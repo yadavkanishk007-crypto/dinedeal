@@ -14,16 +14,279 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      offers: {
+        Row: {
+          created_at: string
+          discount_percent: number
+          id: string
+          is_active: boolean | null
+          max_discount: number
+          min_order_amount: number | null
+          restaurant_id: string
+          terms: string | null
+          title: string
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          created_at?: string
+          discount_percent: number
+          id?: string
+          is_active?: boolean | null
+          max_discount?: number
+          min_order_amount?: number | null
+          restaurant_id: string
+          terms?: string | null
+          title: string
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          created_at?: string
+          discount_percent?: number
+          id?: string
+          is_active?: boolean | null
+          max_discount?: number
+          min_order_amount?: number | null
+          restaurant_id?: string
+          terms?: string | null
+          title?: string
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offers_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      restaurants: {
+        Row: {
+          address: string
+          city: string
+          created_at: string
+          cuisine: string
+          description: string | null
+          email: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          is_approved: boolean | null
+          latitude: number | null
+          longitude: number | null
+          name: string
+          open_hours: string | null
+          owner_id: string
+          phone: string | null
+          rating: number | null
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          city?: string
+          created_at?: string
+          cuisine: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_approved?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          open_hours?: string | null
+          owner_id: string
+          phone?: string | null
+          rating?: number | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          city?: string
+          created_at?: string
+          cuisine?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_approved?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          open_hours?: string | null
+          owner_id?: string
+          phone?: string | null
+          rating?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rewards: {
+        Row: {
+          created_at: string
+          id: string
+          points: number
+          total_earned: number
+          total_redeemed: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          points?: number
+          total_earned?: number
+          total_redeemed?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          points?: number
+          total_earned?: number
+          total_redeemed?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          bill_amount: number
+          created_at: string
+          discount_amount: number
+          final_amount: number
+          id: string
+          offer_id: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          payment_status: string | null
+          restaurant_id: string | null
+          rewards_earned: number | null
+          user_id: string | null
+        }
+        Insert: {
+          bill_amount: number
+          created_at?: string
+          discount_amount?: number
+          final_amount: number
+          id?: string
+          offer_id?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          payment_status?: string | null
+          restaurant_id?: string | null
+          rewards_earned?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          bill_amount?: number
+          created_at?: string
+          discount_amount?: number
+          final_amount?: number
+          id?: string
+          offer_id?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          payment_status?: string | null
+          restaurant_id?: string | null
+          rewards_earned?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "customer" | "restaurant" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +413,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["customer", "restaurant", "admin"],
+    },
   },
 } as const
