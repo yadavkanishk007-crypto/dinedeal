@@ -94,6 +94,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ratings: {
+        Row: {
+          app_rating: number | null
+          created_at: string
+          dining_rating: number
+          feedback: string | null
+          id: string
+          restaurant_id: string | null
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          app_rating?: number | null
+          created_at?: string
+          dining_rating: number
+          feedback?: string | null
+          id?: string
+          restaurant_id?: string | null
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          app_rating?: number | null
+          created_at?: string
+          dining_rating?: number
+          feedback?: string | null
+          id?: string
+          restaurant_id?: string | null
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           address: string
@@ -114,6 +162,7 @@ export type Database = {
           phone: string | null
           rating: number | null
           updated_at: string
+          upi_id: string | null
         }
         Insert: {
           address: string
@@ -134,6 +183,7 @@ export type Database = {
           phone?: string | null
           rating?: number | null
           updated_at?: string
+          upi_id?: string | null
         }
         Update: {
           address?: string
@@ -154,6 +204,7 @@ export type Database = {
           phone?: string | null
           rating?: number | null
           updated_at?: string
+          upi_id?: string | null
         }
         Relationships: []
       }
