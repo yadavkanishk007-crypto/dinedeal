@@ -27,6 +27,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
+import RestaurantQRCode from "@/components/RestaurantQRCode";
+import { useRealtimeTransactions } from "@/hooks/useRealtimeTransactions";
 
 interface Restaurant {
   id: string;
@@ -151,6 +153,15 @@ const RestaurantDashboard = () => {
       setIsLoadingData(false);
     }
   };
+
+  // Real-time notifications for new transactions
+  useRealtimeTransactions({
+    restaurantId: restaurant?.id,
+    enabled: !!restaurant?.id,
+    onNewTransaction: () => {
+      fetchRestaurantData(); // Refresh stats on new transaction
+    },
+  });
 
   const handleCreateRestaurant = async (e: React.FormEvent) => {
     e.preventDefault();

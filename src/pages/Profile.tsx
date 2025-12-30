@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -10,23 +11,60 @@ import {
   LogOut,
   ChevronRight,
   TrendingUp,
-  Shield
+  Shield,
+  Receipt
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import BottomNav from "@/components/BottomNav";
-import { userStats } from "@/data/mockData";
-
-const menuItems = [
-  { icon: Heart, label: "Favorite Restaurants", value: `${userStats.favoriteRestaurants} saved`, path: "/favorites" },
-  { icon: CreditCard, label: "Payment Methods", value: "UPI linked", path: "/payments" },
-  { icon: Bell, label: "Notifications", value: "On", path: "/notifications" },
-  { icon: Shield, label: "Privacy & Security", value: "", path: "/security" },
-  { icon: HelpCircle, label: "Help & Support", value: "", path: "/help" },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [stats, setStats] = useState({
+    totalTransactions: 0,
+    lifetimeSavings: 0,
+    favoriteRestaurants: 0,
+  });
+
+  useEffect(() => {
+    if (user) {
+      fetchUserStats();
+    }
+  }, [user]);
+
+  const fetchUserStats = async () => {
+    if (!user) return;
+
+    try {
+      const { data: txData } = await supabase
+        .from("transactions")
+        .select("discount_amount")
+        .eq("user_id", user.id)
+        .eq("payment_status", "completed");
+
+      if (txData) {
+        setStats({
+          totalTransactions: txData.length,
+          lifetimeSavings: txData.reduce((sum, t) => sum + Number(t.discount_amount), 0),
+          favoriteRestaurants: 0,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  };
+
+  const menuItems = [
+    { icon: Receipt, label: "Transaction History", value: `${stats.totalTransactions} payments`, path: "/transactions" },
+    { icon: Heart, label: "Favorite Restaurants", value: `${stats.favoriteRestaurants} saved`, path: "/favorites" },
+    { icon: CreditCard, label: "Payment Methods", value: "UPI linked", path: "/payments" },
+    { icon: Bell, label: "Notifications", value: "On", path: "/notifications" },
+    { icon: Shield, label: "Privacy & Security", value: "", path: "/security" },
+    { icon: HelpCircle, label: "Help & Support", value: "", path: "/help" },
+  ];
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -50,10 +88,7 @@ const Profile = () => {
 
       <main className="container py-6 space-y-6">
         {/* Profile Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-border/50">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -61,9 +96,10 @@ const Profile = () => {
                   <User className="w-10 h-10" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="font-display font-bold text-xl text-foreground">Arjun Kumar</h2>
-                  <p className="text-sm text-muted-foreground">+91 98765 43210</p>
-                  <p className="text-xs text-muted-foreground mt-1">Member since Dec 2024</p>
+                  <h2 className="font-display font-bold text-xl text-foreground">
+                    {user?.email?.split("@")[0] || "User"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
             </CardContent>
@@ -71,42 +107,24 @@ const Profile = () => {
         </motion.div>
 
         {/* Lifetime Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="overflow-hidden border-0">
             <div className="gradient-warm p-6 text-primary-foreground">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-5 h-5" />
                 <span className="font-medium">Lifetime Savings</span>
               </div>
-              <p className="text-4xl font-display font-bold">
-                ₹{userStats.lifetimeSavings.toLocaleString()}
-              </p>
-              <p className="text-sm opacity-80 mt-2">
-                Across {userStats.totalTransactions} transactions
-              </p>
+              <p className="text-4xl font-display font-bold">₹{stats.lifetimeSavings.toLocaleString()}</p>
+              <p className="text-sm opacity-80 mt-2">Across {stats.totalTransactions} transactions</p>
             </div>
           </Card>
         </motion.div>
 
         {/* Menu Items */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="space-y-2"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-2">
           {menuItems.map((item, index) => (
-            <motion.div
-              key={item.label}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 + index * 0.05 }}
-            >
-              <Card className="border-border/50 cursor-pointer hover:border-primary/30 transition-colors">
+            <motion.div key={item.label} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + index * 0.05 }}>
+              <Card className="border-border/50 cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(item.path)}>
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
@@ -114,9 +132,7 @@ const Profile = () => {
                     </div>
                     <div>
                       <p className="font-medium text-foreground text-sm">{item.label}</p>
-                      {item.value && (
-                        <p className="text-xs text-muted-foreground">{item.value}</p>
-                      )}
+                      {item.value && <p className="text-xs text-muted-foreground">{item.value}</p>}
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -127,28 +143,14 @@ const Profile = () => {
         </motion.div>
 
         {/* Logout Button */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Button 
-            variant="outline" 
-            className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-            onClick={() => navigate("/auth")}
-          >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Button variant="outline" className="w-full border-destructive/50 text-destructive hover:bg-destructive/10" onClick={() => signOut()}>
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
           </Button>
         </motion.div>
 
-        {/* App Version */}
-        <motion.p
-          className="text-center text-xs text-muted-foreground"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
+        <motion.p className="text-center text-xs text-muted-foreground" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
           Zave v1.0.0
         </motion.p>
       </main>
