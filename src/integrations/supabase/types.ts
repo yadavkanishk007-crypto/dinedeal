@@ -64,6 +64,39 @@ export type Database = {
           },
         ]
       }
+      otp_verifications: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          is_verified: boolean | null
+          otp_code: string
+          otp_type: string
+          phone: string | null
+          user_email: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          is_verified?: boolean | null
+          otp_code: string
+          otp_type: string
+          phone?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          is_verified?: boolean | null
+          otp_code?: string
+          otp_type?: string
+          phone?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

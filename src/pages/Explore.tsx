@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MapPin, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,52 @@ const filters = [
 const Explore = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [location, setLocation] = useState("Jhansi");
+  const [isLocating, setIsLocating] = useState(false);
+
+  useEffect(() => {
+    detectLocation();
+  }, []);
+
+  const detectLocation = async () => {
+    setIsLocating(true);
+    try {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            try {
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+              );
+              const data = await response.json();
+              const city = data.address?.city || 
+                          data.address?.town || 
+                          data.address?.village || 
+                          data.address?.district ||
+                          "Jhansi";
+              setLocation(city);
+            } catch (error) {
+              console.error("Reverse geocoding failed:", error);
+              setLocation("Jhansi");
+            }
+            setIsLocating(false);
+          },
+          () => {
+            setLocation("Jhansi");
+            setIsLocating(false);
+          },
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      } else {
+        setLocation("Jhansi");
+        setIsLocating(false);
+      }
+    } catch (error) {
+      setLocation("Jhansi");
+      setIsLocating(false);
+    }
+  };
 
   const filteredRestaurants = restaurants.filter((r) => {
     const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -43,7 +89,6 @@ const Explore = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <motion.header
         className="sticky top-0 z-40 glass border-b border-border/30"
         initial={{ y: -100 }}
@@ -54,11 +99,10 @@ const Explore = () => {
             <Logo size="default" />
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="w-4 h-4 text-primary" />
-              <span>Bangalore</span>
+              <span>{isLocating ? "Detecting..." : location}</span>
             </div>
           </div>
 
-          {/* Search Bar */}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -77,21 +121,18 @@ const Explore = () => {
       </motion.header>
 
       <main className="container py-4 space-y-4">
-        {/* Filters */}
         <FilterChips
           filters={filters}
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
         />
 
-        {/* Results Count */}
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             {filteredRestaurants.length} restaurants found
           </p>
         </div>
 
-        {/* Restaurant Grid */}
         <motion.div className="grid gap-4" layout>
           <AnimatePresence mode="popLayout">
             {filteredRestaurants.map((restaurant, index) => (
