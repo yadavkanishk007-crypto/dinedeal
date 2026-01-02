@@ -52,7 +52,7 @@ export const restaurants: Restaurant[] = [
     imageUrl: restaurant1,
     isPopular: true,
     description: "Experience exquisite continental cuisine in a warm, brick-lined ambiance with craft cocktails and premium wines.",
-    address: "123 MG Road, Koramangala, Bangalore",
+    address: "123 Civil Lines, Jhansi",
     openHours: "12:00 PM - 11:30 PM",
     offers: [
       {
@@ -84,7 +84,7 @@ export const restaurants: Restaurant[] = [
     imageUrl: restaurant2,
     isPopular: false,
     description: "Authentic Japanese sushi and ramen in a vibrant neon-lit atmosphere. Fresh fish flown in weekly.",
-    address: "456 Indiranagar, Bangalore",
+    address: "456 Sadar Bazaar, Jhansi",
     openHours: "11:30 AM - 10:30 PM",
     offers: [
       {
@@ -108,7 +108,7 @@ export const restaurants: Restaurant[] = [
     imageUrl: restaurant3,
     isPopular: true,
     description: "Rustic Italian trattoria with wood-fired pizzas, fresh pasta, and an extensive wine selection.",
-    address: "789 HSR Layout, Bangalore",
+    address: "789 Sipri Bazaar, Jhansi",
     openHours: "12:00 PM - 11:00 PM",
     offers: [
       {
@@ -132,7 +132,7 @@ export const restaurants: Restaurant[] = [
     imageUrl: restaurant4,
     isPopular: false,
     description: "Stunning rooftop dining with panoramic city views. Perfect for sunset dinners and celebrations.",
-    address: "101 UB City, Bangalore",
+    address: "101 Elite Chowk, Jhansi",
     openHours: "5:00 PM - 12:00 AM",
     offers: [
       {
@@ -156,7 +156,7 @@ export const restaurants: Restaurant[] = [
     imageUrl: restaurant5,
     isPopular: true,
     description: "Industrial-chic cafe serving artisanal coffee, fresh pastries, and all-day brunch favorites.",
-    address: "222 Church Street, Bangalore",
+    address: "222 Manik Chowk, Jhansi",
     openHours: "8:00 AM - 9:00 PM",
     offers: [
       {
