@@ -1,3 +1,16 @@
+/**
+ * TEMPORARY SEED DATA
+ * ------------------
+ * This file contains ONLY restaurant seed data
+ * Used for initial city pilot (Jhansi)
+ *
+ * ❌ No users
+ * ❌ No transactions
+ * ❌ No rewards
+ * ❌ No wallets
+ *
+ * This file will be replaced by API data
+ */
 import restaurant1 from "@/assets/restaurant-1.jpg";
 import restaurant2 from "@/assets/restaurant-2.jpg";
 import restaurant3 from "@/assets/restaurant-3.jpg";
