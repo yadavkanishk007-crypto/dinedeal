@@ -1,19 +1,11 @@
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open("dinedeal-cache-v1").then((cache) =>
-      cache.addAll([
-        "/",
-        "/index.html",
-        "/manifest.json"
-      ])
-    )
-  );
+self.addEventListener("install", () => {
+  self.skipWaiting();
 });
 
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then(
-      (response) => response || fetch(event.request)
-    )
-  );
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("fetch", () => {
+  // Minimal fetch handler required for installability
 });
