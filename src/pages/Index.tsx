@@ -131,14 +131,14 @@ const LandingPage = () => (
             <TrendingUp className="w-4 h-4" /><span>Users saved ₹2.5 Cr this month</span>
           </motion.div>
           <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground leading-tight mb-6">Dine Local. <span className="gradient-text">Save More.</span></h1>
-          <p className="text-lg text-muted-foreground mb-8 max-w-lg">Pay at your favorite restaurants through Zave and get instant discounts, cashback, and exclusive rewards.</p>
+          <p className="text-lg text-muted-foreground mb-8 max-w-lg">Pay at your favorite restaurants through DineDeal and get instant discounts, cashback, and exclusive rewards.</p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Link to="/auth"><Button variant="gradient" size="xl">Start Saving Now <ArrowRight className="w-5 h-5" /></Button></Link>
             <Link to="/explore"><Button variant="outline" size="xl">Explore Restaurants</Button></Link>
           </div>
         </motion.div>
         <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} className="relative">
-          <motion.img src={heroIllustration} alt="Zave" className="w-full max-w-lg mx-auto" animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 4 }} />
+          <motion.img src={heroIllustration} alt="DineDeal" className="w-full max-w-lg mx-auto" animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 4 }} />
         </motion.div>
       </div>
     </main>

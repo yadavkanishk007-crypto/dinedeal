@@ -1,13 +1,112 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, TrendingUp, Gift, Wallet, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ArrowLeft, TrendingUp, Gift, Wallet, ArrowUpRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import BottomNav from "@/components/BottomNav";
-import { transactions, userStats } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface Transaction {
+  id: string;
+  bill_amount: number;
+  discount_amount: number;
+  final_amount: number;
+  rewards_earned: number;
+  created_at: string;
+  payment_status: string;
+  restaurant_id: string;
+}
+
+interface UserStats {
+  totalSaved: number;
+  rewardPoints: number;
+  totalTransactions: number;
+  redeemableAmount: number;
+  lifetimeSavings: number;
+}
 
 const Rewards = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [userStats, setUserStats] = useState<UserStats>({
+    totalSaved: 0,
+    rewardPoints: 0,
+    totalTransactions: 0,
+    redeemableAmount: 0,
+    lifetimeSavings: 0,
+  });
+  const [restaurantNames, setRestaurantNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserData();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
+
+  const fetchUserData = async () => {
+    try {
+      // Fetch transactions
+      const { data: txData } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user?.id)
+        .eq("payment_status", "completed")
+        .order("created_at", { ascending: false });
+
+      setTransactions(txData || []);
+
+      // Get unique restaurant IDs and fetch their names
+      const restaurantIds = [...new Set((txData || []).map(tx => tx.restaurant_id).filter(Boolean))];
+      if (restaurantIds.length > 0) {
+        const { data: restaurants } = await supabase
+          .from("restaurants")
+          .select("id, name")
+          .in("id", restaurantIds);
+        
+        const names: Record<string, string> = {};
+        restaurants?.forEach(r => {
+          names[r.id] = r.name;
+        });
+        setRestaurantNames(names);
+      }
+
+      // Fetch rewards
+      const { data: rewardsData } = await supabase
+        .from("rewards")
+        .select("*")
+        .eq("user_id", user?.id)
+        .maybeSingle();
+
+      // Calculate stats
+      const totalSaved = (txData || []).reduce((sum, tx) => sum + Number(tx.discount_amount), 0);
+      
+      setUserStats({
+        totalSaved,
+        rewardPoints: rewardsData?.points || 0,
+        totalTransactions: txData?.length || 0,
+        redeemableAmount: Math.floor((rewardsData?.points || 0) / 10), // 10 points = ₹1
+        lifetimeSavings: totalSaved,
+      });
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full gradient-primary animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -113,50 +212,68 @@ const Rewards = () => {
             </h2>
           </div>
 
-          <div className="space-y-3">
-            {transactions.map((tx, index) => (
-              <motion.div
-                key={tx.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + index * 0.05 }}
-              >
-                <Card className="border-border/50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-                          <ArrowUpRight className="w-5 h-5 text-primary" />
+          {transactions.length > 0 ? (
+            <div className="space-y-3">
+              {transactions.map((tx, index) => (
+                <motion.div
+                  key={tx.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 + index * 0.05 }}
+                >
+                  <Card className="border-border/50">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                            <ArrowUpRight className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground text-sm">
+                              {restaurantNames[tx.restaurant_id] || "Restaurant"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(tx.created_at).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-foreground text-sm">
-                            {tx.restaurantName}
+                        <div className="text-right">
+                          <p className="font-semibold text-foreground">₹{tx.bill_amount}</p>
+                          <p className="text-xs text-success font-medium">
+                            Saved ₹{tx.discount_amount}
                           </p>
-                          <p className="text-xs text-muted-foreground">{tx.date}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-foreground">₹{tx.amount}</p>
-                        <p className="text-xs text-success font-medium">
-                          Saved ₹{tx.saved}
-                        </p>
+                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                          Discount applied
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-gold">
+                          <Gift className="w-3 h-3" />
+                          +{tx.rewards_earned || 0} points
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                        {tx.discount}% discount applied
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-gold">
-                        <Gift className="w-3 h-3" />
-                        +{tx.rewardsEarned} points
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-border/50">
+              <CardContent className="p-8 text-center">
+                <Gift className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">No transactions yet</p>
+                <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate("/explore")}>
+                  Start Saving
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </motion.section>
       </main>
 

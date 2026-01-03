@@ -78,10 +78,14 @@ const RestaurantDashboard = () => {
     cuisine: "",
     description: "",
     address: "",
-    city: "Bangalore",
+    city: "Jhansi",
     phone: "",
     email: "",
     openHours: "11:00 AM - 11:00 PM",
+    upiId: "",
+    bankAccountNumber: "",
+    bankIfsc: "",
+    bankAccountHolder: "",
   });
 
   useEffect(() => {
@@ -180,6 +184,10 @@ const RestaurantDashboard = () => {
           phone: formData.phone,
           email: formData.email,
           open_hours: formData.openHours,
+          upi_id: formData.upiId,
+          bank_account_number: formData.bankAccountNumber,
+          bank_ifsc: formData.bankIfsc,
+          bank_account_holder: formData.bankAccountHolder,
           is_active: false,
           is_approved: false,
         })
@@ -493,6 +501,47 @@ const RestaurantOnboarding = ({ formData, setFormData, onSubmit }: any) => (
             value={formData.openHours}
             onChange={(e) => setFormData({ ...formData, openHours: e.target.value })}
           />
+
+          {/* Payment Details Section */}
+          <div className="pt-4 border-t border-border/50">
+            <h3 className="font-semibold text-foreground mb-3">Payment Details (Secure)</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              This information is securely stored and used for receiving payments from customers.
+            </p>
+            <div className="space-y-4">
+              <Input
+                placeholder="UPI ID (e.g., restaurant@paytm) *"
+                value={formData.upiId}
+                onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
+                required
+              />
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border/50" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or add bank details</span>
+                </div>
+              </div>
+              <Input
+                placeholder="Bank Account Number"
+                value={formData.bankAccountNumber}
+                onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="IFSC Code"
+                  value={formData.bankIfsc}
+                  onChange={(e) => setFormData({ ...formData, bankIfsc: e.target.value })}
+                />
+                <Input
+                  placeholder="Account Holder Name"
+                  value={formData.bankAccountHolder}
+                  onChange={(e) => setFormData({ ...formData, bankAccountHolder: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
 
           <Button type="submit" variant="gradient" size="xl" className="w-full">
             Create Restaurant

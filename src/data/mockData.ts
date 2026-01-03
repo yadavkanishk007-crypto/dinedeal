@@ -15,29 +15,8 @@ export interface Restaurant {
   imageUrl: string;
   isPopular?: boolean;
   description: string;
-  offers: Offer[];
   address: string;
   openHours: string;
-}
-
-export interface Offer {
-  id: string;
-  title: string;
-  discount: number;
-  maxDiscount: number;
-  validUntil: string;
-  terms: string;
-}
-
-export interface Transaction {
-  id: string;
-  restaurantName: string;
-  amount: number;
-  discount: number;
-  saved: number;
-  rewardsEarned: number;
-  date: string;
-  status: "completed" | "pending" | "failed";
 }
 
 export const restaurants: Restaurant[] = [
@@ -54,24 +33,6 @@ export const restaurants: Restaurant[] = [
     description: "Experience exquisite continental cuisine in a warm, brick-lined ambiance with craft cocktails and premium wines.",
     address: "123 Civil Lines, Jhansi",
     openHours: "12:00 PM - 11:30 PM",
-    offers: [
-      {
-        id: "o1",
-        title: "Flat 20% Off",
-        discount: 20,
-        maxDiscount: 500,
-        validUntil: "Dec 31, 2024",
-        terms: "Valid on orders above ₹500. Not applicable with other offers.",
-      },
-      {
-        id: "o2",
-        title: "Happy Hours",
-        discount: 30,
-        maxDiscount: 300,
-        validUntil: "Dec 31, 2024",
-        terms: "Valid 4PM-7PM only on beverages.",
-      },
-    ],
   },
   {
     id: "2",
@@ -86,16 +47,6 @@ export const restaurants: Restaurant[] = [
     description: "Authentic Japanese sushi and ramen in a vibrant neon-lit atmosphere. Fresh fish flown in weekly.",
     address: "456 Sadar Bazaar, Jhansi",
     openHours: "11:30 AM - 10:30 PM",
-    offers: [
-      {
-        id: "o3",
-        title: "15% Off All Sushi",
-        discount: 15,
-        maxDiscount: 400,
-        validUntil: "Dec 31, 2024",
-        terms: "Valid on dine-in orders only.",
-      },
-    ],
   },
   {
     id: "3",
@@ -110,16 +61,6 @@ export const restaurants: Restaurant[] = [
     description: "Rustic Italian trattoria with wood-fired pizzas, fresh pasta, and an extensive wine selection.",
     address: "789 Sipri Bazaar, Jhansi",
     openHours: "12:00 PM - 11:00 PM",
-    offers: [
-      {
-        id: "o4",
-        title: "Family Feast 25% Off",
-        discount: 25,
-        maxDiscount: 600,
-        validUntil: "Dec 31, 2024",
-        terms: "Valid for groups of 4 or more.",
-      },
-    ],
   },
   {
     id: "4",
@@ -134,16 +75,6 @@ export const restaurants: Restaurant[] = [
     description: "Stunning rooftop dining with panoramic city views. Perfect for sunset dinners and celebrations.",
     address: "101 Elite Chowk, Jhansi",
     openHours: "5:00 PM - 12:00 AM",
-    offers: [
-      {
-        id: "o5",
-        title: "Sunset Special",
-        discount: 18,
-        maxDiscount: 450,
-        validUntil: "Dec 31, 2024",
-        terms: "Valid 5PM-7PM on weekdays.",
-      },
-    ],
   },
   {
     id: "5",
@@ -158,77 +89,5 @@ export const restaurants: Restaurant[] = [
     description: "Industrial-chic cafe serving artisanal coffee, fresh pastries, and all-day brunch favorites.",
     address: "222 Manik Chowk, Jhansi",
     openHours: "8:00 AM - 9:00 PM",
-    offers: [
-      {
-        id: "o6",
-        title: "Coffee Lover's Deal",
-        discount: 10,
-        maxDiscount: 200,
-        validUntil: "Dec 31, 2024",
-        terms: "Valid on all beverages.",
-      },
-    ],
   },
 ];
-
-export const transactions: Transaction[] = [
-  {
-    id: "t1",
-    restaurantName: "The Brick House",
-    amount: 2500,
-    discount: 20,
-    saved: 500,
-    rewardsEarned: 50,
-    date: "Dec 28, 2024",
-    status: "completed",
-  },
-  {
-    id: "t2",
-    restaurantName: "La Trattoria",
-    amount: 1800,
-    discount: 25,
-    saved: 450,
-    rewardsEarned: 36,
-    date: "Dec 25, 2024",
-    status: "completed",
-  },
-  {
-    id: "t3",
-    restaurantName: "The Brew Barn",
-    amount: 650,
-    discount: 10,
-    saved: 65,
-    rewardsEarned: 13,
-    date: "Dec 22, 2024",
-    status: "completed",
-  },
-  {
-    id: "t4",
-    restaurantName: "Sakura Sushi",
-    amount: 3200,
-    discount: 15,
-    saved: 400,
-    rewardsEarned: 64,
-    date: "Dec 18, 2024",
-    status: "completed",
-  },
-  {
-    id: "t5",
-    restaurantName: "Skyline Terrace",
-    amount: 4500,
-    discount: 18,
-    saved: 450,
-    rewardsEarned: 90,
-    date: "Dec 15, 2024",
-    status: "completed",
-  },
-];
-
-export const userStats = {
-  totalSaved: 2450,
-  rewardPoints: 320,
-  totalTransactions: 12,
-  redeemableAmount: 150,
-  lifetimeSavings: 8750,
-  favoriteRestaurants: 5,
-};
