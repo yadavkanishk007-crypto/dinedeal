@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
@@ -15,22 +15,111 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import BottomNav from "@/components/BottomNav";
-import { restaurants } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
+import { restaurants as mockRestaurants } from "@/data/mockData";
+
+interface Restaurant {
+  id: string;
+  name: string;
+  cuisine: string;
+  description: string | null;
+  address: string;
+  city: string;
+  open_hours: string | null;
+  rating: number | null;
+  image_url: string | null;
+}
+
+interface Offer {
+  id: string;
+  title: string;
+  discount_percent: number;
+  max_discount: number;
+  terms: string | null;
+  valid_until: string | null;
+}
 
 const RestaurantDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const restaurant = restaurants.find((r) => r.id === id);
+  useEffect(() => {
+    if (id) {
+      fetchRestaurantData();
+    }
+  }, [id]);
 
-  if (!restaurant) {
+  const fetchRestaurantData = async () => {
+    try {
+      // Fetch restaurant
+      const { data: restaurantData, error: restaurantError } = await supabase
+        .from("restaurants")
+        .select("*")
+        .eq("id", id)
+        .eq("is_approved", true)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (restaurantError) throw restaurantError;
+
+      if (restaurantData) {
+        setRestaurant(restaurantData);
+
+        // Fetch offers for this restaurant
+        const { data: offersData } = await supabase
+          .from("offers")
+          .select("*")
+          .eq("restaurant_id", id)
+          .eq("is_active", true);
+
+        setOffers(offersData || []);
+      }
+    } catch (error) {
+      console.error("Error fetching restaurant:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fallback to mock data for demo
+  const mockRestaurant = mockRestaurants.find((r) => r.id === id);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full gradient-primary animate-pulse" />
+      </div>
+    );
+  }
+
+  // Use real data if available, otherwise fallback to mock
+  const displayRestaurant = restaurant || (mockRestaurant ? {
+    id: mockRestaurant.id,
+    name: mockRestaurant.name,
+    cuisine: mockRestaurant.cuisine,
+    description: mockRestaurant.description,
+    address: mockRestaurant.address,
+    city: "Jhansi",
+    open_hours: mockRestaurant.openHours,
+    rating: mockRestaurant.rating,
+    image_url: mockRestaurant.imageUrl,
+  } : null);
+
+  if (!displayRestaurant) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground">Restaurant not found</p>
       </div>
     );
   }
+
+  const maxDiscount = offers.length > 0 
+    ? Math.max(...offers.map(o => o.max_discount))
+    : 500;
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -42,8 +131,8 @@ const RestaurantDetail = () => {
           animate={{ opacity: 1 }}
         >
           <img
-            src={restaurant.imageUrl}
-            alt={restaurant.name}
+            src={displayRestaurant.image_url || "/placeholder.svg"}
+            alt={displayRestaurant.name}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
@@ -88,28 +177,30 @@ const RestaurantDetail = () => {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h1 className="font-display text-2xl font-bold text-foreground mb-1">
-                    {restaurant.name}
+                    {displayRestaurant.name}
                   </h1>
-                  <p className="text-muted-foreground text-sm">{restaurant.cuisine}</p>
+                  <p className="text-muted-foreground text-sm">{displayRestaurant.cuisine}</p>
                 </div>
                 <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-success/10">
                   <Star className="w-4 h-4 text-success fill-success" />
-                  <span className="font-semibold text-success">{restaurant.rating}</span>
+                  <span className="font-semibold text-success">{displayRestaurant.rating || 4.5}</span>
                 </div>
               </div>
 
-              <p className="text-muted-foreground text-sm mt-4 leading-relaxed">
-                {restaurant.description}
-              </p>
+              {displayRestaurant.description && (
+                <p className="text-muted-foreground text-sm mt-4 leading-relaxed">
+                  {displayRestaurant.description}
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-4 mt-6 pt-6 border-t border-border/50">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <MapPin className="w-4 h-4 text-primary" />
-                  <span>{restaurant.distance}</span>
+                  <span>{displayRestaurant.city}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4 text-primary" />
-                  <span>{restaurant.openHours}</span>
+                  <span>{displayRestaurant.open_hours || "11:00 AM - 11:00 PM"}</span>
                 </div>
               </div>
             </CardContent>
@@ -125,46 +216,58 @@ const RestaurantDetail = () => {
           <h2 className="font-display font-bold text-lg text-foreground mb-4">
             Active Offers
           </h2>
-          <div className="space-y-3">
-            {restaurant.offers.map((offer, index) => (
-              <motion.div
-                key={offer.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 + index * 0.05 }}
-              >
-                <Card className="border-primary/20 bg-primary/5 overflow-hidden">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-                            <Percent className="w-4 h-4 text-primary-foreground" />
+          {offers.length > 0 ? (
+            <div className="space-y-3">
+              {offers.map((offer, index) => (
+                <motion.div
+                  key={offer.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 + index * 0.05 }}
+                >
+                  <Card className="border-primary/20 bg-primary/5 overflow-hidden">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
+                              <Percent className="w-4 h-4 text-primary-foreground" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-foreground">{offer.title}</h3>
+                              <p className="text-xs text-muted-foreground">
+                                Max ₹{offer.max_discount} off
+                                {offer.valid_until && ` • Valid till ${new Date(offer.valid_until).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">{offer.title}</h3>
-                            <p className="text-xs text-muted-foreground">
-                              Max ₹{offer.maxDiscount} off • Valid till {offer.validUntil}
-                            </p>
-                          </div>
+                          {offer.terms && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
+                              <Info className="w-3 h-3" />
+                              <span>{offer.terms}</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-                          <Info className="w-3 h-3" />
-                          <span>{offer.terms}</span>
+                        <div className="text-right">
+                          <span className="text-2xl font-display font-bold gradient-text">
+                            {offer.discount_percent}%
+                          </span>
+                          <p className="text-xs text-muted-foreground">OFF</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-2xl font-display font-bold gradient-text">
-                          {offer.discount}%
-                        </span>
-                        <p className="text-xs text-muted-foreground">OFF</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <Card className="border-border/50">
+              <CardContent className="p-6 text-center">
+                <Percent className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">No active offers at the moment</p>
+              </CardContent>
+            </Card>
+          )}
         </motion.section>
 
         {/* How it Works */}
@@ -180,7 +283,7 @@ const RestaurantDetail = () => {
             <CardContent className="p-4 space-y-4">
               {[
                 { step: 1, text: "Dine at the restaurant & get the bill" },
-                { step: 2, text: "Open Zave and enter the bill amount" },
+                { step: 2, text: "Open DineDeal and enter the bill amount" },
                 { step: 3, text: "Pay via UPI and instantly save!" },
               ].map((item) => (
                 <div key={item.step} className="flex items-center gap-4">
@@ -209,7 +312,7 @@ const RestaurantDetail = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">Address</p>
-                    <p className="text-xs text-muted-foreground">{restaurant.address}</p>
+                    <p className="text-xs text-muted-foreground">{displayRestaurant.address}, {displayRestaurant.city}</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -231,14 +334,14 @@ const RestaurantDetail = () => {
             <div>
               <p className="text-sm text-muted-foreground">You can save up to</p>
               <p className="text-xl font-display font-bold gradient-text">
-                ₹{restaurant.maxDiscount}
+                ₹{maxDiscount}
               </p>
             </div>
             <Button
               variant="gradient"
               size="lg"
               className="shrink-0"
-              onClick={() => navigate(`/pay?restaurant=${restaurant.id}`)}
+              onClick={() => navigate(`/pay?restaurant=${displayRestaurant.id}`)}
             >
               Pay Now
             </Button>

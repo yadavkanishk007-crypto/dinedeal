@@ -178,6 +178,9 @@ export type Database = {
       restaurants: {
         Row: {
           address: string
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_ifsc: string | null
           city: string
           created_at: string
           cuisine: string
@@ -199,6 +202,9 @@ export type Database = {
         }
         Insert: {
           address: string
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
           city?: string
           created_at?: string
           cuisine: string
@@ -220,6 +226,9 @@ export type Database = {
         }
         Update: {
           address?: string
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_ifsc?: string | null
           city?: string
           created_at?: string
           cuisine?: string

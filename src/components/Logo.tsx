@@ -16,7 +16,7 @@ const Logo = ({ size = "default" }: { size?: "default" | "lg" | "sm" }) => {
         transition={{ type: "spring", stiffness: 400, damping: 10 }}
       >
         <span className={`font-display font-bold ${sizeClasses[size]} gradient-text`}>
-          Zave
+          DineDeal
         </span>
         <motion.div
           className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-gold"
