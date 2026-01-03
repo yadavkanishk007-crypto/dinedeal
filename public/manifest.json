@@ -3,7 +3,7 @@
   "short_name": "DineDeal",
   "description": "Save more. Dine local. Instant deals and rewards at nearby restaurants.",
   "start_url": "/?pwa=true",
-  "id": "/?pwa=true"
+  "id": "/?pwa=true",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
