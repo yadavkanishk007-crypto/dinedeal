@@ -9,7 +9,8 @@ import {
   Gift,
   ChevronRight,
   Copy,
-  ExternalLink
+  ExternalLink,
+  CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-type PaymentStep = "amount" | "breakdown" | "upi" | "processing" | "success";
+type PaymentStep = "amount" | "breakdown" | "payment-method" | "upi" | "card" | "processing" | "success";
+type PaymentMethod = "upi" | "card";
 
 // Restaurant's UPI ID (this would come from the restaurant record in production)
 const MERCHANT_UPI_ID = "merchant@upi";
@@ -37,6 +39,13 @@ const Pay = () => {
   const [billAmount, setBillAmount] = useState("");
   const [transactionId, setTransactionId] = useState<string>("");
   const [upiReference, setUpiReference] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>("upi");
+  
+  // Card details
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cardName, setCardName] = useState("");
 
   const amount = parseFloat(billAmount) || 0;
   const discount = Math.min(amount * (restaurant.discount / 100), restaurant.maxDiscount);
@@ -45,7 +54,7 @@ const Pay = () => {
 
   // Generate a unique transaction reference
   useEffect(() => {
-    setTransactionId(`ZAVE${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`);
+    setTransactionId(`DD${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`);
   }, []);
 
   const handleProceed = () => {
@@ -72,6 +81,17 @@ const Pay = () => {
     return `upi://pay?${upiParams.toString()}`;
   };
 
+  const handleSelectPaymentMethod = (method: PaymentMethod) => {
+    setSelectedPaymentMethod(method);
+    if (method === "upi") {
+      const upiLink = generateUPILink();
+      window.location.href = upiLink;
+      setStep("upi");
+    } else {
+      setStep("card");
+    }
+  };
+
   const handleOpenUPI = () => {
     const upiLink = generateUPILink();
     window.location.href = upiLink;
@@ -84,6 +104,136 @@ const Pay = () => {
       title: "UPI ID Copied",
       description: "Paste it in your UPI app to pay",
     });
+  };
+
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    const matches = v.match(/\d{4,16}/g);
+    const match = matches && matches[0] || '';
+    const parts = [];
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+    return parts.length ? parts.join(' ') : value;
+  };
+
+  const formatExpiry = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    if (v.length >= 2) {
+      return v.substring(0, 2) + '/' + v.substring(2, 4);
+    }
+    return v;
+  };
+
+  const handleCardPayment = async () => {
+    if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
+      toast({
+        title: "Invalid Card Number",
+        description: "Please enter a valid 16-digit card number",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!cardExpiry || cardExpiry.length < 5) {
+      toast({
+        title: "Invalid Expiry Date",
+        description: "Please enter a valid expiry date (MM/YY)",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!cardCvv || cardCvv.length < 3) {
+      toast({
+        title: "Invalid CVV",
+        description: "Please enter a valid CVV",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!cardName) {
+      toast({
+        title: "Name Required",
+        description: "Please enter the cardholder name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setStep("processing");
+
+    try {
+      // Simulate card payment processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Save transaction to database
+      const { error } = await supabase.from("transactions").insert({
+        user_id: user?.id,
+        restaurant_id: restaurantId,
+        bill_amount: amount,
+        discount_amount: discount,
+        final_amount: finalAmount,
+        rewards_earned: rewardsEarned,
+        payment_method: "card",
+        payment_reference: `CARD-${transactionId}`,
+        payment_status: "completed",
+      });
+
+      if (error) throw error;
+
+      // Update user rewards if logged in
+      if (user?.id) {
+        const { data: currentRewards } = await supabase
+          .from("rewards")
+          .select("points, total_earned")
+          .eq("user_id", user.id)
+          .single();
+
+        if (currentRewards) {
+          await supabase
+            .from("rewards")
+            .update({
+              points: currentRewards.points + rewardsEarned,
+              total_earned: currentRewards.total_earned + rewardsEarned,
+            })
+            .eq("user_id", user.id);
+        }
+      }
+
+      // Send transaction receipt email
+      if (user?.email) {
+        try {
+          await supabase.functions.invoke("send-email", {
+            body: {
+              to: user.email,
+              type: "transaction_receipt",
+              data: {
+                userName: user.user_metadata?.full_name || "Customer",
+                restaurantName: restaurant.name,
+                billAmount: amount,
+                discount: discount,
+                finalAmount: finalAmount,
+                rewardsEarned: rewardsEarned,
+                transactionId: transactionId,
+                date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
+                paymentMethod: "Card",
+              },
+            },
+          });
+        } catch (emailError) {
+          console.error("Failed to send receipt email:", emailError);
+        }
+      }
+
+      setStep("success");
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast({
+        title: "Payment Failed",
+        description: "There was an error processing your card payment. Please try again.",
+        variant: "destructive",
+      });
+      setStep("card");
+    }
   };
 
   const handleConfirmPayment = async () => {
@@ -133,6 +283,31 @@ const Pay = () => {
         }
       }
 
+      // Send transaction receipt email
+      if (user?.email) {
+        try {
+          await supabase.functions.invoke("send-email", {
+            body: {
+              to: user.email,
+              type: "transaction_receipt",
+              data: {
+                userName: user.user_metadata?.full_name || "Customer",
+                restaurantName: restaurant.name,
+                billAmount: amount,
+                discount: discount,
+                finalAmount: finalAmount,
+                rewardsEarned: rewardsEarned,
+                transactionId: transactionId,
+                date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
+                paymentMethod: "UPI",
+              },
+            },
+          });
+        } catch (emailError) {
+          console.error("Failed to send receipt email:", emailError);
+        }
+      }
+
       setTimeout(() => setStep("success"), 1500);
     } catch (error) {
       console.error("Payment error:", error);
@@ -155,7 +330,11 @@ const Pay = () => {
         <div className="container py-4 flex items-center gap-4">
           <motion.button
             className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"
-            onClick={() => step === "amount" ? navigate(-1) : setStep("amount")}
+            onClick={() => {
+              if (step === "amount") navigate(-1);
+              else if (step === "card" || step === "upi") setStep("breakdown");
+              else setStep("amount");
+            }}
             whileTap={{ scale: 0.95 }}
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -275,7 +454,7 @@ const Pay = () => {
                   <div className="flex justify-between items-center text-success">
                     <span className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4" />
-                      Zave Discount ({restaurant.discount}%)
+                      DineDeal Discount ({restaurant.discount}%)
                     </span>
                     <span className="font-medium">- ₹{discount.toFixed(2)}</span>
                   </div>
@@ -301,39 +480,68 @@ const Pay = () => {
                 </CardContent>
               </Card>
 
-              {/* Payment Method */}
+              {/* Payment Methods */}
               <div>
                 <h3 className="font-display font-bold text-lg text-foreground mb-3">
-                  Pay With
+                  Select Payment Method
                 </h3>
-                <Card className="border-primary/30">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
-                        <Smartphone className="w-5 h-5 text-primary" />
+                <div className="space-y-3">
+                  {/* UPI Option */}
+                  <Card 
+                    className={`border-2 cursor-pointer transition-all ${selectedPaymentMethod === 'upi' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}
+                    onClick={() => setSelectedPaymentMethod('upi')}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                          <Smartphone className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">UPI Payment</p>
+                          <p className="text-xs text-muted-foreground">GPay, PhonePe, Paytm & more</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-foreground">UPI Payment</p>
-                        <p className="text-xs text-muted-foreground">GPay, PhonePe, Paytm & more</p>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPaymentMethod === 'upi' ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
+                        {selectedPaymentMethod === 'upi' && <Check className="w-3 h-3 text-primary-foreground" />}
                       </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+
+                  {/* Card Option */}
+                  <Card 
+                    className={`border-2 cursor-pointer transition-all ${selectedPaymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}
+                    onClick={() => setSelectedPaymentMethod('card')}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                          <CreditCard className="w-5 h-5 text-gold" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">Credit / Debit Card</p>
+                          <p className="text-xs text-muted-foreground">Visa, Mastercard, RuPay</p>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPaymentMethod === 'card' ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
+                        {selectedPaymentMethod === 'card' && <Check className="w-3 h-3 text-primary-foreground" />}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
 
               <Button
                 variant="gradient"
                 size="xl"
                 className="w-full"
-                onClick={handleOpenUPI}
+                onClick={() => handleSelectPaymentMethod(selectedPaymentMethod)}
               >
-                Pay ₹{finalAmount.toFixed(2)} via UPI
+                Pay ₹{finalAmount.toFixed(2)} via {selectedPaymentMethod === 'upi' ? 'UPI' : 'Card'}
               </Button>
             </motion.div>
           )}
 
-          {/* Step 3: UPI Payment */}
+          {/* Step 3a: UPI Payment */}
           {step === "upi" && (
             <motion.div
               key="upi"
@@ -420,6 +628,98 @@ const Pay = () => {
             </motion.div>
           )}
 
+          {/* Step 3b: Card Payment */}
+          {step === "card" && (
+            <motion.div
+              key="card"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-6"
+            >
+              <div className="text-center py-4">
+                <div className="w-16 h-16 rounded-full gradient-gold flex items-center justify-center mx-auto mb-4">
+                  <CreditCard className="w-8 h-8 text-primary-foreground" />
+                </div>
+                <h2 className="font-display font-bold text-xl text-foreground mb-2">
+                  Enter Card Details
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Pay ₹{finalAmount.toFixed(2)} using your card
+                </p>
+              </div>
+
+              {/* Card Form */}
+              <Card className="border-border/50">
+                <CardContent className="p-6 space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Card Number</label>
+                    <Input
+                      placeholder="1234 5678 9012 3456"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                      maxLength={19}
+                      className="text-lg tracking-wider"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">Expiry Date</label>
+                      <Input
+                        placeholder="MM/YY"
+                        value={cardExpiry}
+                        onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                        maxLength={5}
+                        className="text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">CVV</label>
+                      <Input
+                        type="password"
+                        placeholder="•••"
+                        value={cardCvv}
+                        onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        maxLength={4}
+                        className="text-center"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Cardholder Name</label>
+                    <Input
+                      placeholder="Name on card"
+                      value={cardName}
+                      onChange={(e) => setCardName(e.target.value.toUpperCase())}
+                      className="uppercase"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Security Note */}
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-success/10 border border-success/20">
+                <Check className="w-4 h-4 text-success flex-shrink-0" />
+                <p className="text-xs text-success">Your payment is secured with 256-bit SSL encryption</p>
+              </div>
+
+              <Button
+                variant="gradient"
+                size="xl"
+                className="w-full"
+                onClick={handleCardPayment}
+              >
+                Pay ₹{finalAmount.toFixed(2)}
+              </Button>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Transaction ID: {transactionId}
+              </p>
+            </motion.div>
+          )}
+
           {/* Step 4: Processing */}
           {step === "processing" && (
             <motion.div
@@ -458,60 +758,56 @@ const Pay = () => {
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", stiffness: 200, damping: 15 }}
               >
-                <Check className="w-12 h-12 text-success-foreground" />
+                <Check className="w-12 h-12 text-primary-foreground" />
               </motion.div>
-              
-              <motion.h2
-                className="font-display font-bold text-2xl text-foreground mb-2"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
+
+              <h2 className="font-display font-bold text-3xl text-foreground mb-2">
                 Payment Successful!
-              </motion.h2>
-              
-              <motion.p
-                className="text-muted-foreground mb-8"
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                You saved ₹{discount.toFixed(0)} on this transaction
+              </p>
+
+              {/* Receipt Summary */}
+              <Card className="w-full max-w-sm border-border/50 mb-6">
+                <CardContent className="p-6 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Bill Amount</span>
+                    <span className="text-foreground">₹{amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-success">
+                    <span>Discount</span>
+                    <span>- ₹{discount.toFixed(2)}</span>
+                  </div>
+                  <div className="border-t border-border pt-3 flex justify-between font-semibold">
+                    <span className="text-foreground">Paid</span>
+                    <span className="text-primary">₹{finalAmount.toFixed(2)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Rewards Earned */}
+              <motion.div
+                className="flex items-center gap-3 p-4 rounded-2xl bg-gold/10 border border-gold/30 mb-8"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                Thank you for dining at {restaurant.name}
-              </motion.p>
-
-              <motion.div
-                className="w-full max-w-sm space-y-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-              >
-                <Card className="border-success/30 bg-success/5">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground mb-1">You Saved</p>
-                    <p className="text-3xl font-display font-bold text-success">
-                      ₹{discount.toFixed(0)}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-gold/30 bg-gold/5">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Rewards Earned</p>
-                    <p className="text-2xl font-display font-bold text-gold">
-                      +{rewardsEarned} Points
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Button
-                  variant="gradient"
-                  size="lg"
-                  className="w-full mt-6"
-                  onClick={() => navigate("/")}
-                >
-                  Back to Home
-                </Button>
+                <Gift className="w-8 h-8 text-gold" />
+                <div className="text-left">
+                  <p className="font-semibold text-foreground">+{rewardsEarned} Points Earned!</p>
+                  <p className="text-xs text-muted-foreground">Added to your rewards balance</p>
+                </div>
               </motion.div>
+
+              <Button
+                variant="gradient"
+                size="xl"
+                className="w-full max-w-sm"
+                onClick={() => navigate("/explore")}
+              >
+                Done
+              </Button>
             </motion.div>
           )}
         </AnimatePresence>
