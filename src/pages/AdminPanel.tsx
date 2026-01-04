@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
   Shield, Users, Store, Receipt, TrendingUp, Check, X, Eye, ArrowLeft,
-  DollarSign, Percent
+  DollarSign, Percent, BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
+import AdminAnalyticsCharts from "@/components/AdminAnalyticsCharts";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -38,7 +39,7 @@ const AdminPanel = () => {
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [stats, setStats] = useState({ users: 0, restaurants: 0, transactions: 0, revenue: 0 });
-  const [activeTab, setActiveTab] = useState<"overview" | "restaurants" | "users">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "restaurants" | "users">("overview");
   const [selectedRestaurant, setSelectedRestaurant] = useState<any | null>(null);
   const [restaurantStats, setRestaurantStats] = useState<RestaurantStats | null>(null);
   const [restaurantOffers, setRestaurantOffers] = useState<any[]>([]);
@@ -313,9 +314,10 @@ const AdminPanel = () => {
       </header>
 
       <div className="container py-6">
-        <div className="flex gap-2 mb-6">
-          {["overview", "restaurants", "users"].map(tab => (
-            <Button key={tab} variant={activeTab === tab ? "default" : "secondary"} size="sm" onClick={() => setActiveTab(tab as any)}>
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {["overview", "analytics", "restaurants", "users"].map(tab => (
+            <Button key={tab} variant={activeTab === tab ? "default" : "secondary"} size="sm" onClick={() => setActiveTab(tab as any)} className="flex items-center gap-1">
+              {tab === "analytics" && <BarChart3 className="w-4 h-4" />}
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </Button>
           ))}
@@ -328,6 +330,10 @@ const AdminPanel = () => {
             <Card><CardContent className="p-4"><Receipt className="w-8 h-8 text-success mb-2" /><p className="text-xs text-muted-foreground">Transactions</p><p className="text-2xl font-bold">{stats.transactions}</p></CardContent></Card>
             <Card><CardContent className="p-4"><TrendingUp className="w-8 h-8 text-accent mb-2" /><p className="text-xs text-muted-foreground">Revenue</p><p className="text-2xl font-bold">₹{stats.revenue.toLocaleString()}</p></CardContent></Card>
           </div>
+        )}
+
+        {activeTab === "analytics" && (
+          <AdminAnalyticsCharts />
         )}
 
         {activeTab === "restaurants" && (
