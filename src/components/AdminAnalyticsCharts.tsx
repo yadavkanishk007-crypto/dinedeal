@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart,
@@ -18,7 +19,8 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import { TrendingUp, Users, Store, IndianRupee, ShoppingCart, Award, Target, Percent } from "lucide-react";
+import { TrendingUp, Users, Store, IndianRupee, ShoppingCart, Award, Target, Percent, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { exportToCSV, exportToPDF } from "@/utils/exportUtils";
 
 interface AnalyticsData {
   usersByRole: { name: string; value: number; color: string }[];
@@ -264,6 +266,38 @@ const AdminAnalyticsCharts = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    exportToCSV({
+      totalCustomers: analytics.totalCustomers,
+      totalRestaurants: analytics.totalRestaurants,
+      totalRevenue: analytics.totalRevenue,
+      totalTransactions: analytics.totalTransactions,
+      avgOrderValue: analytics.avgOrderValue,
+      totalDiscountGiven: analytics.totalDiscountGiven,
+      conversionRate: analytics.conversionRate,
+      topRestaurants: analytics.topRestaurants,
+      cuisineDistribution: analytics.cuisineDistribution,
+      revenueByMonth: analytics.revenueByMonth,
+      transactionsByDay: analytics.transactionsByDay,
+    });
+  };
+
+  const handleExportPDF = () => {
+    exportToPDF({
+      totalCustomers: analytics.totalCustomers,
+      totalRestaurants: analytics.totalRestaurants,
+      totalRevenue: analytics.totalRevenue,
+      totalTransactions: analytics.totalTransactions,
+      avgOrderValue: analytics.avgOrderValue,
+      totalDiscountGiven: analytics.totalDiscountGiven,
+      conversionRate: analytics.conversionRate,
+      topRestaurants: analytics.topRestaurants,
+      cuisineDistribution: analytics.cuisineDistribution,
+      revenueByMonth: analytics.revenueByMonth,
+      transactionsByDay: analytics.transactionsByDay,
+    });
+  };
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -278,6 +312,21 @@ const AdminAnalyticsCharts = () => {
 
   return (
     <div className="space-y-6">
+      {/* Export Buttons */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Analytics Dashboard</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportPDF}>
+            <FileText className="w-4 h-4 mr-2" />
+            Export PDF
+          </Button>
+        </div>
+      </div>
+
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
