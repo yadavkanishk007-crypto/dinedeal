@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { MapPin, Sparkles, TrendingUp, ArrowRight, ChevronDown } from "lucide-react";
+import { MapPin, Sparkles, ArrowRight, ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/Logo";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -30,6 +30,54 @@ const Index = () => {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("all");
   const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [location, setLocation] = useState("Detecting...");
+  const [isLocating, setIsLocating] = useState(true);
+
+  // Check if today is weekend (Saturday = 6, Sunday = 0)
+  const isWeekend = () => {
+    const day = new Date().getDay();
+    return day === 0 || day === 6;
+  };
+
+  const detectLocation = async () => {
+    setIsLocating(true);
+    try {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            try {
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+              );
+              const data = await response.json();
+              const city = data.address?.city || 
+                          data.address?.town || 
+                          data.address?.village || 
+                          data.address?.district ||
+                          "Jhansi";
+              setLocation(city);
+            } catch (error) {
+              console.error("Reverse geocoding failed:", error);
+              setLocation("Jhansi");
+            }
+            setIsLocating(false);
+          },
+          () => {
+            setLocation("Jhansi");
+            setIsLocating(false);
+          },
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      } else {
+        setLocation("Jhansi");
+        setIsLocating(false);
+      }
+    } catch (error) {
+      setLocation("Jhansi");
+      setIsLocating(false);
+    }
+  };
 
   useEffect(() => {
     if (!loading && user && role === "restaurant") {
@@ -41,7 +89,10 @@ const Index = () => {
 
   useEffect(() => {
     fetchRestaurants();
-  }, []);
+    if (user) {
+      detectLocation();
+    }
+  }, [user]);
 
   const fetchRestaurants = async () => {
     const { data } = await supabase
@@ -69,7 +120,16 @@ const Index = () => {
             <Logo size="default" />
             <div className="h-6 w-px bg-border" />
             <button className="flex items-center gap-1 text-sm text-muted-foreground">
-              <MapPin className="w-4 h-4 text-primary" /><span>Bangalore</span><ChevronDown className="w-3 h-3" />
+              <MapPin className="w-4 h-4 text-primary" />
+              {isLocating ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Detecting...
+                </span>
+              ) : (
+                <span>{location}</span>
+              )}
+              <ChevronDown className="w-3 h-3" />
             </button>
           </div>
           <Link to="/profile">
@@ -83,14 +143,17 @@ const Index = () => {
       <main className="container py-6 space-y-6">
         <QuickStats />
         
-        <motion.div className="relative overflow-hidden rounded-3xl gradient-primary p-6 text-primary-foreground" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2"><Sparkles className="w-5 h-5" /><span className="text-sm font-medium opacity-90">Weekend Special</span></div>
-            <h3 className="font-display text-2xl font-bold mb-2">Extra 10% Cashback</h3>
-            <p className="text-sm opacity-80 mb-4">Pay at any restaurant this weekend!</p>
-            <Button variant="glass" size="sm" className="bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30">Claim Now</Button>
-          </div>
-        </motion.div>
+        {/* Weekend Cashback Banner - Only show on weekends */}
+        {isWeekend() && (
+          <motion.div className="relative overflow-hidden rounded-3xl gradient-primary p-6 text-primary-foreground" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2"><Sparkles className="w-5 h-5" /><span className="text-sm font-medium opacity-90">Weekend Special</span></div>
+              <h3 className="font-display text-2xl font-bold mb-2">Extra 10% Cashback</h3>
+              <p className="text-sm opacity-80 mb-4">Pay at any restaurant this weekend!</p>
+              <Button variant="glass" size="sm" className="bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30">Claim Now</Button>
+            </div>
+          </motion.div>
+        )}
 
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -114,7 +177,6 @@ const Index = () => {
     </div>
   );
 };
-
 const LandingPage = () => (
   <div className="min-h-screen bg-background">
     <header className="container py-6 flex items-center justify-between">
@@ -127,9 +189,6 @@ const LandingPage = () => (
     <main className="container py-12 md:py-24">
       <div className="grid lg:grid-cols-2 gap-12 items-center">
         <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}>
-          <motion.div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <TrendingUp className="w-4 h-4" /><span>Users saved ₹2.5 Cr this month</span>
-          </motion.div>
           <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground leading-tight mb-6">Dine Local. <span className="gradient-text">Save More.</span></h1>
           <p className="text-lg text-muted-foreground mb-8 max-w-lg">Pay at your favorite restaurants through DineDeal and get instant discounts, cashback, and exclusive rewards.</p>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -144,5 +203,4 @@ const LandingPage = () => (
     </main>
   </div>
 );
-
 export default Index;
