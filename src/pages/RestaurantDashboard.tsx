@@ -28,7 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
 import RestaurantQRCode from "@/components/RestaurantQRCode";
-import { useRealtimeTransactions } from "@/hooks/useRealtimeTransactions";
+import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 
 interface Restaurant {
   id: string;
@@ -159,10 +159,10 @@ const RestaurantDashboard = () => {
   };
 
   // Real-time notifications for new transactions
-  useRealtimeTransactions({
+  useOrderNotifications({
     restaurantId: restaurant?.id,
     enabled: !!restaurant?.id,
-    onNewTransaction: () => {
+    onNewOrder: () => {
       fetchRestaurantData(); // Refresh stats on new transaction
     },
   });

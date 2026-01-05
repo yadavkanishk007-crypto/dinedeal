@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
   Shield, Users, Store, Receipt, TrendingUp, Check, X, Eye, ArrowLeft,
-  DollarSign, Percent, BarChart3
+  DollarSign, Percent, BarChart3, Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
 import AdminAnalyticsCharts from "@/components/AdminAnalyticsCharts";
+import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -44,6 +45,18 @@ const AdminPanel = () => {
   const [restaurantStats, setRestaurantStats] = useState<RestaurantStats | null>(null);
   const [restaurantOffers, setRestaurantOffers] = useState<any[]>([]);
   const [restaurantTransactions, setRestaurantTransactions] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+
+  // Enable order notifications for admin
+  const { requestPermission } = useOrderNotifications({
+    isAdmin: true,
+    enabled: user && role === "admin",
+    onNewOrder: (order) => {
+      setRecentOrders(prev => [order, ...prev].slice(0, 10));
+      // Refresh stats when new order comes in
+      fetchData();
+    },
+  });
 
   useEffect(() => {
     if (!loading && (!user || role !== "admin")) {
