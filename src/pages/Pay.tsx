@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ArrowLeft, 
-  Check, 
-  Smartphone, 
+import {
+  ArrowLeft,
+  Check,
+  Smartphone,
   Sparkles,
   Gift,
-  ChevronRight,
   Copy,
   ExternalLink,
-  CreditCard
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +19,17 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-type PaymentStep = "amount" | "breakdown" | "payment-method" | "upi" | "card" | "processing" | "success";
+type PaymentStep =
+  | "amount"
+  | "breakdown"
+  | "payment-method"
+  | "upi"
+  | "card"
+  | "processing"
+  | "success";
 type PaymentMethod = "upi" | "card";
 
-// Restaurant's UPI ID (this would come from the restaurant record in production)
+// Restaurant's UPI ID
 const MERCHANT_UPI_ID = "merchant@upi";
 
 const Pay = () => {
@@ -31,30 +37,49 @@ const Pay = () => {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   const restaurantId = searchParams.get("restaurant");
-  const restaurant = restaurants.find((r) => r.id === restaurantId) || restaurants[0];
-  
+  const restaurant =
+    restaurants.find((r) => r.id === restaurantId) || restaurants[0];
+
   const [step, setStep] = useState<PaymentStep>("amount");
   const [billAmount, setBillAmount] = useState("");
   const [transactionId, setTransactionId] = useState<string>("");
   const [upiReference, setUpiReference] = useState("");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>("upi");
-  
-  // Card details
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-  const [cardName, setCardName] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] =
+    useState<PaymentMethod>("upi");
+  const [isRazorpayLoaded, setIsRazorpayLoaded] = useState(false);
 
+  // Calculations
   const amount = parseFloat(billAmount) || 0;
-  const discount = Math.min(amount * (restaurant.discount / 100), restaurant.maxDiscount);
+  const discount = Math.min(
+    amount * (restaurant.discount / 100),
+    restaurant.maxDiscount
+  );
   const finalAmount = amount - discount;
   const rewardsEarned = Math.floor(amount * 0.02);
 
-  // Generate a unique transaction reference
+  // 1. Generate unique transaction reference
   useEffect(() => {
-    setTransactionId(`DD${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`);
+    setTransactionId(
+      `DD${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+    );
+  }, []);
+
+  // 2. Load Razorpay Script dynamically
+  useEffect(() => {
+    const loadScript = async () => {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => setIsRazorpayLoaded(true);
+      script.onerror = () => {
+        console.error("Razorpay SDK failed to load");
+        setIsRazorpayLoaded(false);
+      };
+      document.body.appendChild(script);
+    };
+    loadScript();
   }, []);
 
   const handleProceed = () => {
@@ -92,12 +117,6 @@ const Pay = () => {
     }
   };
 
-  const handleOpenUPI = () => {
-    const upiLink = generateUPILink();
-    window.location.href = upiLink;
-    setStep("upi");
-  };
-
   const copyUPIId = () => {
     navigator.clipboard.writeText(MERCHANT_UPI_ID);
     toast({
@@ -106,65 +125,12 @@ const Pay = () => {
     });
   };
 
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = matches && matches[0] || '';
-    const parts = [];
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-    return parts.length ? parts.join(' ') : value;
-  };
-
-  const formatExpiry = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    if (v.length >= 2) {
-      return v.substring(0, 2) + '/' + v.substring(2, 4);
-    }
-    return v;
-  };
-
-  const handleCardPayment = async () => {
-    if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
-      toast({
-        title: "Invalid Card Number",
-        description: "Please enter a valid 16-digit card number",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!cardExpiry || cardExpiry.length < 5) {
-      toast({
-        title: "Invalid Expiry Date",
-        description: "Please enter a valid expiry date (MM/YY)",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!cardCvv || cardCvv.length < 3) {
-      toast({
-        title: "Invalid CVV",
-        description: "Please enter a valid CVV",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!cardName) {
-      toast({
-        title: "Name Required",
-        description: "Please enter the cardholder name",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setStep("processing");
-
+  // Logic to handle database recording after payment success
+  const recordTransaction = async (
+    method: "upi" | "card",
+    reference: string
+  ) => {
     try {
-      // Simulate card payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
       // Save transaction to database
       const { error } = await supabase.from("transactions").insert({
         user_id: user?.id,
@@ -173,8 +139,8 @@ const Pay = () => {
         discount_amount: discount,
         final_amount: finalAmount,
         rewards_earned: rewardsEarned,
-        payment_method: "card",
-        payment_reference: `CARD-${transactionId}`,
+        payment_method: method,
+        payment_reference: reference,
         payment_status: "completed",
       });
 
@@ -214,8 +180,12 @@ const Pay = () => {
                 finalAmount: finalAmount,
                 rewardsEarned: rewardsEarned,
                 transactionId: transactionId,
-                date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
-                paymentMethod: "Card",
+                date: new Date().toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }),
+                paymentMethod: method === "upi" ? "UPI" : "Card",
               },
             },
           });
@@ -226,97 +196,103 @@ const Pay = () => {
 
       setStep("success");
     } catch (error) {
-      console.error("Payment error:", error);
+      console.error("Payment recording error:", error);
       toast({
-        title: "Payment Failed",
-        description: "There was an error processing your card payment. Please try again.",
+        title: "Payment Recorded",
+        description:
+          "Payment successful, but there was an issue syncing details.",
+        variant: "destructive",
+      });
+      setStep("success"); // Still show success if the payment itself worked
+    }
+  };
+
+  // --- Real Razorpay Logic ---
+  const startRazorpayPayment = async (amountVal: number) => {
+    if (!isRazorpayLoaded) {
+      toast({
+        title: "System Loading",
+        description: "Payment system is initializing. Please try again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setStep("processing");
+
+      // 1️⃣ Create order from backend
+      const res = await fetch(
+        "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amountVal }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error("Order creation failed");
+      }
+
+      const { order } = data;
+
+      // 2️⃣ Open Razorpay Checkout
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID, // Ensure this exists in .env
+        amount: order.amount,
+        currency: order.currency,
+        name: "DineDeal",
+        description: `Payment at ${restaurant.name}`,
+        order_id: order.id,
+        handler: async function (response: any) {
+          // 3️⃣ Payment success -> Record in Supabase
+          await recordTransaction("card", response.razorpay_payment_id);
+        },
+        theme: { color: "#000000" },
+        modal: {
+          ondismiss: function () {
+            setStep("card"); // Go back to card step if user cancels
+          },
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on("payment.failed", function (response: any) {
+        toast({
+          title: "Payment Failed",
+          description: response.error.description,
+          variant: "destructive",
+        });
+        setStep("card");
+      });
+      rzp.open();
+    } catch (error) {
+      console.error("Razorpay error:", error);
+      toast({
+        title: "Payment Initialization Failed",
+        description: "Unable to initiate card payment. Check connection.",
         variant: "destructive",
       });
       setStep("card");
     }
   };
 
-  const handleConfirmPayment = async () => {
+  // --- UPI Logic ---
+  const handleConfirmUPIPayment = async () => {
     if (!upiReference.trim()) {
       toast({
         title: "Enter UPI Reference",
-        description: "Please enter the UPI reference number from your payment app",
+        description:
+          "Please enter the UPI reference number from your payment app",
         variant: "destructive",
       });
       return;
     }
-
     setStep("processing");
-
-    try {
-      // Save transaction to database
-      const { error } = await supabase.from("transactions").insert({
-        user_id: user?.id,
-        restaurant_id: restaurantId,
-        bill_amount: amount,
-        discount_amount: discount,
-        final_amount: finalAmount,
-        rewards_earned: rewardsEarned,
-        payment_method: "upi",
-        payment_reference: upiReference,
-        payment_status: "completed",
-      });
-
-      if (error) throw error;
-
-      // Update user rewards if logged in
-      if (user?.id) {
-        const { data: currentRewards } = await supabase
-          .from("rewards")
-          .select("points, total_earned")
-          .eq("user_id", user.id)
-          .single();
-
-        if (currentRewards) {
-          await supabase
-            .from("rewards")
-            .update({
-              points: currentRewards.points + rewardsEarned,
-              total_earned: currentRewards.total_earned + rewardsEarned,
-            })
-            .eq("user_id", user.id);
-        }
-      }
-
-      // Send transaction receipt email
-      if (user?.email) {
-        try {
-          await supabase.functions.invoke("send-email", {
-            body: {
-              to: user.email,
-              type: "transaction_receipt",
-              data: {
-                userName: user.user_metadata?.full_name || "Customer",
-                restaurantName: restaurant.name,
-                billAmount: amount,
-                discount: discount,
-                finalAmount: finalAmount,
-                rewardsEarned: rewardsEarned,
-                transactionId: transactionId,
-                date: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
-                paymentMethod: "UPI",
-              },
-            },
-          });
-        } catch (emailError) {
-          console.error("Failed to send receipt email:", emailError);
-        }
-      }
-
-      setTimeout(() => setStep("success"), 1500);
-    } catch (error) {
-      console.error("Payment error:", error);
-      toast({
-        title: "Payment recorded",
-        description: "Your payment has been recorded successfully!",
-      });
-      setTimeout(() => setStep("success"), 1500);
-    }
+    await recordTransaction("upi", upiReference);
   };
 
   return (
@@ -340,8 +316,12 @@ const Pay = () => {
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </motion.button>
           <div>
-            <h1 className="font-display font-bold text-foreground">Pay at {restaurant.name}</h1>
-            <p className="text-xs text-muted-foreground">{restaurant.discount}% discount available</p>
+            <h1 className="font-display font-bold text-foreground">
+              Pay at {restaurant.name}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {restaurant.discount}% discount available
+            </p>
           </div>
         </div>
       </motion.header>
@@ -358,9 +338,13 @@ const Pay = () => {
               className="space-y-6"
             >
               <div className="text-center py-8">
-                <p className="text-muted-foreground text-sm mb-2">Enter your bill amount</p>
+                <p className="text-muted-foreground text-sm mb-2">
+                  Enter your bill amount
+                </p>
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-4xl font-display font-bold text-foreground">₹</span>
+                  <span className="text-4xl font-display font-bold text-foreground">
+                    ₹
+                  </span>
                   <input
                     type="number"
                     placeholder="0"
@@ -405,8 +389,12 @@ const Pay = () => {
                       className="w-16 h-16 rounded-xl object-cover"
                     />
                     <div className="flex-1">
-                      <h3 className="font-semibold text-foreground">{restaurant.name}</h3>
-                      <p className="text-xs text-muted-foreground">{restaurant.cuisine}</p>
+                      <h3 className="font-semibold text-foreground">
+                        {restaurant.name}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {restaurant.cuisine}
+                      </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="px-2 py-0.5 rounded-full gradient-primary text-xs font-medium text-primary-foreground">
                           {restaurant.discount}% OFF
@@ -449,17 +437,23 @@ const Pay = () => {
                 <CardContent className="p-6 space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Bill Amount</span>
-                    <span className="font-medium text-foreground">₹{amount.toFixed(2)}</span>
+                    <span className="font-medium text-foreground">
+                      ₹{amount.toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-success">
                     <span className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4" />
                       DineDeal Discount ({restaurant.discount}%)
                     </span>
-                    <span className="font-medium">- ₹{discount.toFixed(2)}</span>
+                    <span className="font-medium">
+                      - ₹{discount.toFixed(2)}
+                    </span>
                   </div>
                   <div className="border-t border-border pt-4 flex justify-between items-center">
-                    <span className="font-semibold text-foreground">You Pay</span>
+                    <span className="font-semibold text-foreground">
+                      You Pay
+                    </span>
                     <span className="text-2xl font-display font-bold gradient-text">
                       ₹{finalAmount.toFixed(2)}
                     </span>
@@ -474,8 +468,12 @@ const Pay = () => {
                     <Gift className="w-6 h-6 text-primary-foreground" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-foreground">Earn {rewardsEarned} Reward Points</p>
-                    <p className="text-xs text-muted-foreground">Redeem on your next visit!</p>
+                    <p className="font-semibold text-foreground">
+                      Earn {rewardsEarned} Reward Points
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Redeem on your next visit!
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -487,9 +485,13 @@ const Pay = () => {
                 </h3>
                 <div className="space-y-3">
                   {/* UPI Option */}
-                  <Card 
-                    className={`border-2 cursor-pointer transition-all ${selectedPaymentMethod === 'upi' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}
-                    onClick={() => setSelectedPaymentMethod('upi')}
+                  <Card
+                    className={`border-2 cursor-pointer transition-all ${
+                      selectedPaymentMethod === "upi"
+                        ? "border-primary bg-primary/5"
+                        : "border-border/50 hover:border-primary/30"
+                    }`}
+                    onClick={() => setSelectedPaymentMethod("upi")}
                   >
                     <CardContent className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -497,20 +499,36 @@ const Pay = () => {
                           <Smartphone className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">UPI Payment</p>
-                          <p className="text-xs text-muted-foreground">GPay, PhonePe, Paytm & more</p>
+                          <p className="font-medium text-foreground">
+                            UPI Payment
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            GPay, PhonePe, Paytm & more
+                          </p>
                         </div>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPaymentMethod === 'upi' ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
-                        {selectedPaymentMethod === 'upi' && <Check className="w-3 h-3 text-primary-foreground" />}
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          selectedPaymentMethod === "upi"
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground"
+                        }`}
+                      >
+                        {selectedPaymentMethod === "upi" && (
+                          <Check className="w-3 h-3 text-primary-foreground" />
+                        )}
                       </div>
                     </CardContent>
                   </Card>
 
                   {/* Card Option */}
-                  <Card 
-                    className={`border-2 cursor-pointer transition-all ${selectedPaymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}
-                    onClick={() => setSelectedPaymentMethod('card')}
+                  <Card
+                    className={`border-2 cursor-pointer transition-all ${
+                      selectedPaymentMethod === "card"
+                        ? "border-primary bg-primary/5"
+                        : "border-border/50 hover:border-primary/30"
+                    }`}
+                    onClick={() => setSelectedPaymentMethod("card")}
                   >
                     <CardContent className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -518,12 +536,24 @@ const Pay = () => {
                           <CreditCard className="w-5 h-5 text-gold" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">Credit / Debit Card</p>
-                          <p className="text-xs text-muted-foreground">Visa, Mastercard, RuPay</p>
+                          <p className="font-medium text-foreground">
+                            Credit / Debit Card
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Visa, Mastercard, RuPay
+                          </p>
                         </div>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPaymentMethod === 'card' ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
-                        {selectedPaymentMethod === 'card' && <Check className="w-3 h-3 text-primary-foreground" />}
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          selectedPaymentMethod === "card"
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground"
+                        }`}
+                      >
+                        {selectedPaymentMethod === "card" && (
+                          <Check className="w-3 h-3 text-primary-foreground" />
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -534,9 +564,12 @@ const Pay = () => {
                 variant="gradient"
                 size="xl"
                 className="w-full"
-                onClick={() => handleSelectPaymentMethod(selectedPaymentMethod)}
+                onClick={() =>
+                  handleSelectPaymentMethod(selectedPaymentMethod)
+                }
               >
-                Pay ₹{finalAmount.toFixed(2)} via {selectedPaymentMethod === 'upi' ? 'UPI' : 'Card'}
+                Pay ₹{finalAmount.toFixed(2)} via{" "}
+                {selectedPaymentMethod === "upi" ? "UPI" : "Card"}
               </Button>
             </motion.div>
           )}
@@ -565,9 +598,13 @@ const Pay = () => {
               {/* UPI ID Display */}
               <Card className="border-border/50">
                 <CardContent className="p-4">
-                  <p className="text-xs text-muted-foreground mb-2">Pay to UPI ID</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Pay to UPI ID
+                  </p>
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-medium text-foreground">{MERCHANT_UPI_ID}</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {MERCHANT_UPI_ID}
+                    </span>
                     <Button variant="ghost" size="sm" onClick={copyUPIId}>
                       <Copy className="w-4 h-4" />
                     </Button>
@@ -578,7 +615,9 @@ const Pay = () => {
               {/* Amount */}
               <Card className="border-primary/30 bg-primary/5">
                 <CardContent className="p-4 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Amount to Pay</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Amount to Pay
+                  </p>
                   <p className="text-3xl font-display font-bold text-primary">
                     ₹{finalAmount.toFixed(2)}
                   </p>
@@ -590,7 +629,7 @@ const Pay = () => {
                 variant="outline"
                 size="lg"
                 className="w-full"
-                onClick={() => window.location.href = generateUPILink()}
+                onClick={() => (window.location.href = generateUPILink())}
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Open UPI App
@@ -602,7 +641,8 @@ const Pay = () => {
                   Enter UPI Reference Number
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  After payment, enter the UTR/Reference number from your UPI app
+                  After payment, enter the UTR/Reference number from your UPI
+                  app
                 </p>
                 <Input
                   placeholder="e.g., 123456789012"
@@ -616,7 +656,7 @@ const Pay = () => {
                 variant="gradient"
                 size="xl"
                 className="w-full"
-                onClick={handleConfirmPayment}
+                onClick={handleConfirmUPIPayment}
                 disabled={!upiReference.trim()}
               >
                 Confirm Payment
@@ -628,7 +668,7 @@ const Pay = () => {
             </motion.div>
           )}
 
-          {/* Step 3b: Card Payment */}
+          {/* Step 3b: Card Payment (Razorpay Integrated) */}
           {step === "card" && (
             <motion.div
               key="card"
@@ -642,77 +682,32 @@ const Pay = () => {
                   <CreditCard className="w-8 h-8 text-primary-foreground" />
                 </div>
                 <h2 className="font-display font-bold text-xl text-foreground mb-2">
-                  Enter Card Details
+                  Pay with Card
                 </h2>
                 <p className="text-muted-foreground text-sm">
-                  Pay ₹{finalAmount.toFixed(2)} using your card
+                  Secure card payment powered by Razorpay
                 </p>
               </div>
 
-              {/* Card Form */}
               <Card className="border-border/50">
-                <CardContent className="p-6 space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">Card Number</label>
-                    <Input
-                      placeholder="1234 5678 9012 3456"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                      maxLength={19}
-                      className="text-lg tracking-wider"
-                    />
-                  </div>
+                <CardContent className="p-6 space-y-4 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    You will be redirected to Razorpay’s secure payment screen.
+                  </p>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-2 block">Expiry Date</label>
-                      <Input
-                        placeholder="MM/YY"
-                        value={cardExpiry}
-                        onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                        maxLength={5}
-                        className="text-center"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-foreground mb-2 block">CVV</label>
-                      <Input
-                        type="password"
-                        placeholder="•••"
-                        value={cardCvv}
-                        onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        maxLength={4}
-                        className="text-center"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">Cardholder Name</label>
-                    <Input
-                      placeholder="Name on card"
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value.toUpperCase())}
-                      className="uppercase"
-                    />
-                  </div>
+                  <Button
+                    variant="gradient"
+                    size="xl"
+                    className="w-full"
+                    onClick={() => startRazorpayPayment(finalAmount)}
+                    disabled={!isRazorpayLoaded}
+                  >
+                    {!isRazorpayLoaded
+                      ? "Loading System..."
+                      : `Pay ₹${finalAmount.toFixed(2)} Securely`}
+                  </Button>
                 </CardContent>
               </Card>
-
-              {/* Security Note */}
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-success/10 border border-success/20">
-                <Check className="w-4 h-4 text-success flex-shrink-0" />
-                <p className="text-xs text-success">Your payment is secured with 256-bit SSL encryption</p>
-              </div>
-
-              <Button
-                variant="gradient"
-                size="xl"
-                className="w-full"
-                onClick={handleCardPayment}
-              >
-                Pay ₹{finalAmount.toFixed(2)}
-              </Button>
 
               <p className="text-xs text-center text-muted-foreground">
                 Transaction ID: {transactionId}
@@ -732,14 +727,20 @@ const Pay = () => {
               <motion.div
                 className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center mb-6"
                 animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                transition={{
+                  repeat: Infinity,
+                  duration: 2,
+                  ease: "linear",
+                }}
               >
                 <Smartphone className="w-10 h-10 text-primary-foreground" />
               </motion.div>
               <h2 className="font-display font-bold text-2xl text-foreground mb-2">
                 Verifying Payment
               </h2>
-              <p className="text-muted-foreground">Please wait a moment...</p>
+              <p className="text-muted-foreground">
+                Please wait a moment...
+              </p>
             </motion.div>
           )}
 
@@ -756,7 +757,11 @@ const Pay = () => {
                 className="w-24 h-24 rounded-full gradient-success flex items-center justify-center mb-6"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 200,
+                  damping: 15,
+                }}
               >
                 <Check className="w-12 h-12 text-primary-foreground" />
               </motion.div>
@@ -773,7 +778,9 @@ const Pay = () => {
                 <CardContent className="p-6 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Bill Amount</span>
-                    <span className="text-foreground">₹{amount.toFixed(2)}</span>
+                    <span className="text-foreground">
+                      ₹{amount.toFixed(2)}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm text-success">
                     <span>Discount</span>
@@ -781,7 +788,9 @@ const Pay = () => {
                   </div>
                   <div className="border-t border-border pt-3 flex justify-between font-semibold">
                     <span className="text-foreground">Paid</span>
-                    <span className="text-primary">₹{finalAmount.toFixed(2)}</span>
+                    <span className="text-primary">
+                      ₹{finalAmount.toFixed(2)}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -795,8 +804,12 @@ const Pay = () => {
               >
                 <Gift className="w-8 h-8 text-gold" />
                 <div className="text-left">
-                  <p className="font-semibold text-foreground">+{rewardsEarned} Points Earned!</p>
-                  <p className="text-xs text-muted-foreground">Added to your rewards balance</p>
+                  <p className="font-semibold text-foreground">
+                    +{rewardsEarned} Points Earned!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Added to your rewards balance
+                  </p>
                 </div>
               </motion.div>
 
