@@ -10,13 +10,17 @@ import {
   ChevronRight,
   Heart,
   Share2,
-  Info
+  Info,
+  CalendarDays,
+  UtensilsCrossed,
+  Leaf
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import { restaurants as mockRestaurants } from "@/data/mockData";
+import TableBookingModal from "@/components/TableBookingModal";
 
 interface Restaurant {
   id: string;
@@ -38,6 +42,15 @@ interface Offer {
   terms: string | null;
   valid_until: string | null;
 }
+interface MenuItem {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  category: string;
+  is_veg: boolean;
+  is_available: boolean;
+}
 
 const RestaurantDetail = () => {
   const { id } = useParams();
@@ -45,7 +58,9 @@ const RestaurantDetail = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -77,6 +92,16 @@ const RestaurantDetail = () => {
           .eq("is_active", true);
 
         setOffers(offersData || []);
+
+        // Fetch menu items
+        const { data: menuData } = await supabase
+          .from("menu_items")
+          .select("*")
+          .eq("restaurant_id", id)
+          .eq("is_available", true)
+          .order("category");
+
+        setMenuItems(menuData || []);
       }
     } catch (error) {
       console.error("Error fetching restaurant:", error);
@@ -120,6 +145,12 @@ const RestaurantDetail = () => {
   const maxDiscount = offers.length > 0 
     ? Math.max(...offers.map(o => o.max_discount))
     : 500;
+
+  const groupedMenuItems = menuItems.reduce((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, MenuItem[]>);
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -270,6 +301,49 @@ const RestaurantDetail = () => {
           )}
         </motion.section>
 
+        {/* Menu Section */}
+        {menuItems.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <h2 className="font-display font-bold text-lg text-foreground mb-4 flex items-center gap-2">
+              <UtensilsCrossed className="w-5 h-5 text-primary" />
+              Menu
+            </h2>
+            <Card className="border-border/50">
+              <CardContent className="p-4 space-y-4">
+                {Object.entries(groupedMenuItems).map(([category, items]) => (
+                  <div key={category}>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-2">{category}</h3>
+                    <div className="space-y-2">
+                      {items.map((item) => (
+                        <div key={item.id} className="flex items-start justify-between p-3 rounded-lg bg-secondary/50">
+                          <div className="flex items-start gap-2">
+                            <div className={`w-4 h-4 mt-1 rounded-sm border-2 flex items-center justify-center shrink-0 ${
+                              item.is_veg ? "border-success" : "border-destructive"
+                            }`}>
+                              <div className={`w-2 h-2 rounded-full ${item.is_veg ? "bg-success" : "bg-destructive"}`} />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{item.name}</p>
+                              {item.description && (
+                                <p className="text-xs text-muted-foreground">{item.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="font-bold text-sm">₹{item.price}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.section>
+        )}
+
         {/* How it Works */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -348,6 +422,13 @@ const RestaurantDetail = () => {
           </div>
         </div>
       </motion.div>
+
+      <TableBookingModal
+        isOpen={showBookingModal}
+        onClose={() => setShowBookingModal(false)}
+        restaurantId={displayRestaurant.id}
+        restaurantName={displayRestaurant.name}
+      />
 
       <BottomNav />
     </div>

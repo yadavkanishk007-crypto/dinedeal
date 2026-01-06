@@ -22,6 +22,12 @@ import {
 import { TrendingUp, Users, Store, IndianRupee, ShoppingCart, Award, Target, Percent, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { exportToCSV, exportToPDF } from "@/utils/exportUtils";
 
+interface CouponUsage {
+  code: string;
+  uses: number;
+  discount: number;
+}
+
 interface AnalyticsData {
   usersByRole: { name: string; value: number; color: string }[];
   signupsByMonth: { month: string; customers: number; restaurants: number }[];
@@ -38,6 +44,7 @@ interface AnalyticsData {
   conversionRate: number;
   activeRestaurants: number;
   recentSignups: number;
+  couponUsage: CouponUsage[];
 }
 
 const COLORS = ["hsl(var(--primary))", "hsl(var(--gold))", "hsl(var(--accent))", "hsl(var(--success))", "hsl(var(--destructive))"];
@@ -59,6 +66,7 @@ const AdminAnalyticsCharts = () => {
     conversionRate: 0,
     activeRestaurants: 0,
     recentSignups: 0,
+    couponUsage: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -242,6 +250,20 @@ const AdminAnalyticsCharts = () => {
       const usersWithTransactions = new Set(transactionsData?.map(tx => tx.user_id).filter(Boolean));
       const conversionRate = roleCount.customer > 0 ? (usersWithTransactions.size / roleCount.customer) * 100 : 0;
 
+      // Fetch coupon usage
+      const { data: couponsData } = await supabase
+        .from("coupons")
+        .select("code, current_uses, max_discount, discount_percent");
+
+      const couponUsage: CouponUsage[] = (couponsData || [])
+        .filter(c => c.current_uses > 0)
+        .map(c => ({
+          code: c.code,
+          uses: c.current_uses,
+          discount: c.current_uses * (c.max_discount || 0),
+        }))
+        .sort((a, b) => b.uses - a.uses);
+
       setAnalytics({
         usersByRole,
         signupsByMonth: signupsTrend,
@@ -258,6 +280,7 @@ const AdminAnalyticsCharts = () => {
         conversionRate,
         activeRestaurants,
         recentSignups,
+        couponUsage,
       });
     } catch (error) {
       console.error("Error fetching analytics:", error);
@@ -279,6 +302,7 @@ const AdminAnalyticsCharts = () => {
       cuisineDistribution: analytics.cuisineDistribution,
       revenueByMonth: analytics.revenueByMonth,
       transactionsByDay: analytics.transactionsByDay,
+      couponUsage: analytics.couponUsage,
     });
   };
 
@@ -295,6 +319,7 @@ const AdminAnalyticsCharts = () => {
       cuisineDistribution: analytics.cuisineDistribution,
       revenueByMonth: analytics.revenueByMonth,
       transactionsByDay: analytics.transactionsByDay,
+      couponUsage: analytics.couponUsage,
     });
   };
 
