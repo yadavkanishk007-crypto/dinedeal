@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
   Shield, Users, Store, Receipt, TrendingUp, Check, X, Eye, ArrowLeft,
-  DollarSign, Percent, BarChart3, Bell
+  DollarSign, Percent, BarChart3, Bell, UserPlus, Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
 import AdminAnalyticsCharts from "@/components/AdminAnalyticsCharts";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
+import AdminCreator from "@/components/AdminCreator";
+import CouponManager from "@/components/CouponManager";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -40,7 +42,7 @@ const AdminPanel = () => {
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [stats, setStats] = useState({ users: 0, restaurants: 0, transactions: 0, revenue: 0 });
-  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "restaurants" | "users">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "restaurants" | "users" | "admins" | "coupons">("overview");
   const [selectedRestaurant, setSelectedRestaurant] = useState<any | null>(null);
   const [restaurantStats, setRestaurantStats] = useState<RestaurantStats | null>(null);
   const [restaurantOffers, setRestaurantOffers] = useState<any[]>([]);
@@ -328,10 +330,17 @@ const AdminPanel = () => {
 
       <div className="container py-6">
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {["overview", "analytics", "restaurants", "users"].map(tab => (
-            <Button key={tab} variant={activeTab === tab ? "default" : "secondary"} size="sm" onClick={() => setActiveTab(tab as any)} className="flex items-center gap-1">
-              {tab === "analytics" && <BarChart3 className="w-4 h-4" />}
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          {[
+            { id: "overview", label: "Overview", icon: null },
+            { id: "analytics", label: "Analytics", icon: BarChart3 },
+            { id: "restaurants", label: "Restaurants", icon: Store },
+            { id: "users", label: "Users", icon: Users },
+            { id: "admins", label: "Create Admin", icon: UserPlus },
+            { id: "coupons", label: "Coupons", icon: Ticket },
+          ].map(tab => (
+            <Button key={tab.id} variant={activeTab === tab.id ? "default" : "secondary"} size="sm" onClick={() => setActiveTab(tab.id as any)} className="flex items-center gap-1 shrink-0">
+              {tab.icon && <tab.icon className="w-4 h-4" />}
+              {tab.label}
             </Button>
           ))}
         </div>
@@ -426,6 +435,14 @@ const AdminPanel = () => {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === "admins" && (
+          <AdminCreator />
+        )}
+
+        {activeTab === "coupons" && (
+          <CouponManager />
         )}
       </div>
     </div>

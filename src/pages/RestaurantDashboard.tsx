@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Upload,
   Camera,
-  X
+  X,
+  UtensilsCrossed,
+  Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +31,8 @@ import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
 import RestaurantQRCode from "@/components/RestaurantQRCode";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
+import MenuManager from "@/components/MenuManager";
+import ReservationManager from "@/components/ReservationManager";
 
 interface Restaurant {
   id: string;
@@ -68,7 +72,7 @@ const RestaurantDashboard = () => {
     totalCustomers: 0,
     avgOrderValue: 0,
   });
-  const [activeTab, setActiveTab] = useState<"overview" | "offers" | "transactions" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "menu" | "reservations" | "offers" | "transactions" | "settings">("overview");
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -317,6 +321,8 @@ const RestaurantDashboard = () => {
         <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide">
           {[
             { id: "overview", label: "Overview", icon: BarChart3 },
+            { id: "menu", label: "Menu", icon: UtensilsCrossed },
+            { id: "reservations", label: "Reservations", icon: Calendar },
             { id: "offers", label: "Offers", icon: Percent },
             { id: "transactions", label: "Transactions", icon: Receipt },
             { id: "settings", label: "Settings", icon: Settings },
@@ -399,6 +405,14 @@ const RestaurantDashboard = () => {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {activeTab === "menu" && restaurant && (
+          <MenuManager restaurantId={restaurant.id} />
+        )}
+
+        {activeTab === "reservations" && restaurant && (
+          <ReservationManager restaurantId={restaurant.id} />
         )}
 
         {activeTab === "offers" && (
