@@ -63,6 +63,25 @@ const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: Ta
 
       if (error) throw error;
 
+      // Send confirmation email if email provided
+      if (formData.email) {
+        await supabase.functions.invoke("send-reservation-email", {
+          body: {
+            to: formData.email,
+            type: "confirmation",
+            data: {
+              customerName: formData.name,
+              restaurantName,
+              reservationDate: formData.date,
+              reservationTime: formData.time,
+              partySize: formData.partySize,
+              status: "pending",
+              specialRequests: formData.specialRequests,
+            },
+          },
+        });
+      }
+
       toast({
         title: "Reservation Requested!",
         description: `Your table for ${formData.partySize} at ${restaurantName} on ${formData.date} is pending confirmation.`,

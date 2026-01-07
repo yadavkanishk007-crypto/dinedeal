@@ -21,6 +21,7 @@ import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import { restaurants as mockRestaurants } from "@/data/mockData";
 import TableBookingModal from "@/components/TableBookingModal";
+import RestaurantGallery from "@/components/RestaurantGallery";
 
 interface Restaurant {
   id: string;
@@ -344,6 +345,15 @@ const RestaurantDetail = () => {
           </motion.section>
         )}
 
+        {/* Photo Gallery */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <RestaurantGallery restaurantId={displayRestaurant.id} />
+        </motion.section>
+
         {/* How it Works */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -411,6 +421,15 @@ const RestaurantDetail = () => {
                 ₹{maxDiscount}
               </p>
             </div>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="shrink-0"
+              onClick={() => setShowBookingModal(true)}
+            >
+              <CalendarDays className="w-4 h-4 mr-2" />
+              Book Table
+            </Button>
             <Button
               variant="gradient"
               size="lg"

@@ -15,6 +15,7 @@ import RestaurantDashboard from "./pages/RestaurantDashboard";
 import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import TransactionHistory from "./pages/TransactionHistory";
+import MyReservations from "./pages/MyReservations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/rewards" element={<Rewards />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/transactions" element={<TransactionHistory />} />
+            <Route path="/reservations" element={<MyReservations />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/restaurant-dashboard" element={<RestaurantDashboard />} />
             <Route path="/admin/login" element={<AdminLogin />} />
