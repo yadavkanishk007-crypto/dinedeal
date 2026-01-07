@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Calendar, Clock, Users, Phone, Check, X, MessageSquare } from "lucide-react";
+import { Calendar, Clock, Users, Phone, Check, X, MessageSquare, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,9 +21,10 @@ interface Reservation {
 
 interface ReservationManagerProps {
   restaurantId: string;
+  restaurantName?: string;
 }
 
-const ReservationManager = ({ restaurantId }: ReservationManagerProps) => {
+const ReservationManager = ({ restaurantId, restaurantName = "Restaurant" }: ReservationManagerProps) => {
   const { toast } = useToast();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,16 +51,52 @@ const ReservationManager = ({ restaurantId }: ReservationManagerProps) => {
     }
   };
 
+  const sendStatusEmail = async (reservation: Reservation, newStatus: string) => {
+    if (!reservation.email) return;
+    
+    try {
+      await supabase.functions.invoke("send-reservation-email", {
+        body: {
+          to: reservation.email,
+          type: "status_update",
+          data: {
+            customerName: reservation.name,
+            restaurantName,
+            reservationDate: reservation.reservation_date,
+            reservationTime: reservation.reservation_time,
+            partySize: reservation.party_size,
+            status: newStatus,
+            specialRequests: reservation.special_requests,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error sending email:", error);
+    }
+  };
+
   const updateStatus = async (id: string, status: string) => {
     try {
+      const reservation = reservations.find(r => r.id === id);
+      
       const { error } = await supabase
         .from("reservations")
         .update({ status })
         .eq("id", id);
 
       if (error) throw error;
+      
       setReservations(reservations.map((r) => (r.id === id ? { ...r, status } : r)));
-      toast({ title: `Reservation ${status}` });
+      
+      // Send email notification
+      if (reservation) {
+        sendStatusEmail(reservation, status);
+      }
+      
+      toast({ 
+        title: `Reservation ${status}`,
+        description: reservation?.email ? "Email notification sent to customer" : undefined
+      });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }

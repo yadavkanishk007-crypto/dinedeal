@@ -33,6 +33,7 @@ import RestaurantQRCode from "@/components/RestaurantQRCode";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import MenuManager from "@/components/MenuManager";
 import ReservationManager from "@/components/ReservationManager";
+import RestaurantGallery from "@/components/RestaurantGallery";
 
 interface Restaurant {
   id: string;
@@ -412,7 +413,14 @@ const RestaurantDashboard = () => {
         )}
 
         {activeTab === "reservations" && restaurant && (
-          <ReservationManager restaurantId={restaurant.id} />
+          <ReservationManager restaurantId={restaurant.id} restaurantName={restaurant.name} />
+        )}
+
+        {activeTab === "settings" && restaurant && (
+          <div className="space-y-6">
+            <RestaurantGallery restaurantId={restaurant.id} editable />
+            <SettingsTab restaurant={restaurant} setRestaurant={setRestaurant} />
+          </div>
         )}
 
         {activeTab === "offers" && (
@@ -423,9 +431,6 @@ const RestaurantDashboard = () => {
           <TransactionsTab restaurantId={restaurant?.id} />
         )}
 
-        {activeTab === "settings" && (
-          <SettingsTab restaurant={restaurant} setRestaurant={setRestaurant} />
-        )}
       </div>
     </div>
   );
