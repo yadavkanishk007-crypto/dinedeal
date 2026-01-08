@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
   Shield, Users, Store, Receipt, TrendingUp, Check, X, Eye, ArrowLeft,
-  DollarSign, Percent, BarChart3, Bell, UserPlus, Ticket
+  DollarSign, Percent, BarChart3, Bell, UserPlus, Ticket, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import AdminAnalyticsCharts from "@/components/AdminAnalyticsCharts";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import AdminCreator from "@/components/AdminCreator";
 import CouponManager from "@/components/CouponManager";
+import { AdminAuditLog } from "@/components/AdminAuditLog";
+import { useAuditLog } from "@/hooks/useAuditLog";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -38,11 +40,12 @@ const AdminPanel = () => {
   const navigate = useNavigate();
   const { user, role, signOut, loading } = useAuth();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [stats, setStats] = useState({ users: 0, restaurants: 0, transactions: 0, revenue: 0 });
-  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "restaurants" | "users" | "admins" | "coupons">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "restaurants" | "users" | "admins" | "coupons" | "audit">("overview");
   const [selectedRestaurant, setSelectedRestaurant] = useState<any | null>(null);
   const [restaurantStats, setRestaurantStats] = useState<RestaurantStats | null>(null);
   const [restaurantOffers, setRestaurantOffers] = useState<any[]>([]);
@@ -141,6 +144,13 @@ const AdminPanel = () => {
     await supabase.from("restaurants").update({ is_approved: approved, is_active: approved }).eq("id", id);
     setRestaurants(restaurants.map(r => r.id === id ? { ...r, is_approved: approved, is_active: approved } : r));
     toast({ title: approved ? "Restaurant Approved" : "Restaurant Rejected" });
+    
+    await logAction({
+      action: approved ? 'approve' : 'reject',
+      entity_type: 'restaurant',
+      entity_id: id,
+      details: { approved },
+    });
   };
 
   useEffect(() => {
@@ -337,6 +347,7 @@ const AdminPanel = () => {
             { id: "users", label: "Users", icon: Users },
             { id: "admins", label: "Create Admin", icon: UserPlus },
             { id: "coupons", label: "Coupons", icon: Ticket },
+            { id: "audit", label: "Audit Log", icon: FileText },
           ].map(tab => (
             <Button key={tab.id} variant={activeTab === tab.id ? "default" : "secondary"} size="sm" onClick={() => setActiveTab(tab.id as any)} className="flex items-center gap-1 shrink-0">
               {tab.icon && <tab.icon className="w-4 h-4" />}
@@ -443,6 +454,10 @@ const AdminPanel = () => {
 
         {activeTab === "coupons" && (
           <CouponManager />
+        )}
+
+        {activeTab === "audit" && (
+          <AdminAuditLog />
         )}
       </div>
     </div>

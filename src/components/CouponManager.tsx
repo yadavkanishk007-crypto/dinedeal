@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAuditLog } from "@/hooks/useAuditLog";
 
 interface Coupon {
   id: string;
@@ -27,6 +28,7 @@ interface Coupon {
 const CouponManager = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -94,6 +96,14 @@ const CouponManager = () => {
       if (error) throw error;
 
       toast({ title: "Coupon created!", description: `Code: ${formData.code.toUpperCase()}` });
+      
+      // Log the action
+      await logAction({
+        action: 'create',
+        entity_type: 'coupon',
+        details: { code: formData.code.toUpperCase(), discount: formData.discountPercent + '%' },
+      });
+
       setShowForm(false);
       setFormData({
         code: "",
@@ -117,7 +127,7 @@ const CouponManager = () => {
     }
   };
 
-  const toggleCoupon = async (id: string, isActive: boolean) => {
+  const toggleCoupon = async (id: string, isActive: boolean, code: string) => {
     try {
       const { error } = await supabase
         .from("coupons")
@@ -125,6 +135,13 @@ const CouponManager = () => {
         .eq("id", id);
 
       if (error) throw error;
+      
+      await logAction({
+        action: 'update',
+        entity_type: 'coupon',
+        entity_id: id,
+        details: { code, status: !isActive ? 'activated' : 'deactivated' },
+      });
       setCoupons(coupons.map((c) => (c.id === id ? { ...c, is_active: !isActive } : c)));
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -350,7 +367,7 @@ const CouponManager = () => {
                       </div>
                       <Switch
                         checked={coupon.is_active}
-                        onCheckedChange={() => toggleCoupon(coupon.id, coupon.is_active)}
+                        onCheckedChange={() => toggleCoupon(coupon.id, coupon.is_active, coupon.code)}
                       />
                     </div>
                   </div>
