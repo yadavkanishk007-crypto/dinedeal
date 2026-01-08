@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 
 const AdminCreator = () => {
   const { toast } = useToast();
+  const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -54,6 +56,13 @@ const AdminCreator = () => {
       toast({
         title: "Admin Created!",
         description: `Admin account for ${formData.email} has been created.`,
+      });
+
+      // Log the action
+      await logAction({
+        action: 'create',
+        entity_type: 'admin',
+        details: { email: formData.email, city: formData.city },
       });
 
       setCreatedAdmins([
