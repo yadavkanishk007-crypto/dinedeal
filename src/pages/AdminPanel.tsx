@@ -43,7 +43,7 @@ interface UserProfile {
 const AdminPanel = () => {
   const navigate = useNavigate();
   // Updated destructuring based on your request
-  const { user, role, signOut, loading, roleLoading } = useAuth(); 
+  const { user, role, signOut, loading } = useAuth(); 
   const { toast } = useToast();
   const { logAction } = useAuditLog();
 
@@ -66,10 +66,10 @@ const AdminPanel = () => {
   /* ---------------- ADMIN GUARD ---------------- */
   useEffect(() => {
     // 1. Wait for auth loading AND role fetching to finish
-    if (loading || roleLoading) return;
+    if (loading) return;
 
     // 2. Check permissions
-    if (!user || !["admin", "super_admin"].includes(role ?? "")) {
+    if (!user || role !== "admin") {
       toast({
         title: "Access Denied",
         description: "You do not have permission to view this page.",
@@ -77,7 +77,7 @@ const AdminPanel = () => {
       });
       navigate("/admin/login", { replace: true });
     }
-  }, [user, role, loading, roleLoading, navigate, toast]);
+  }, [user, role, loading, navigate, toast]);
 
   /* ---------------- DATA FETCHING ---------------- */
   const fetchData = async () => {
@@ -120,13 +120,13 @@ const AdminPanel = () => {
   };
 
   useEffect(() => {
-    if (user && isAdmin && !loading && !roleLoading) {
+    if (user && isAdmin && !loading) {
       fetchData();
     }
-  }, [user, role, loading, roleLoading, isAdmin]);
+  }, [user, role, loading, isAdmin]);
 
   /* ---------------- LOADING STATE ---------------- */
-  if (loading || roleLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
