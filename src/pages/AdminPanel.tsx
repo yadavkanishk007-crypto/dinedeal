@@ -1,3 +1,4 @@
+import { hasAccess } from "@/utils/roleAccess";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -67,9 +68,14 @@ const AdminPanel = () => {
   useEffect(() => {
     // 1. Wait for auth loading AND role fetching to finish
     if (loading) return;
-
+    // No user → kick out
+    if (!user) {
+      navigate("/admin/login", { replace: true });
+      return;
+    }
+    if (role === null) return;
     // 2. Check permissions
-    if (!user || role !== "admin") {
+    if (!hasAccess(role, "admin")) {
       toast({
         title: "Access Denied",
         description: "You do not have permission to view this page.",
@@ -320,7 +326,10 @@ const AdminPanel = () => {
         )}
 
         {/* 5. CREATE ADMIN (Super Admin Only) */}
-        {activeTab === "admins" && isSuperAdmin && <AdminCreator />}
+        {activeTab === "admins" && hasAccess(role, "super_admin") && (
+           <AdminCreator />
+         )}
+
 
         {/* 6. COUPONS */}
         {activeTab === "coupons" && <CouponManager />}
