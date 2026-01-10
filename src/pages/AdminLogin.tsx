@@ -34,7 +34,7 @@ const AdminLogin = () => {
         .from("user_roles")
         .select("role")
         .eq("user_id", data.user.id)
-        .in("role", ["admin", "super_admin"])
+        .eq("role", "admin")
         .maybeSingle();
 
       if (roleError || !roleData) {
