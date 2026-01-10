@@ -1,3 +1,4 @@
+console.log("AUTH PAGE VERSION: 2026-01-10 FINAL");
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
