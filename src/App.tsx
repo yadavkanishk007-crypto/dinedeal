@@ -36,7 +36,16 @@ const App = () => (
             <Route path="/restaurant/:id" element={<RestaurantDetail />} />
             <Route path="/pay" element={<Pay />} />
             <Route path="/rewards" element={<Rewards />} />
-            <Route path="/profile" element={<Profile />} />
+
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+
             <Route path="/transactions" element={<TransactionHistory />} />
             <Route path="/reservations" element={<MyReservations />} />
             <Route path="/auth" element={<Auth />} />
@@ -44,9 +53,23 @@ const App = () => (
             {/* ✅ PASSWORD RESET ROUTE */}
             <Route path="/reset-password" element={<ResetPassword />} />
 
-            <Route path="/restaurant-dashboard" element={<RestaurantDashboard />} />
+            <Route
+              path="/restaurant-dashboard"
+              element={
+                <RoleRoute allowed={["restaurant"]}>
+                  <RestaurantDashboard />
+                </RoleRoute>
+              }
+            />
             <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route
+              path="/admin"
+              element={
+                <RoleRoute allowed={["admin", "super_admin"]}>
+                  <AdminPanel />
+                </RoleRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
