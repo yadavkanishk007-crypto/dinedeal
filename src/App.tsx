@@ -11,6 +11,7 @@ import Pay from "./pages/Pay";
 import Rewards from "./pages/Rewards";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword"; // ✅ ADD THIS
 import RestaurantDashboard from "./pages/RestaurantDashboard";
 import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
@@ -37,6 +38,10 @@ const App = () => (
             <Route path="/transactions" element={<TransactionHistory />} />
             <Route path="/reservations" element={<MyReservations />} />
             <Route path="/auth" element={<Auth />} />
+
+            {/* ✅ PASSWORD RESET ROUTE */}
+            <Route path="/reset-password" element={<ResetPassword />} />
+
             <Route path="/restaurant-dashboard" element={<RestaurantDashboard />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminPanel />} />
