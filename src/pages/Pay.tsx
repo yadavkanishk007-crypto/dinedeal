@@ -10,6 +10,8 @@ import {
   Copy,
   ExternalLink,
   CreditCard,
+  Tag,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,14 +51,35 @@ const Pay = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>("upi");
   const [isRazorpayLoaded, setIsRazorpayLoaded] = useState(false);
+  
+  // Coupon state
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    id: string;
+    code: string;
+    discount_percent: number;
+    max_discount: number | null;
+  } | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
 
   // Calculations
   const amount = parseFloat(billAmount) || 0;
-  const discount = Math.min(
+  const restaurantDiscount = Math.min(
     amount * (restaurant.discount / 100),
     restaurant.maxDiscount
   );
-  const finalAmount = amount - discount;
+  
+  // Coupon discount calculation
+  const couponDiscount = appliedCoupon 
+    ? Math.min(
+        amount * (appliedCoupon.discount_percent / 100),
+        appliedCoupon.max_discount || Infinity
+      )
+    : 0;
+  
+  const totalDiscount = restaurantDiscount + couponDiscount;
+  const finalAmount = Math.max(amount - totalDiscount, 0);
   const rewardsEarned = Math.floor(amount * 0.02);
 
   // 1. Generate unique transaction reference
@@ -136,7 +159,7 @@ const Pay = () => {
         user_id: user?.id,
         restaurant_id: restaurantId,
         bill_amount: amount,
-        discount_amount: discount,
+        discount_amount: totalDiscount,
         final_amount: finalAmount,
         rewards_earned: rewardsEarned,
         payment_method: method,
@@ -176,7 +199,7 @@ const Pay = () => {
                 userName: user.user_metadata?.full_name || "Customer",
                 restaurantName: restaurant.name,
                 billAmount: amount,
-                discount: discount,
+                discount: totalDiscount,
                 finalAmount: finalAmount,
                 rewardsEarned: rewardsEarned,
                 transactionId: transactionId,
@@ -359,7 +382,7 @@ const Pay = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                   >
-                    You'll save up to ₹{discount.toFixed(0)} on this bill!
+                    You'll save up to ₹{restaurantDiscount.toFixed(0)} on this bill!
                   </motion.p>
                 )}
               </div>
@@ -447,9 +470,20 @@ const Pay = () => {
                       DineDeal Discount ({restaurant.discount}%)
                     </span>
                     <span className="font-medium">
-                      - ₹{discount.toFixed(2)}
+                      - ₹{restaurantDiscount.toFixed(2)}
                     </span>
                   </div>
+                  {appliedCoupon && couponDiscount > 0 && (
+                    <div className="flex justify-between items-center text-success">
+                      <span className="flex items-center gap-2">
+                        <Tag className="w-4 h-4" />
+                        Coupon ({appliedCoupon.code})
+                      </span>
+                      <span className="font-medium">
+                        - ₹{couponDiscount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   <div className="border-t border-border pt-4 flex justify-between items-center">
                     <span className="font-semibold text-foreground">
                       You Pay
@@ -475,6 +509,114 @@ const Pay = () => {
                       Redeem on your next visit!
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Coupon Code Input */}
+              <Card className="border-border/50">
+                <CardContent className="p-4">
+                  <p className="text-sm font-medium text-foreground mb-3">Have a coupon?</p>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/30">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-success" />
+                        <span className="font-medium text-foreground">{appliedCoupon.code}</span>
+                        <span className="text-xs text-success">Applied!</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponCode("");
+                        }}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter coupon code"
+                        value={couponCode}
+                        onChange={(e) => {
+                          setCouponCode(e.target.value.toUpperCase());
+                          setCouponError("");
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="secondary"
+                        onClick={async () => {
+                          if (!couponCode.trim()) return;
+                          setCouponLoading(true);
+                          setCouponError("");
+                          
+                          try {
+                            const { data: coupon, error } = await supabase
+                              .from("coupons")
+                              .select("*")
+                              .eq("code", couponCode.trim())
+                              .eq("is_active", true)
+                              .maybeSingle();
+
+                            if (error) throw error;
+                            
+                            if (!coupon) {
+                              setCouponError("Invalid coupon code");
+                              return;
+                            }
+
+                            // Check validity dates
+                            const now = new Date();
+                            if (coupon.valid_from && new Date(coupon.valid_from) > now) {
+                              setCouponError("Coupon not yet valid");
+                              return;
+                            }
+                            if (coupon.valid_until && new Date(coupon.valid_until) < now) {
+                              setCouponError("Coupon expired");
+                              return;
+                            }
+
+                            // Check min order amount
+                            if (coupon.min_order_amount && amount < coupon.min_order_amount) {
+                              setCouponError(`Min order ₹${coupon.min_order_amount}`);
+                              return;
+                            }
+
+                            // Check max uses
+                            if (coupon.max_uses && (coupon.current_uses || 0) >= coupon.max_uses) {
+                              setCouponError("Coupon usage limit reached");
+                              return;
+                            }
+
+                            setAppliedCoupon({
+                              id: coupon.id,
+                              code: coupon.code,
+                              discount_percent: coupon.discount_percent,
+                              max_discount: coupon.max_discount,
+                            });
+                            toast({
+                              title: "Coupon Applied!",
+                              description: `${coupon.discount_percent}% off applied`,
+                            });
+                          } catch (err) {
+                            console.error("Coupon error:", err);
+                            setCouponError("Failed to apply coupon");
+                          } finally {
+                            setCouponLoading(false);
+                          }
+                        }}
+                        disabled={couponLoading || !couponCode.trim()}
+                      >
+                        {couponLoading ? "..." : "Apply"}
+                      </Button>
+                    </div>
+                  )}
+                  {couponError && (
+                    <p className="text-xs text-destructive mt-2">{couponError}</p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -770,7 +912,7 @@ const Pay = () => {
                 Payment Successful!
               </h2>
               <p className="text-muted-foreground mb-6">
-                You saved ₹{discount.toFixed(0)} on this transaction
+                You saved ₹{totalDiscount.toFixed(0)} on this transaction
               </p>
 
               {/* Receipt Summary */}
@@ -783,8 +925,8 @@ const Pay = () => {
                     </span>
                   </div>
                   <div className="flex justify-between text-sm text-success">
-                    <span>Discount</span>
-                    <span>- ₹{discount.toFixed(2)}</span>
+                    <span>Total Savings</span>
+                    <span>- ₹{totalDiscount.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-border pt-3 flex justify-between font-semibold">
                     <span className="text-foreground">Paid</span>

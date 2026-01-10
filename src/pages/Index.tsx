@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { MapPin, Sparkles, ArrowRight, ChevronDown, Loader2 } from "lucide-react";
+import { MapPin, Sparkles, ArrowRight, ChevronDown, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/Logo";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -18,6 +18,34 @@ import restaurant4 from "@/assets/restaurant-4.jpg";
 import restaurant5 from "@/assets/restaurant-5.jpg";
 
 const defaultImages = [restaurant1, restaurant2, restaurant3, restaurant4, restaurant5];
+
+// PWA Install Hook
+const useInstallPrompt = () => {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const promptInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setIsInstallable(false);
+    }
+    setDeferredPrompt(null);
+  };
+
+  return { isInstallable, promptInstall };
+};
 const filters = [
   { id: "all", label: "All" },
   { id: "popular", label: "🔥 Popular" },
@@ -177,30 +205,54 @@ const Index = () => {
     </div>
   );
 };
-const LandingPage = () => (
-  <div className="min-h-screen bg-background">
-    <header className="container py-6 flex items-center justify-between">
-      <Logo size="lg" />
-      <div className="flex items-center gap-4">
-        <Link to="/auth"><Button variant="ghost">Sign In</Button></Link>
-        <Link to="/auth"><Button variant="gradient">Get Started</Button></Link>
-      </div>
-    </header>
-    <main className="container py-12 md:py-24">
-      <div className="grid lg:grid-cols-2 gap-12 items-center">
-        <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}>
-          <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground leading-tight mb-6">Dine Local. <span className="gradient-text">Save More.</span></h1>
-          <p className="text-lg text-muted-foreground mb-8 max-w-lg">Pay at your favorite restaurants through DineDeal and get instant discounts, cashback, and exclusive rewards.</p>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Link to="/auth"><Button variant="gradient" size="xl">Start Saving Now <ArrowRight className="w-5 h-5" /></Button></Link>
-            <Link to="/explore"><Button variant="outline" size="xl">Explore Restaurants</Button></Link>
-          </div>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} className="relative">
-          <motion.img src={heroIllustration} alt="DineDeal" className="w-full max-w-lg mx-auto" animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 4 }} />
-        </motion.div>
-      </div>
-    </main>
-  </div>
-);
+const LandingPage = () => {
+  const { isInstallable, promptInstall } = useInstallPrompt();
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="container py-6 flex items-center justify-between">
+        <Logo size="lg" />
+        <div className="flex items-center gap-4">
+          {isInstallable && (
+            <Button variant="outline" onClick={promptInstall} className="gap-2">
+              <Download className="w-4 h-4" />
+              Install App
+            </Button>
+          )}
+          <Link to="/auth"><Button variant="ghost">Sign In</Button></Link>
+          <Link to="/auth"><Button variant="gradient">Get Started</Button></Link>
+        </div>
+      </header>
+      <main className="container py-12 md:py-24">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}>
+            <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground leading-tight mb-6">Dine Local. <span className="gradient-text">Save More.</span></h1>
+            <p className="text-lg text-muted-foreground mb-8 max-w-lg">Pay at your favorite restaurants through DineDeal and get instant discounts, cashback, and exclusive rewards.</p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link to="/auth"><Button variant="gradient" size="xl">Start Saving Now <ArrowRight className="w-5 h-5" /></Button></Link>
+              <Link to="/explore"><Button variant="outline" size="xl">Explore Restaurants</Button></Link>
+            </div>
+            {isInstallable && (
+              <motion.div 
+                className="mt-6 p-4 rounded-xl bg-primary/10 border border-primary/20"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <p className="text-sm text-muted-foreground mb-2">📱 Get the best experience</p>
+                <Button variant="gradient" size="sm" onClick={promptInstall} className="gap-2">
+                  <Download className="w-4 h-4" />
+                  Install DineDeal App
+                </Button>
+              </motion.div>
+            )}
+          </motion.div>
+          <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} className="relative">
+            <motion.img src={heroIllustration} alt="DineDeal" className="w-full max-w-lg mx-auto" animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 4 }} />
+          </motion.div>
+        </div>
+      </main>
+    </div>
+  );
+};
 export default Index;
