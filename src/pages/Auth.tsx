@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 type AuthMode = "signin" | "signup" | "forgot-password";
-type UserRole = "customer" | "restaurant";
+type UserRole = "customer" | "restaurant" | "admin";
 
 const Auth = () => {
   const { signUp, signIn, user, role, loading } = useAuth();
