@@ -155,19 +155,51 @@ const Pay = () => {
   ) => {
     try {
       // Save transaction to database
-      const { error } = await supabase.from("transactions").insert({
-        user_id: user?.id,
-        restaurant_id: restaurantId,
-        bill_amount: amount,
-        discount_amount: totalDiscount,
-        final_amount: finalAmount,
-        rewards_earned: rewardsEarned,
-        payment_method: method,
-        payment_reference: reference,
-        payment_status: "completed",
-      });
+      const { data: transactionData, error } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: user?.id,
+          restaurant_id: restaurantId,
+          bill_amount: amount,
+          discount_amount: totalDiscount,
+          final_amount: finalAmount,
+          rewards_earned: rewardsEarned,
+          payment_method: method,
+          payment_reference: reference,
+          payment_status: "completed",
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      // Record coupon usage if a coupon was applied
+      if (appliedCoupon && user?.id && transactionData?.id) {
+        try {
+          // Insert coupon usage record
+          await supabase.from("coupon_usages").insert({
+            coupon_id: appliedCoupon.id,
+            user_id: user.id,
+            transaction_id: transactionData.id,
+          });
+
+          // Increment coupon current_uses count using direct update
+          const { data: couponData } = await supabase
+            .from("coupons")
+            .select("current_uses")
+            .eq("id", appliedCoupon.id)
+            .single();
+          
+          if (couponData) {
+            await supabase
+              .from("coupons")
+              .update({ current_uses: (couponData.current_uses || 0) + 1 })
+              .eq("id", appliedCoupon.id);
+          }
+        } catch (couponError) {
+          console.error("Failed to record coupon usage:", couponError);
+        }
+      }
 
       // Update user rewards if logged in
       if (user?.id) {
@@ -209,6 +241,7 @@ const Pay = () => {
                   year: "numeric",
                 }),
                 paymentMethod: method === "upi" ? "UPI" : "Card",
+                couponCode: appliedCoupon?.code || null,
               },
             },
           });

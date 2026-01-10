@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import NotificationSettings from "@/components/NotificationSettings";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -61,7 +62,6 @@ const Profile = () => {
     { icon: Receipt, label: "Transaction History", value: `${stats.totalTransactions} payments`, path: "/transactions" },
     { icon: Heart, label: "Favorite Restaurants", value: `${stats.favoriteRestaurants} saved`, path: "/favorites" },
     { icon: CreditCard, label: "Payment Methods", value: "UPI linked", path: "/payments" },
-    { icon: Bell, label: "Notifications", value: "On", path: "/notifications" },
     { icon: Shield, label: "Privacy & Security", value: "", path: "/security" },
     { icon: HelpCircle, label: "Help & Support", value: "", path: "/help" },
   ];
@@ -118,6 +118,11 @@ const Profile = () => {
               <p className="text-sm opacity-80 mt-2">Across {stats.totalTransactions} transactions</p>
             </div>
           </Card>
+        </motion.div>
+
+        {/* Push Notifications */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <NotificationSettings />
         </motion.div>
 
         {/* Menu Items */}
