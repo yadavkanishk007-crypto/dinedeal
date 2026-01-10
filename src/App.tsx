@@ -18,6 +18,8 @@ import AdminPanel from "./pages/AdminPanel";
 import TransactionHistory from "./pages/TransactionHistory";
 import MyReservations from "./pages/MyReservations";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import RoleRoute from "@/components/RoleRoute";
 
 const queryClient = new QueryClient();
 
