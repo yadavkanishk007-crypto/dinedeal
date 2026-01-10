@@ -56,8 +56,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // RLS-safe: no filters
     const [{ data: roleData }, { data: profileData }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", session.user.id).single();
-      supabase.from("profiles").select("*").single(),
+      supabase.from("user_roles").select("role").eq("user_id", session.user.id).single(),
+      supabase.from("profiles").select("*").single()
     ]);
 
     setRole((roleData?.role as UserRole) ?? null);
