@@ -28,7 +28,7 @@ type UserRole = "customer" | "restaurant";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { signUp, signIn } = useAuth();
+  const { signUp, signIn, user, role, loading } = useAuth();
   const { toast } = useToast();
 
   const [mode, setMode] = useState<AuthMode>("signin");
@@ -43,6 +43,20 @@ const Auth = () => {
 
   const [location, setLocation] = useState("Jhansi");
   const [isLocating, setIsLocating] = useState(false);
+
+  // 🔒 FINAL, CORRECT REDIRECT LOGIC
+  useEffect(() => {
+    if (loading) return;
+    if (!user || !role) return;
+
+    if (role === "admin") {
+      navigate("/admin", { replace: true });
+    } else if (role === "restaurant") {
+      navigate("/restaurant-dashboard", { replace: true });
+    } else {
+      navigate("/", { replace: true });
+    }
+  }, [user, role, loading, navigate]);
 
   // Auto-detect location
   useEffect(() => {
@@ -88,7 +102,7 @@ const Auth = () => {
     }
   };
 
-  // ✅ Native Supabase password reset (NO edge functions)
+  // Native Supabase reset password
   const handleSendResetEmail = async () => {
     if (!email) {
       toast({
@@ -151,8 +165,6 @@ const Auth = () => {
           title: "Account created",
           description: "Welcome! You are now signed in.",
         });
-
-        navigate(selectedRole === "restaurant" ? "/restaurant-dashboard" : "/");
       }
 
       if (mode === "signin") {
@@ -171,8 +183,6 @@ const Auth = () => {
           title: "Welcome back",
           description: "You are now signed in",
         });
-
-        navigate("/");
       }
     } catch {
       toast({
