@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   ReactNode,
+  useCallback,
 } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,34 +38,76 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadUserData = async () => {
+  /**
+   * Load base auth + user profile safely
+   * ❌ No admin queries here
+   */
+  const loadUserData = useCallback(async () => {
     setLoading(true);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    setSession(session);
-    setUser(session?.user ?? null);
+      if (sessionError) {
+        console.warn("Session error:", sessionError.message);
+        setSession(null);
+        setUser(null);
+        setRole(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
 
-    if (!session?.user) {
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (!session?.user) {
+        setRole(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      /**
+       * Fetch role + profile in parallel
+       * Both MUST be RLS-safe
+       */
+      const [roleRes, profileRes] = await Promise.all([
+        supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id)
+          .maybeSingle(),
+        supabase.from("profiles").select("*").maybeSingle(),
+      ]);
+
+      if (roleRes.error) {
+        console.warn("Role fetch skipped:", roleRes.error.message);
+      }
+
+      if (profileRes.error) {
+        console.warn("Profile fetch skipped:", profileRes.error.message);
+      }
+
+      setRole((roleRes.data?.role as UserRole) ?? "customer");
+      setProfile(profileRes.data ?? null);
+    } catch (err) {
+      console.error("Auth bootstrap failed:", err);
+      setSession(null);
+      setUser(null);
       setRole(null);
       setProfile(null);
+    } finally {
       setLoading(false);
-      return;
     }
+  }, []);
 
-    // RLS-safe: no filters
-    const [{ data: roleData }, { data: profileData }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", session.user.id).single(),
-      supabase.from("profiles").select("*").single()
-    ]);
-
-    setRole((roleData?.role as UserRole) ?? null);
-    setProfile(profileData ?? null);
-    setLoading(false);
-  };
-
+  /**
+   * Initial load + auth state changes
+   */
   useEffect(() => {
     loadUserData();
 
@@ -75,8 +118,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [loadUserData]);
 
+  /**
+   * Auth actions
+   */
   const signUp = async (
     email: string,
     password: string,
