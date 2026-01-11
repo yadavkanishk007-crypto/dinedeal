@@ -47,6 +47,45 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_permissions: {
+        Row: {
+          can_manage_coupons: boolean | null
+          can_manage_restaurants: boolean | null
+          can_manage_users: boolean | null
+          can_send_notifications: boolean | null
+          can_view_audit: boolean | null
+          can_view_revenue: boolean | null
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_manage_coupons?: boolean | null
+          can_manage_restaurants?: boolean | null
+          can_manage_users?: boolean | null
+          can_send_notifications?: boolean | null
+          can_view_audit?: boolean | null
+          can_view_revenue?: boolean | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_manage_coupons?: boolean | null
+          can_manage_restaurants?: boolean | null
+          can_manage_users?: boolean | null
+          can_send_notifications?: boolean | null
+          can_view_audit?: boolean | null
+          can_view_revenue?: boolean | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       coupon_usages: {
         Row: {
           coupon_id: string
@@ -198,6 +237,39 @@ export type Database = {
           },
         ]
       }
+      notification_logs: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          sent_by: string
+          target_type: string
+          title: string
+          total_failed: number | null
+          total_sent: number | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          sent_by: string
+          target_type?: string
+          title: string
+          total_failed?: number | null
+          total_sent?: number | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          sent_by?: string
+          target_type?: string
+          title?: string
+          total_failed?: number | null
+          total_sent?: number | null
+        }
+        Relationships: []
+      }
       offers: {
         Row: {
           created_at: string
@@ -306,6 +378,36 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
           updated_at?: string
           user_id?: string
         }

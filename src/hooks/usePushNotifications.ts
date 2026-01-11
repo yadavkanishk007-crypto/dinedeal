@@ -92,9 +92,26 @@ export const usePushNotifications = () => {
         });
       }
 
-      // Store subscription in database (you'd create this table)
-      // For now, we'll just log and track locally
-      console.log("Push subscription created:", subscription.toJSON());
+      // Store subscription in database
+      const subscriptionJson = subscription.toJSON();
+      const keys = subscriptionJson.keys || {};
+      
+      const { error } = await supabase
+        .from("push_subscriptions")
+        .upsert({
+          user_id: user.id,
+          endpoint: subscription.endpoint,
+          p256dh: keys.p256dh || '',
+          auth: keys.auth || '',
+        }, {
+          onConflict: 'user_id,endpoint'
+        });
+
+      if (error) {
+        console.error("Error storing push subscription:", error);
+      } else {
+        console.log("Push subscription stored successfully");
+      }
       
       setState((prev) => ({ ...prev, isSubscribed: true }));
       return true;
@@ -105,13 +122,20 @@ export const usePushNotifications = () => {
   }, [state.isSupported, user, requestPermission]);
 
   const unsubscribe = useCallback(async (): Promise<boolean> => {
-    if (!state.isSupported) return false;
+    if (!state.isSupported || !user) return false;
 
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       
       if (subscription) {
+        // Remove from database first
+        await supabase
+          .from("push_subscriptions")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("endpoint", subscription.endpoint);
+        
         await subscription.unsubscribe();
       }
 
@@ -121,7 +145,7 @@ export const usePushNotifications = () => {
       console.error("Error unsubscribing from push notifications:", error);
       return false;
     }
-  }, [state.isSupported]);
+  }, [state.isSupported, user]);
 
   // Send a local notification (useful for testing or immediate notifications)
   const sendLocalNotification = useCallback(async (title: string, options?: { body?: string; tag?: string; icon?: string; badge?: string; data?: Record<string, unknown> }) => {

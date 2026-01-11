@@ -1,18 +1,30 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { UserPlus, Shield, Eye, EyeOff, Loader2, Check } from "lucide-react";
+import { UserPlus, Shield, Eye, EyeOff, Loader2, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
+
+interface AdminPermissions {
+  canViewRevenue: boolean;
+  canManageRestaurants: boolean;
+  canManageUsers: boolean;
+  canManageCoupons: boolean;
+  canSendNotifications: boolean;
+  canViewAudit: boolean;
+}
 
 const AdminCreator = () => {
   const { toast } = useToast();
   const { logAction } = useAuditLog();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showPermissions, setShowPermissions] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -20,7 +32,15 @@ const AdminCreator = () => {
     phone: "",
     city: "Jhansi",
   });
-  const [createdAdmins, setCreatedAdmins] = useState<{ email: string; created_at: string }[]>([]);
+  const [permissions, setPermissions] = useState<AdminPermissions>({
+    canViewRevenue: true,
+    canManageRestaurants: true,
+    canManageUsers: false,
+    canManageCoupons: true,
+    canSendNotifications: true,
+    canViewAudit: true,
+  });
+  const [createdAdmins, setCreatedAdmins] = useState<{ email: string; created_at: string; permissions?: AdminPermissions }[]>([]);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +56,7 @@ const AdminCreator = () => {
 
     setLoading(true);
     try {
-      // Call edge function to create admin
+      // Call edge function to create admin with permissions
       const { data, error } = await supabase.functions.invoke("create-admin", {
         body: {
           email: formData.email,
@@ -44,6 +64,7 @@ const AdminCreator = () => {
           fullName: formData.fullName,
           phone: formData.phone,
           city: formData.city,
+          permissions,
         },
       });
 
@@ -62,11 +83,11 @@ const AdminCreator = () => {
       await logAction({
         action: 'create',
         entity_type: 'admin',
-        details: { email: formData.email, city: formData.city },
+        details: { email: formData.email, city: formData.city, permissions },
       });
 
       setCreatedAdmins([
-        { email: formData.email, created_at: new Date().toISOString() },
+        { email: formData.email, created_at: new Date().toISOString(), permissions },
         ...createdAdmins,
       ]);
 
@@ -76,6 +97,16 @@ const AdminCreator = () => {
         fullName: "",
         phone: "",
         city: "Jhansi",
+      });
+      
+      // Reset permissions to defaults
+      setPermissions({
+        canViewRevenue: true,
+        canManageRestaurants: true,
+        canManageUsers: false,
+        canManageCoupons: true,
+        canSendNotifications: true,
+        canViewAudit: true,
       });
     } catch (error: any) {
       toast({
@@ -176,6 +207,80 @@ const AdminCreator = () => {
                 </select>
               </div>
 
+              {/* Role-Based Permissions */}
+              <div className="border border-border/50 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowPermissions(!showPermissions)}
+                  className="w-full p-3 flex items-center justify-between bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                >
+                  <span className="font-medium text-sm">Admin Permissions</span>
+                  {showPermissions ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+                
+                {showPermissions && (
+                  <div className="p-4 space-y-4 bg-background">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="canViewRevenue" className="text-sm">View Revenue & Analytics</Label>
+                        <Switch
+                          id="canViewRevenue"
+                          checked={permissions.canViewRevenue}
+                          onCheckedChange={(checked) => setPermissions({ ...permissions, canViewRevenue: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="canManageRestaurants" className="text-sm">Manage Restaurants</Label>
+                        <Switch
+                          id="canManageRestaurants"
+                          checked={permissions.canManageRestaurants}
+                          onCheckedChange={(checked) => setPermissions({ ...permissions, canManageRestaurants: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="canManageUsers" className="text-sm">Manage Users</Label>
+                        <Switch
+                          id="canManageUsers"
+                          checked={permissions.canManageUsers}
+                          onCheckedChange={(checked) => setPermissions({ ...permissions, canManageUsers: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="canManageCoupons" className="text-sm">Manage Coupons</Label>
+                        <Switch
+                          id="canManageCoupons"
+                          checked={permissions.canManageCoupons}
+                          onCheckedChange={(checked) => setPermissions({ ...permissions, canManageCoupons: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="canSendNotifications" className="text-sm">Send Notifications</Label>
+                        <Switch
+                          id="canSendNotifications"
+                          checked={permissions.canSendNotifications}
+                          onCheckedChange={(checked) => setPermissions({ ...permissions, canSendNotifications: checked })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="canViewAudit" className="text-sm">View Audit Logs</Label>
+                        <Switch
+                          id="canViewAudit"
+                          checked={permissions.canViewAudit}
+                          onCheckedChange={(checked) => setPermissions({ ...permissions, canViewAudit: checked })}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      These permissions control what the new admin can access in the dashboard.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <Button type="submit" variant="gradient" disabled={loading}>
                 {loading ? (
                   <>
@@ -203,14 +308,38 @@ const AdminCreator = () => {
           <CardContent>
             <div className="space-y-2">
               {createdAdmins.map((admin, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-secondary">
-                  <Check className="w-4 h-4 text-success" />
-                  <div>
-                    <p className="font-medium">{admin.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(admin.created_at).toLocaleString("en-IN")}
-                    </p>
+                <div key={i} className="p-3 rounded-lg bg-secondary">
+                  <div className="flex items-center gap-3">
+                    <Check className="w-4 h-4 text-success" />
+                    <div className="flex-1">
+                      <p className="font-medium">{admin.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(admin.created_at).toLocaleString("en-IN")}
+                      </p>
+                    </div>
                   </div>
+                  {admin.permissions && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {admin.permissions.canViewRevenue && (
+                        <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">Revenue</span>
+                      )}
+                      {admin.permissions.canManageRestaurants && (
+                        <span className="text-xs px-2 py-0.5 bg-orange-500/10 text-orange-600 rounded-full">Restaurants</span>
+                      )}
+                      {admin.permissions.canManageUsers && (
+                        <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-600 rounded-full">Users</span>
+                      )}
+                      {admin.permissions.canManageCoupons && (
+                        <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-600 rounded-full">Coupons</span>
+                      )}
+                      {admin.permissions.canSendNotifications && (
+                        <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded-full">Notifications</span>
+                      )}
+                      {admin.permissions.canViewAudit && (
+                        <span className="text-xs px-2 py-0.5 bg-gray-500/10 text-gray-600 rounded-full">Audit</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

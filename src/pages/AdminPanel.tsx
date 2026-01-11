@@ -10,7 +10,8 @@ import {
   LogOut,
   MapPin,
   Calendar,
-  Phone
+  Phone,
+  Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import AdminCreator from "@/components/AdminCreator";
 import CouponManager from "@/components/CouponManager";
 import { AdminAuditLog } from "@/components/AdminAuditLog";
 import { useAuditLog } from "@/hooks/useAuditLog";
+import AdminNotificationSender from "@/components/AdminNotificationSender";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -58,7 +60,7 @@ const AdminPanel = () => {
   });
   
   const [activeTab, setActiveTab] = useState<
-    "overview" | "analytics" | "restaurants" | "users" | "admins" | "coupons" | "audit"
+    "overview" | "analytics" | "restaurants" | "users" | "admins" | "notifications" | "coupons" | "audit"
   >("overview");
 
   const isAdmin = role === "admin" || role === "super_admin";
@@ -181,6 +183,7 @@ const AdminPanel = () => {
             { id: "restaurants", label: "Restaurants" },
             { id: "users", label: "Users" },
             isSuperAdmin && { id: "admins", label: "Create Admin" },
+            { id: "notifications", label: "Notifications", icon: Bell },
             { id: "coupons", label: "Coupons" },
             { id: "audit", label: "Audit Log" },
           ]
@@ -330,11 +333,13 @@ const AdminPanel = () => {
            <AdminCreator />
          )}
 
+        {/* 6. NOTIFICATIONS */}
+        {activeTab === "notifications" && <AdminNotificationSender />}
 
-        {/* 6. COUPONS */}
+        {/* 7. COUPONS */}
         {activeTab === "coupons" && <CouponManager />}
 
-        {/* 7. AUDIT LOG */}
+        {/* 8. AUDIT LOG */}
         {activeTab === "audit" && <AdminAuditLog />}
       </div>
     </div>
