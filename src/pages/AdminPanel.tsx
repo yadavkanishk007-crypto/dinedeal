@@ -45,7 +45,6 @@ interface UserProfile {
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  // Updated destructuring based on your request
   const { user, role, signOut, loading } = useAuth(); 
   const { toast } = useToast();
   const { logAction } = useAuditLog();
@@ -58,25 +57,25 @@ const AdminPanel = () => {
     transactions: 0,
     revenue: 0,
   });
-  
+   
   const [activeTab, setActiveTab] = useState<
     "overview" | "analytics" | "restaurants" | "users" | "admins" | "notifications" | "coupons" | "audit"
   >("overview");
 
   const isAdmin = role === "admin" || role === "super_admin";
-  const isSuperAdmin = role === "super_admin";
+  
+  // --- CHANGED: Grants Super Admin access only to this specific email ---
+  const isSuperAdmin = user?.email === "zaveadmin123@gmail.com";
 
   /* ---------------- ADMIN GUARD ---------------- */
   useEffect(() => {
-    // 1. Wait for auth loading AND role fetching to finish
     if (loading) return;
-    // No user → kick out
     if (!user) {
       navigate("/admin/login", { replace: true });
       return;
     }
     if (role === null) return;
-    // 2. Check permissions
+    
     if (!hasAccess(role, "admin")) {
       toast({
         title: "Access Denied",
@@ -328,8 +327,8 @@ const AdminPanel = () => {
            </Card>
         )}
 
-        {/* 5. CREATE ADMIN (Super Admin Only) */}
-        {activeTab === "admins" && hasAccess(role, "super_admin") && (
+        {/* 5. CREATE ADMIN (Changed to use isSuperAdmin variable directly) */}
+        {activeTab === "admins" && isSuperAdmin && (
            <AdminCreator />
          )}
 
