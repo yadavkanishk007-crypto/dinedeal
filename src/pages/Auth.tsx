@@ -1,4 +1,4 @@
-console.log("AUTH PAGE VERSION: 2026-01-10 FINAL");
+console.log("AUTH PAGE VERSION: 2026-01-11 WITH ROLE SELECTOR");
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,6 +8,8 @@ import {
   EyeOff,
   Shield,
   MapPin,
+  User,
+  Store,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,7 @@ import Logo from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 type AuthMode = "signin" | "signup" | "forgot-password";
 type UserRole = "customer" | "restaurant" | "admin";
@@ -42,7 +45,7 @@ const Auth = () => {
      LOCAL STATE
      ========================= */
   const [mode, setMode] = useState<AuthMode>("signin");
-  const [selectedRole] = useState<UserRole>("customer");
+  const [selectedRole, setSelectedRole] = useState<UserRole>("customer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -235,6 +238,41 @@ const Auth = () => {
 
               {mode === "signup" && (
                 <>
+                  {/* Role Selector */}
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground text-center">I want to sign up as:</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRole("customer")}
+                        className={cn(
+                          "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                          selectedRole === "customer"
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <User className="w-6 h-6" />
+                        <span className="font-medium">Customer</span>
+                        <span className="text-xs text-muted-foreground">Discover & dine</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRole("restaurant")}
+                        className={cn(
+                          "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                          selectedRole === "restaurant"
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <Store className="w-6 h-6" />
+                        <span className="font-medium">Restaurant</span>
+                        <span className="text-xs text-muted-foreground">List your business</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <Input
                     placeholder="Full name"
                     value={fullName}
