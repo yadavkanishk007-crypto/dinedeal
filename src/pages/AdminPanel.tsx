@@ -11,10 +11,15 @@ import {
   MapPin,
   Calendar,
   Phone,
-  Bell
+  Bell,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +30,7 @@ import CouponManager from "@/components/CouponManager";
 import { AdminAuditLog } from "@/components/AdminAuditLog";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import AdminNotificationSender from "@/components/AdminNotificationSender";
+import AdminRestaurantDetail from "@/components/AdminRestaurantDetail";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -45,6 +51,7 @@ interface UserProfile {
 
 const AdminPanel = () => {
   const navigate = useNavigate();
+  // Updated destructuring based on your request
   const { user, role, signOut, loading } = useAuth(); 
   const { toast } = useToast();
   const { logAction } = useAuditLog();
@@ -54,28 +61,30 @@ const AdminPanel = () => {
   const [stats, setStats] = useState({
     users: 0,
     restaurants: 0,
+    pendingApprovals: 0,
     transactions: 0,
     revenue: 0,
   });
-   
+  
   const [activeTab, setActiveTab] = useState<
     "overview" | "analytics" | "restaurants" | "users" | "admins" | "notifications" | "coupons" | "audit"
   >("overview");
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
 
   const isAdmin = role === "admin" || role === "super_admin";
-  
-  // --- CHANGED: Grants Super Admin access only to this specific email ---
-  const isSuperAdmin = user?.email === "zaveadmin123@gmail.com";
+  const isSuperAdmin = role === "super_admin";
 
   /* ---------------- ADMIN GUARD ---------------- */
   useEffect(() => {
+    // 1. Wait for auth loading AND role fetching to finish
     if (loading) return;
+    // No user → kick out
     if (!user) {
       navigate("/admin/login", { replace: true });
       return;
     }
     if (role === null) return;
-    
+    // 2. Check permissions
     if (!hasAccess(role, "admin")) {
       toast({
         title: "Access Denied",
@@ -107,6 +116,12 @@ const AdminPanel = () => {
         .from("restaurants")
         .select("*", { count: "exact", head: true });
 
+      // Fetch pending approvals count
+      const { count: pendingCount } = await supabase
+        .from("restaurants")
+        .select("*", { count: "exact", head: true })
+        .eq("is_approved", false);
+
       // Fetch Revenue
       const { data: txData } = await supabase
         .from("transactions")
@@ -118,6 +133,7 @@ const AdminPanel = () => {
       setStats({
         users: userCount || 0,
         restaurants: restCount || 0,
+        pendingApprovals: pendingCount || 0,
         transactions: txData?.length || 0,
         revenue,
       });
@@ -204,7 +220,7 @@ const AdminPanel = () => {
 
         {/* 1. OVERVIEW */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in slide-in-from-bottom-4">
             <Card>
               <CardContent className="p-6">
                 <div className="flex justify-between items-start">
@@ -227,6 +243,19 @@ const AdminPanel = () => {
                   </div>
                   <div className="p-2 bg-orange-500/10 rounded-lg">
                     <Store className="w-5 h-5 text-orange-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setActiveTab("restaurants")}>
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Pending Approval</p>
+                    <p className="text-2xl font-bold mt-2">{stats.pendingApprovals}</p>
+                  </div>
+                  <div className="p-2 bg-yellow-500/10 rounded-lg">
+                    <Clock className="w-5 h-5 text-yellow-500" />
                   </div>
                 </div>
               </CardContent>
@@ -265,34 +294,92 @@ const AdminPanel = () => {
 
         {/* 3. RESTAURANTS */}
         {activeTab === "restaurants" && (
-           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-             {restaurants.length === 0 ? (
-               <p className="text-muted-foreground col-span-full">No restaurants found.</p>
-             ) : (
-               restaurants.map((rest) => (
-                 <Card key={rest.id} className="hover:shadow-md transition-shadow">
-                   <CardHeader className="pb-2">
-                     <CardTitle className="text-lg flex justify-between">
-                       {rest.name}
-                       <span className={`text-xs px-2 py-1 rounded-full ${rest.is_open ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                         {rest.is_open ? 'Open' : 'Closed'}
-                       </span>
-                     </CardTitle>
-                   </CardHeader>
-                   <CardContent className="text-sm text-muted-foreground space-y-2">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        <span className="truncate">{rest.address}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        <span>{rest.phone || "N/A"}</span>
-                      </div>
-                   </CardContent>
-                 </Card>
-               ))
-             )}
-           </div>
+          selectedRestaurantId ? (
+            <AdminRestaurantDetail
+              restaurantId={selectedRestaurantId}
+              onBack={() => setSelectedRestaurantId(null)}
+              onApprovalChange={fetchData}
+            />
+          ) : (
+            <div className="space-y-4">
+              {/* Filter by approval status */}
+              <div className="flex gap-2 flex-wrap">
+                <Badge variant="outline" className="cursor-pointer">
+                  All ({restaurants.length})
+                </Badge>
+                <Badge 
+                  variant="secondary" 
+                  className="cursor-pointer bg-yellow-500/10 text-yellow-700 border-yellow-500/30"
+                >
+                  Pending ({restaurants.filter(r => !r.is_approved).length})
+                </Badge>
+                <Badge 
+                  variant="secondary" 
+                  className="cursor-pointer bg-green-500/10 text-green-700 border-green-500/30"
+                >
+                  Approved ({restaurants.filter(r => r.is_approved).length})
+                </Badge>
+              </div>
+              
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {restaurants.length === 0 ? (
+                  <p className="text-muted-foreground col-span-full">No restaurants found.</p>
+                ) : (
+                  restaurants.map((rest) => (
+                    <Card 
+                      key={rest.id} 
+                      className="hover:shadow-md transition-shadow cursor-pointer group"
+                      onClick={() => setSelectedRestaurantId(rest.id)}
+                    >
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg flex justify-between items-start">
+                          <span className="truncate pr-2">{rest.name}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {!rest.is_approved ? (
+                              <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 text-xs">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Pending
+                              </Badge>
+                            ) : rest.is_active ? (
+                              <Badge variant="default" className="bg-green-500 text-xs">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">
+                                <XCircle className="w-3 h-3 mr-1" />
+                                Inactive
+                              </Badge>
+                            )}
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="text-sm text-muted-foreground space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Store className="w-4 h-4" />
+                          <span className="truncate">{rest.cuisine}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          <span className="truncate">{rest.address}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          <span>{rest.phone || "N/A"}</span>
+                        </div>
+                        <div className="pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="outline" size="sm" className="w-full gap-2">
+                            <Eye className="w-4 h-4" />
+                            View Details
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+          )
         )}
 
         {/* 4. USERS */}
@@ -327,8 +414,8 @@ const AdminPanel = () => {
            </Card>
         )}
 
-        {/* 5. CREATE ADMIN (Changed to use isSuperAdmin variable directly) */}
-        {activeTab === "admins" && isSuperAdmin && (
+        {/* 5. CREATE ADMIN (Super Admin Only) */}
+        {activeTab === "admins" && hasAccess(role, "super_admin") && (
            <AdminCreator />
          )}
 
