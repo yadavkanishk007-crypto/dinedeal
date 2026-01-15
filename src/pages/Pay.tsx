@@ -118,8 +118,8 @@ export default function Pay() {
 
   const restaurantDiscount = restaurant
     ? Math.min(
-        amount * (restaurant.discount / 100),
-        restaurant.max_discount
+        amount * ((restaurant.discount || 0)/ 100),
+        restaurant.max_discount ?? Infinity 
       )
     : 0;
 
