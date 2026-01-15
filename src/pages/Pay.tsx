@@ -62,7 +62,7 @@ const Pay = () => {
   const restaurantId = searchParams.get("restaurant");
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [step, setStep] = useState<PaymentStep>("loading");
-  
+   
   // --- Payment State ---
   const [billAmount, setBillAmount] = useState("");
   const [transactionId, setTransactionId] = useState("");
@@ -129,7 +129,7 @@ const Pay = () => {
 
   // --- Calculations ---
   const amount = parseFloat(billAmount) || 0;
-  
+   
   // Safe Restaurant Discount Calculation
   // We use (|| 0) to handle undefined/null discount
   // We use (?? Infinity) to handle undefined/null max_discount (assuming no limit if missing)
@@ -208,7 +208,7 @@ const Pay = () => {
   // --- Core Transaction Recorder ---
   const recordTransaction = async (method: "upi" | "card", reference: string) => {
     if (!restaurant) return;
-    
+     
     try {
       // 1. Insert Transaction
       const { data: txnData, error } = await supabase
@@ -378,7 +378,7 @@ const Pay = () => {
 
       <main className="container py-6">
         <AnimatePresence mode="wait">
-          
+           
           {/* STEP 1: AMOUNT */}
           {step === "amount" && (
             <motion.div
@@ -472,7 +472,7 @@ const Pay = () => {
                   </div>
                 </CardContent>
               </Card>
-              
+               
               {/* Coupon Input */}
               {!appliedCoupon ? (
                  <div className="flex gap-2">
@@ -500,29 +500,43 @@ const Pay = () => {
               <div className="space-y-3 pt-4">
                 <h3 className="font-semibold text-lg">Payment Method</h3>
                 
+                {/* UPI Option */}
                 <div 
-                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "upi" ? "border-primary bg-primary/5" : "border-border/10 bg-transparent"}`}
+                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${
+                     selectedPaymentMethod === "upi" 
+                       ? "border-primary bg-primary/5" 
+                       : "border-border/10 bg-transparent"
+                   }`}
                    onClick={() => setSelectedPaymentMethod("upi")}
                 >
                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"><Smartphone className="w-5 h-5 text-primary"/></div>
+                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                         <Smartphone className="w-5 h-5 text-primary"/>
+                      </div>
                       <div>
-                         <p className="font-medium">UPI Apps</p>
-                         <p className="text-xs text-muted-foreground">GPay, PhonePe, Paytm</p>
+                          <p className="font-medium">UPI Apps</p>
+                          <p className="text-xs text-muted-foreground">GPay, PhonePe, Paytm</p>
                       </div>
                    </div>
                    {selectedPaymentMethod === "upi" && <div className="w-4 h-4 rounded-full bg-primary" />}
                 </div>
 
+                {/* Card Option */}
                 <div 
-                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "card" ? "border-primary bg-primary/5" : "border-border/10 bg-transparent"}`}
+                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${
+                     selectedPaymentMethod === "card" 
+                       ? "border-primary bg-primary/5" 
+                       : "border-border/10 bg-transparent"
+                   }`}
                    onClick={() => setSelectedPaymentMethod("card")}
                 >
                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center"><CreditCard className="w-5 h-5 text-gold"/></div>
+                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                         <CreditCard className="w-5 h-5 text-gold"/>
+                      </div>
                       <div>
-                         <p className="font-medium">Credit / Debit Card</p>
-                         <p className="text-xs text-muted-foreground">Via Razorpay Secure</p>
+                          <p className="font-medium">Credit / Debit Card</p>
+                          <p className="text-xs text-muted-foreground">Via Razorpay Secure</p>
                       </div>
                    </div>
                    {selectedPaymentMethod === "card" && <div className="w-4 h-4 rounded-full bg-primary" />}
@@ -612,7 +626,7 @@ const Pay = () => {
                 <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-green-500/30">
                    <Check className="w-12 h-12 text-white" />
                 </div>
-                
+                 
                 <div>
                    <h2 className="text-2xl font-bold">Payment Successful!</h2>
                    <p className="text-muted-foreground">Transaction ID: {transactionId}</p>
