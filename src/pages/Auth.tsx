@@ -1,4 +1,4 @@
-console.log("AUTH PAGE VERSION: 2026-01-11 WITH ROLE SELECTOR");
+console.log("AUTH PAGE VERSION: 2026-01-11");
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,20 +29,7 @@ const Auth = () => {
   const { toast } = useToast();
 
   /* =========================
-     🔐 IMMEDIATE REDIRECT GUARD
-     ========================= */
-  if (!loading && user && role) {
-    if (role === "admin") {
-      return <Navigate to="/admin" replace />;
-    }
-    if (role === "restaurant") {
-      return <Navigate to="/restaurant-dashboard" replace />;
-    }
-    return <Navigate to="/" replace />;
-  }
-
-  /* =========================
-     LOCAL STATE
+     LOCAL STATE (MOVED UP)
      ========================= */
   const [mode, setMode] = useState<AuthMode>("signin");
   const [selectedRole, setSelectedRole] = useState<UserRole>("customer");
@@ -57,7 +44,7 @@ const Auth = () => {
   const [isLocating, setIsLocating] = useState(false);
 
   /* =========================
-     LOCATION (NON-BLOCKING)
+     LOCATION (MOVED UP)
      ========================= */
   useEffect(() => {
     const detect = async () => {
@@ -88,6 +75,20 @@ const Auth = () => {
 
     detect();
   }, []);
+
+  /* =========================
+     🔐 IMMEDIATE REDIRECT GUARD
+     (MOVED AFTER ALL HOOKS)
+     ========================= */
+  if (!loading && user && role) {
+    if (role === "admin") {
+      return <Navigate to="/admin" replace />;
+    }
+    if (role === "restaurant") {
+      return <Navigate to="/restaurant-dashboard" replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
 
   /* =========================
      PASSWORD RESET
