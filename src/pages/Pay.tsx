@@ -130,9 +130,14 @@ const Pay = () => {
   // --- Calculations ---
   const amount = parseFloat(billAmount) || 0;
   
-  // Restaurant Discount
+  // Safe Restaurant Discount Calculation
+  // We use (|| 0) to handle undefined/null discount
+  // We use (?? Infinity) to handle undefined/null max_discount (assuming no limit if missing)
   const restaurantDiscount = restaurant
-    ? Math.min(amount * (restaurant.discount / 100), restaurant.max_discount)
+    ? Math.min(
+        amount * ((restaurant.discount || 0) / 100), 
+        restaurant.max_discount ?? Infinity
+      )
     : 0;
 
   // Coupon Discount
@@ -496,7 +501,7 @@ const Pay = () => {
                 <h3 className="font-semibold text-lg">Payment Method</h3>
                 
                 <div 
-                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "upi" ? "border-primary bg-primary/5" : "border-border"}`}
+                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "upi" ? "border-primary bg-primary/5" : "border-borde[...]
                    onClick={() => setSelectedPaymentMethod("upi")}
                 >
                    <div className="flex items-center gap-3">
@@ -510,7 +515,7 @@ const Pay = () => {
                 </div>
 
                 <div 
-                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "card" ? "border-primary bg-primary/5" : "border-border"}`}
+                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "card" ? "border-primary bg-primary/5" : "border-bord[...]
                    onClick={() => setSelectedPaymentMethod("card")}
                 >
                    <div className="flex items-center gap-3">
