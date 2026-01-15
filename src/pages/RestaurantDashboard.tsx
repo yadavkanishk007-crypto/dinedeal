@@ -18,7 +18,9 @@ import {
   Camera,
   X,
   UtensilsCrossed,
-  Calendar
+  Calendar,
+  Wallet,
+  PiggyBank
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +36,8 @@ import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import MenuManager from "@/components/MenuManager";
 import ReservationManager from "@/components/ReservationManager";
 import RestaurantGallery from "@/components/RestaurantGallery";
+import RestaurantEarningsTab from "@/components/RestaurantEarningsTab";
+import RestaurantSettlementsTab from "@/components/RestaurantSettlementsTab";
 
 interface Restaurant {
   id: string;
@@ -73,7 +77,12 @@ const RestaurantDashboard = () => {
     totalCustomers: 0,
     avgOrderValue: 0,
   });
-  const [activeTab, setActiveTab] = useState<"overview" | "menu" | "reservations" | "offers" | "transactions" | "settings">("overview");
+  
+  // Merged activeTab types to include Earnings and Settlements
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "menu" | "reservations" | "offers" | "transactions" | "earnings" | "settlements" | "settings"
+  >("overview");
+  
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -326,6 +335,8 @@ const RestaurantDashboard = () => {
             { id: "reservations", label: "Reservations", icon: Calendar },
             { id: "offers", label: "Offers", icon: Percent },
             { id: "transactions", label: "Transactions", icon: Receipt },
+            { id: "earnings", label: "Earnings", icon: PiggyBank },
+            { id: "settlements", label: "Settlements", icon: Wallet },
             { id: "settings", label: "Settings", icon: Settings },
           ].map((tab) => (
             <Button
@@ -429,6 +440,16 @@ const RestaurantDashboard = () => {
 
         {activeTab === "transactions" && (
           <TransactionsTab restaurantId={restaurant?.id} />
+        )}
+
+        {/* Merged Earnings Tab */}
+        {activeTab === "earnings" && restaurant && (
+          <RestaurantEarningsTab restaurantId={restaurant.id} />
+        )}
+
+        {/* Merged Settlements Tab */}
+        {activeTab === "settlements" && restaurant && (
+          <RestaurantSettlementsTab restaurantId={restaurant.id} />
         )}
 
       </div>

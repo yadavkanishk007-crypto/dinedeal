@@ -16,6 +16,9 @@ import {
   XCircle,
   Clock,
   Eye,
+  Wallet,
+  PiggyBank,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +34,9 @@ import { AdminAuditLog } from "@/components/AdminAuditLog";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import AdminNotificationSender from "@/components/AdminNotificationSender";
 import AdminRestaurantDetail from "@/components/AdminRestaurantDetail";
+import AdminRestaurantEarnings from "@/components/AdminRestaurantEarnings";
+import AdminSettlements from "@/components/AdminSettlements";
+import AdminPayouts from "@/components/AdminPayouts";
 
 interface RestaurantStats {
   totalRevenue: number;
@@ -51,8 +57,8 @@ interface UserProfile {
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  // Updated destructuring based on your request
-  const { user, role, signOut, loading } = useAuth(); 
+  // Using the updated destructuring pattern
+  const { user, role, signOut, loading } = useAuth();
   const { toast } = useToast();
   const { logAction } = useAuditLog();
 
@@ -65,10 +71,21 @@ const AdminPanel = () => {
     transactions: 0,
     revenue: 0,
   });
-  
+
   const [activeTab, setActiveTab] = useState<
-    "overview" | "analytics" | "restaurants" | "users" | "admins" | "notifications" | "coupons" | "audit"
+    | "overview"
+    | "analytics"
+    | "restaurants"
+    | "users"
+    | "admins"
+    | "notifications"
+    | "coupons"
+    | "audit"
+    | "earnings"
+    | "settlements"
+    | "payouts"
   >("overview");
+  
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
 
   const isAdmin = role === "admin" || role === "super_admin";
@@ -78,12 +95,15 @@ const AdminPanel = () => {
   useEffect(() => {
     // 1. Wait for auth loading AND role fetching to finish
     if (loading) return;
+    
     // No user → kick out
     if (!user) {
       navigate("/admin/login", { replace: true });
       return;
     }
+    
     if (role === null) return;
+    
     // 2. Check permissions
     if (!hasAccess(role, "admin")) {
       toast({
@@ -196,6 +216,9 @@ const AdminPanel = () => {
             { id: "overview", label: "Overview" },
             { id: "analytics", label: "Analytics" },
             { id: "restaurants", label: "Restaurants" },
+            { id: "earnings", label: "Earnings", icon: PiggyBank },
+            { id: "settlements", label: "Settlements", icon: Wallet },
+            { id: "payouts", label: "Payouts", icon: CreditCard },
             { id: "users", label: "Users" },
             isSuperAdmin && { id: "admins", label: "Create Admin" },
             { id: "notifications", label: "Notifications", icon: Bell },
@@ -209,8 +232,9 @@ const AdminPanel = () => {
                 size="sm"
                 variant={activeTab === tab.id ? "default" : "outline"}
                 onClick={() => setActiveTab(tab.id)}
-                className="whitespace-nowrap"
+                className="whitespace-nowrap gap-2"
               >
+                {tab.icon && <tab.icon className="w-4 h-4" />}
                 {tab.label}
               </Button>
             ))}
@@ -427,6 +451,15 @@ const AdminPanel = () => {
 
         {/* 8. AUDIT LOG */}
         {activeTab === "audit" && <AdminAuditLog />}
+
+        {/* 9. EARNINGS */}
+        {activeTab === "earnings" && <AdminRestaurantEarnings />}
+
+        {/* 10. SETTLEMENTS */}
+        {activeTab === "settlements" && <AdminSettlements />}
+
+        {/* 11. PAYOUTS */}
+        {activeTab === "payouts" && <AdminPayouts />}
       </div>
     </div>
   );
