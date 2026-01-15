@@ -501,7 +501,7 @@ const Pay = () => {
                 <h3 className="font-semibold text-lg">Payment Method</h3>
                 
                 <div 
-                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "upi" ? "border-primary bg-primary/5" : "border-borde[...]
+                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "upi" ? "border-primary bg-primary/5" : "border-border/10 bg-transparent"}`}
                    onClick={() => setSelectedPaymentMethod("upi")}
                 >
                    <div className="flex items-center gap-3">
@@ -515,7 +515,7 @@ const Pay = () => {
                 </div>
 
                 <div 
-                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "card" ? "border-primary bg-primary/5" : "border-bord[...]
+                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${selectedPaymentMethod === "card" ? "border-primary bg-primary/5" : "border-border/10 bg-transparent"}`}
                    onClick={() => setSelectedPaymentMethod("card")}
                 >
                    <div className="flex items-center gap-3">
