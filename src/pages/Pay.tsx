@@ -55,7 +55,10 @@ export default function Pay() {
   const [step, setStep] = useState<PaymentStep>("loading");
 
   const [billAmount, setBillAmount] = useState("");
+  // Generated mostly for UI reference; actual correlation happens via Order ID in backend
   const [transactionId, setTransactionId] = useState("");
+  
+  // Store the payment ID so we can poll for its completion by the webhook
   const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
 
   // UI Selection State
@@ -72,14 +75,11 @@ export default function Pay() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // --- Initialization ---
+
   useEffect(() => {
-    // Validate restaurant ID
-    if (!restaurantId || restaurantId === "no-id" || restaurantId.trim() === "") {
-      toast({
-        title: "Invalid Payment Link",
-        description: "Please select a restaurant first.",
-        variant: "destructive",
-      });
+    // 🔒 Block "no-id" explicitly
+    if (!restaurantId || restaurantId === "no-id") {
+      toast({ title: "Invalid Payment Link", variant: "destructive" });
       navigate("/explore");
       return;
     }
@@ -88,35 +88,16 @@ export default function Pay() {
       try {
         const { data, error } = await supabase
           .from("restaurants")
-          .select("id, name, cuisine, discount, max_discount, image_url")
+          .select("*")
           .eq("id", restaurantId)
-          .eq("is_active", true)
-          .maybeSingle();
+          .single();
 
-        if (error) {
-          console.error("Supabase error:", error);
-          throw new Error("Failed to load restaurant data");
-        }
-
-        if (!data) {
-          throw new Error("Restaurant not found or inactive");
-        }
+        if (error || !data) throw new Error("Restaurant not found");
 
         setRestaurant(data);
         setStep("amount");
-        setTransactionId(
-          `DD${Date.now().toString().slice(-6)}${Math.random()
-            .toString(36)
-            .substr(2, 4)
-            .toUpperCase()}`
-        );
+        setTransactionId(`DD${Date.now().toString().slice(-6)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`);
       } catch (err) {
-        console.error("Load restaurant error:", err);
-        toast({
-          title: "Restaurant Not Available",
-          description: err instanceof Error ? err.message : "Please try again",
-          variant: "destructive",
-        });
         navigate("/explore");
       }
     };
@@ -124,33 +105,22 @@ export default function Pay() {
     loadData();
   }, [restaurantId, navigate, toast]);
 
-  // Load Razorpay script
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
     script.onload = () => setIsRazorpayLoaded(true);
-    script.onerror = () => {
-      toast({
-        title: "Payment System Unavailable",
-        description: "Could not load payment gateway. Please refresh.",
-        variant: "destructive",
-      });
-    };
     document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, [toast]);
+  }, []);
 
   // --- Calculations ---
+
   const amount = parseFloat(billAmount) || 0;
 
   const restaurantDiscount = restaurant
     ? Math.min(
-        amount * ((restaurant.discount || 0) / 100),
-        restaurant.max_discount ?? Infinity
+        amount * ((restaurant.discount || 0)/ 100),
+        restaurant.max_discount ?? Infinity 
       )
     : 0;
 
@@ -163,19 +133,18 @@ export default function Pay() {
 
   const totalDiscount = restaurantDiscount + couponDiscount;
   const finalAmount = Math.max(amount - totalDiscount, 0);
+  // Rewards are now calculated by the Webhook, but we can display an estimate
   const estimatedRewards = Math.floor(amount * 0.02);
 
   // --- Coupon Handler ---
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) {
-      setCouponError("Please enter a coupon code");
-      return;
-    }
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
     setCouponLoading(true);
     setCouponError("");
 
     try {
+      // Frontend only VERIFIES coupon existence. Backend usage is applied via Webhook.
       const { data, error } = await supabase
         .from("coupons")
         .select("*")
@@ -183,121 +152,87 @@ export default function Pay() {
         .eq("is_active", true)
         .maybeSingle();
 
-      if (error) {
-        console.error("Coupon fetch error:", error);
-        setCouponError("Error checking coupon");
-        return;
-      }
-
-      if (!data) {
+      if (error || !data) {
         setCouponError("Invalid coupon code");
         return;
       }
 
       const now = new Date();
       if (data.valid_until && new Date(data.valid_until) < now) {
-        setCouponError("Coupon has expired");
+        setCouponError("Coupon expired");
         return;
       }
-
       if (data.min_order_amount && amount < data.min_order_amount) {
-        setCouponError(`Minimum order ₹${data.min_order_amount} required`);
+        setCouponError(`Min order ₹${data.min_order_amount}`);
         return;
       }
 
       setAppliedCoupon(data);
-      setCouponCode("");
-      toast({
-        title: "Coupon Applied Successfully",
-        description: `${data.discount_percent}% discount unlocked!`,
-      });
+      toast({ title: "Coupon Applied", description: `${data.discount_percent}% saved!` });
     } catch (err) {
-      console.error("Coupon error:", err);
-      setCouponError("Error applying coupon");
+      setCouponError("Error checking coupon");
     } finally {
       setCouponLoading(false);
     }
   };
 
   // --- Payment Handler (Razorpay) ---
+
   const handlePayment = async () => {
-    if (!restaurant?.id) {
+    // 🔒 Guarantees restaurant.id is valid before calling backend
+    if (!restaurant || !restaurant.id) {
       toast({
         title: "Invalid Restaurant",
-        description: "Please restart the payment process.",
+        description: "Please open payment from a restaurant page.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!isRazorpayLoaded) {
-      toast({
-        title: "Payment Gateway Loading",
-        description: "Please wait a moment...",
-        variant: "default",
-      });
-      return;
-    }
-
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to continue.",
-        variant: "destructive",
-      });
-      navigate("/auth");
-      return;
-    }
-
+    if (!isRazorpayLoaded) return;
+    
+    // 🧪 Debug Log
+    console.log("💳 Initiating payment for restaurant:", restaurant.id);
+    
     setIsProcessing(true);
-    toast({ title: "Initializing secure payment..." });
+    toast({ title: "Securing connection..." });
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || "https://dinedeal-backend-076n.onrender.com";
-      const res = await fetch(`${backendUrl}/api/payments/create-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: Math.round(finalAmount * 100), // Convert to paise
-          restaurantId: restaurant.id,
-          userId: user.id,
-          metadata: {
-            couponCode: appliedCoupon?.code,
-            frontendRef: transactionId,
-            billAmount: amount,
-            discount: totalDiscount,
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Backend error:", res.status, errorText);
-        throw new Error(
-          res.status === 404
-            ? "Payment service unavailable. Please contact support."
-            : "Failed to create payment order"
-        );
-      }
+      // 1. Create Order on Backend
+      const res = await fetch(
+        "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: finalAmount,
+            restaurantId: restaurant.id,
+            userId: user?.id ?? "guest",
+            metadata: {
+              // We pass this data so the Backend Webhook knows what to apply
+              couponCode: appliedCoupon?.code, 
+              frontendRef: transactionId
+            }
+          }),
+        }
+      );
 
       const data = await res.json();
+      if (!data.success) throw new Error(data.message || "Order creation failed");
 
-      if (!data.success || !data.order?.id) {
-        throw new Error(data.message || "Invalid order response");
-      }
-
-      // Open Razorpay Modal
+      // 2. Open Razorpay Modal
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: data.order.amount,
         currency: "INR",
         name: restaurant.name,
-        description: `Order Ref: ${transactionId}`,
+        description: `Ref: ${transactionId}`,
         order_id: data.order.id,
+        // ✅ SECURE HANDLER: UI Only. No DB Writes.
         handler: function (response: any) {
-          console.log("Payment success:", response);
           setVerifyingPaymentId(response.razorpay_payment_id);
           setStep("processing");
+          // Logic stops here. We wait for the Polling Effect below.
         },
         modal: {
           ondismiss: () => {
@@ -306,106 +241,86 @@ export default function Pay() {
           },
         },
         prefill: {
-          email: user.email,
-          contact: user.phone || "",
+          email: user?.email,
+          contact: user?.phone,
         },
         theme: { color: "#000000" },
       };
 
       const rzp = new (window as any).Razorpay(options);
-      rzp.on("payment.failed", function (response: any) {
-        console.error("Payment failed:", response.error);
-        setIsProcessing(false);
-        toast({
-          title: "Payment Failed",
-          description: response.error.description || "Please try again",
-          variant: "destructive",
-        });
-      });
-
       rzp.open();
     } catch (err) {
-      console.error("Payment initialization error:", err);
+      console.error(err);
       setIsProcessing(false);
-      toast({
-        title: "Payment Error",
-        description: err instanceof Error ? err.message : "Could not initiate payment",
-        variant: "destructive",
+      toast({ 
+        title: "Payment Error", 
+        description: "Could not initiate secure checkout.", 
+        variant: "destructive" 
       });
     }
   };
 
-  // --- Polling Effect for Payment Verification ---
+  // --- 🔒 Secure Polling Effect ---
+  // Since frontend cannot write, we poll the DB to see when the Webhook has done its job.
   useEffect(() => {
     if (step !== "processing" || !verifyingPaymentId) return;
 
     let attempts = 0;
-    const maxAttempts = 30; // 60 seconds total
-    let intervalId: NodeJS.Timeout;
+    const maxAttempts = 20; // Try for ~40 seconds (2s interval)
 
     const checkStatus = async () => {
       attempts++;
+      
+      // We look for the transaction created by the webhook
+      const { data } = await supabase
+        .from("transactions")
+        .select("id, payment_status")
+        .eq("payment_reference", verifyingPaymentId)
+        .maybeSingle();
 
-      try {
-        const { data, error } = await supabase
-          .from("transactions")
-          .select("id, payment_status")
-          .eq("payment_reference", verifyingPaymentId)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Transaction check error:", error);
-        }
-
-        if (data) {
-          clearInterval(intervalId);
-          setStep("success");
-          setIsProcessing(false);
-          toast({
-            title: "Payment Confirmed",
-            description: "Your transaction is complete!",
-          });
-        } else if (attempts >= maxAttempts) {
-          clearInterval(intervalId);
-          setIsProcessing(false);
-          setStep("success");
-          toast({
-            title: "Payment Processing",
-            description: "Your payment is being verified. Check transactions for updates.",
-            variant: "default",
-          });
-        }
-      } catch (err) {
-        console.error("Status check error:", err);
+      if (data) {
+        // ✅ Webhook success!
+        setStep("success");
+        setIsProcessing(false);
+        toast({ title: "Payment Confirmed", description: "Receipt sent to email." });
+      } else if (attempts >= maxAttempts) {
+        // Timeout (Webhook is slow or failed)
+        // We still show success because money is likely deducted, but warn user
+        setIsProcessing(false);
+        setStep("success"); 
+        toast({ 
+          title: "Payment Received", 
+          description: "Syncing data in background...", 
+          variant: "default" 
+        });
+      } else {
+        // Retry
+        setTimeout(checkStatus, 2000);
       }
     };
 
-    // Initial check
     checkStatus();
-    // Then poll every 2 seconds
-    intervalId = setInterval(checkStatus, 2000);
+  }, [step, verifyingPaymentId]);
 
-    return () => clearInterval(intervalId);
-  }, [step, verifyingPaymentId, toast]);
 
-  // --- Render Loading State ---
+  // --- Render ---
+
   if (step === "loading" || !restaurant) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-muted-foreground">Loading restaurant details...</p>
+          <p className="text-muted-foreground">Connecting to restaurant...</p>
         </div>
       </div>
     );
   }
 
-  // --- Main Render ---
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Header */}
       <motion.header
-        className="sticky top-0 z-40 glass border-b border-border/30 bg-background/95 backdrop-blur"
+        className="sticky top-0 z-40 glass border-b border-border/30"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
       >
@@ -415,19 +330,14 @@ export default function Pay() {
             size="icon"
             className="rounded-full"
             onClick={() => {
-              if (step === "success") {
-                navigate("/explore");
-              } else if (step === "amount") {
-                navigate(-1);
-              } else {
-                setStep("amount");
-              }
+              if (step === "amount") navigate("/explore");
+              else if (step === "success") navigate("/explore");
+              else setStep("amount");
             }}
-            disabled={step === "processing"}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="flex-1">
+          <div>
             <h1 className="font-display font-bold text-foreground line-clamp-1">
               {restaurant.name}
             </h1>
@@ -438,8 +348,9 @@ export default function Pay() {
         </div>
       </motion.header>
 
-      <main className="container py-6 max-w-2xl mx-auto">
+      <main className="container py-6">
         <AnimatePresence mode="wait">
+          
           {/* STEP 1: BILL AMOUNT */}
           {step === "amount" && (
             <motion.div
@@ -450,13 +361,9 @@ export default function Pay() {
               className="space-y-6"
             >
               <div className="text-center py-10">
-                <p className="text-muted-foreground text-sm mb-3">
-                  Enter Your Bill Amount
-                </p>
+                <p className="text-muted-foreground text-sm mb-3">Total Bill Amount</p>
                 <div className="flex items-center justify-center gap-1">
-                  <span className="text-4xl font-display font-bold text-muted-foreground">
-                    ₹
-                  </span>
+                  <span className="text-4xl font-display font-bold text-muted-foreground">₹</span>
                   <input
                     type="number"
                     placeholder="0"
@@ -464,13 +371,11 @@ export default function Pay() {
                     onChange={(e) => setBillAmount(e.target.value)}
                     className="text-5xl font-display font-bold bg-transparent border-none outline-none w-48 text-center placeholder:text-muted-foreground/20"
                     autoFocus
-                    min="0"
-                    step="1"
                   />
                 </div>
               </div>
 
-              {/* Quick Amount Buttons */}
+              {/* Quick Suggestions */}
               <div className="grid grid-cols-4 gap-2">
                 {[200, 500, 1000, 2000].map((val) => (
                   <Button
@@ -484,17 +389,9 @@ export default function Pay() {
                 ))}
               </div>
 
-              {/* Restaurant Info Card */}
               <Card>
                 <CardContent className="p-4 flex gap-4 items-center">
-                  <img
-                    src={restaurant.image_url || "/placeholder.jpg"}
-                    className="w-16 h-16 rounded-md object-cover bg-muted"
-                    alt={restaurant.name}
-                    onError={(e) => {
-                      e.currentTarget.src = "/placeholder.jpg";
-                    }}
-                  />
+                  <img src={restaurant.image_url || "/placeholder.jpg"} className="w-16 h-16 rounded-md object-cover bg-muted" alt="" />
                   <div>
                     <p className="font-semibold">{restaurant.name}</p>
                     <p className="text-xs text-success flex items-center gap-1 font-medium">
@@ -511,7 +408,7 @@ export default function Pay() {
                 disabled={amount < 1}
                 onClick={() => setStep("breakdown")}
               >
-                Continue to Payment
+                Continue
               </Button>
             </motion.div>
           )}
@@ -525,147 +422,105 @@ export default function Pay() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              {/* Bill Summary */}
               <Card>
                 <CardContent className="p-6 space-y-4">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Bill Amount</span>
-                    <span className="font-medium">₹{amount.toFixed(2)}</span>
+                    <span>₹{amount.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-success">
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" /> Restaurant Discount
-                    </span>
-                    <span className="font-medium">- ₹{restaurantDiscount.toFixed(2)}</span>
+                    <span className="flex items-center gap-2"><Sparkles className="w-4 h-4"/> DineDeal Offer</span>
+                    <span>- ₹{restaurantDiscount.toFixed(2)}</span>
                   </div>
                   {appliedCoupon && (
                     <div className="flex justify-between text-success">
-                      <span className="flex items-center gap-2">
-                        <Tag className="w-4 h-4" /> Coupon ({appliedCoupon.code})
-                      </span>
-                      <span className="font-medium">- ₹{couponDiscount.toFixed(2)}</span>
+                      <span className="flex items-center gap-2"><Tag className="w-4 h-4"/> Coupon ({appliedCoupon.code})</span>
+                      <span>- ₹{couponDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="border-t pt-4 flex justify-between items-center font-bold text-lg">
-                    <span>Amount to Pay</span>
-                    <span className="text-primary">₹{finalAmount.toFixed(2)}</span>
+                    <span>To Pay</span>
+                    <span>₹{finalAmount.toFixed(2)}</span>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Coupon Section */}
               {!appliedCoupon ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Enter Coupon Code"
-                      value={couponCode}
-                      onChange={(e) => {
-                        setCouponCode(e.target.value.toUpperCase());
-                        setCouponError("");
-                      }}
-                      className="uppercase"
-                      disabled={couponLoading}
-                    />
-                    <Button
-                      onClick={handleApplyCoupon}
-                      disabled={couponLoading || !couponCode.trim()}
-                    >
-                      {couponLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Apply"
-                      )}
-                    </Button>
-                  </div>
-                  {couponError && (
-                    <p className="text-xs text-destructive flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> {couponError}
-                    </p>
-                  )}
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Enter Coupon Code" 
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="uppercase"
+                  />
+                  <Button onClick={handleApplyCoupon} disabled={couponLoading}>
+                    {couponLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : "Apply"}
+                  </Button>
                 </div>
               ) : (
                 <div className="flex justify-between items-center p-3 bg-success/10 rounded-lg border border-success/20">
                   <span className="text-sm font-medium text-success flex items-center gap-2">
-                    <Check className="w-4 h-4" /> {appliedCoupon.code} applied
+                    <Check className="w-4 h-4" /> Code {appliedCoupon.code} applied
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setAppliedCoupon(null);
-                      setCouponCode("");
-                    }}
-                  >
-                    <X className="w-4 h-4" />
+                  <Button variant="ghost" size="sm" onClick={() => setAppliedCoupon(null)}>
+                    <X className="w-4 h-4"/>
                   </Button>
                 </div>
               )}
+              {couponError && <p className="text-xs text-destructive flex items-center gap-1 ml-1"><AlertCircle className="w-3 h-3"/> {couponError}</p>}
 
-              {/* Payment Methods */}
+              {/* Payment Methods (Visual Selector) */}
               <div className="space-y-3 pt-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-lg">Payment Method</h3>
                   <span className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded">
-                    <ShieldCheck className="w-3 h-3 text-green-600" /> Secured by
-                    Razorpay
+                    <ShieldCheck className="w-3 h-3 text-green-600"/> Secured by Razorpay
                   </span>
                 </div>
-
-                <div
+                
+                <div 
                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${
-                    displayMethod === "upi"
-                      ? "border-primary bg-primary/5"
-                      : "border-border/40 hover:border-border"
+                    displayMethod === "upi" ? "border-primary bg-primary/5" : "border-border/40 hover:border-border"
                   }`}
                   onClick={() => setDisplayMethod("upi")}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-primary" />
+                      <Smartphone className="w-5 h-5 text-primary"/>
                     </div>
                     <div>
                       <p className="font-medium">UPI Apps</p>
-                      <p className="text-xs text-muted-foreground">
-                        Google Pay, PhonePe, Paytm
-                      </p>
+                      <p className="text-xs text-muted-foreground">Google Pay, PhonePe, Paytm</p>
                     </div>
                   </div>
-                  {displayMethod === "upi" && (
-                    <div className="w-4 h-4 rounded-full bg-primary" />
-                  )}
+                  {displayMethod === "upi" && <div className="w-4 h-4 rounded-full bg-primary" />}
                 </div>
 
-                <div
+                <div 
                   className={`p-4 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${
-                    displayMethod === "card"
-                      ? "border-primary bg-primary/5"
-                      : "border-border/40 hover:border-border"
+                    displayMethod === "card" ? "border-primary bg-primary/5" : "border-border/40 hover:border-border"
                   }`}
                   onClick={() => setDisplayMethod("card")}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-gold" />
+                      <CreditCard className="w-5 h-5 text-gold"/>
                     </div>
                     <div>
                       <p className="font-medium">Cards & More</p>
-                      <p className="text-xs text-muted-foreground">
-                        Credit/Debit, Netbanking
-                      </p>
+                      <p className="text-xs text-muted-foreground">Credit/Debit, Netbanking</p>
                     </div>
                   </div>
-                  {displayMethod === "card" && (
-                    <div className="w-4 h-4 rounded-full bg-primary" />
-                  )}
+                  {displayMethod === "card" && <div className="w-4 h-4 rounded-full bg-primary" />}
                 </div>
               </div>
 
-              <Button
-                size="lg"
-                className="w-full text-lg h-12"
-                onClick={handlePayment}
-                disabled={isProcessing || !isRazorpayLoaded}
+              <Button 
+                size="lg" 
+                className="w-full text-lg h-12" 
+                onClick={handlePayment} 
+                disabled={isProcessing}
               >
                 {isProcessing ? (
                   <>
@@ -678,22 +533,15 @@ export default function Pay() {
             </motion.div>
           )}
 
-          {/* STEP 3: PROCESSING */}
+          {/* STEP 3: PROCESSING (Post-Razorpay) */}
           {step === "processing" && (
-            <motion.div
-              key="processing"
-              className="flex flex-col items-center justify-center pt-20 space-y-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
+            <motion.div className="flex flex-col items-center justify-center pt-20 space-y-4">
               <div className="relative">
                 <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
                 <ShieldCheck className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
               </div>
               <h3 className="font-semibold text-lg">Verifying Payment...</h3>
-              <p className="text-muted-foreground text-sm text-center max-w-xs">
-                Please wait while we confirm your transaction securely
-              </p>
+              <p className="text-muted-foreground text-sm">Waiting for secure confirmation</p>
             </motion.div>
           )}
 
@@ -708,12 +556,10 @@ export default function Pay() {
               <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-green-500/30">
                 <Check className="w-12 h-12 text-white" />
               </div>
-
+              
               <div>
                 <h2 className="text-2xl font-bold">Payment Successful!</h2>
-                <p className="text-muted-foreground text-sm mt-1">
-                  Reference: {transactionId}
-                </p>
+                <p className="text-muted-foreground text-sm mt-1">Ref ID: {transactionId}</p>
               </div>
 
               <Card className="bg-secondary/30 border-none">
@@ -722,8 +568,7 @@ export default function Pay() {
                   <p className="text-4xl font-bold">₹{finalAmount.toFixed(2)}</p>
                   {totalDiscount > 0 && (
                     <div className="mt-4 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-500/10 text-green-600 text-sm font-medium">
-                      <Sparkles className="w-3 h-3" /> You saved ₹
-                      {totalDiscount.toFixed(2)}
+                      <Sparkles className="w-3 h-3"/> Saved ₹{totalDiscount.toFixed(2)}
                     </div>
                   )}
                 </CardContent>
@@ -731,27 +576,20 @@ export default function Pay() {
 
               <div className="flex items-center gap-4 p-4 rounded-xl bg-gold/10 border border-gold/30">
                 <div className="w-10 h-10 rounded-full bg-gold flex items-center justify-center text-white font-bold">
-                  <Gift className="w-5 h-5" />
+                  <Gift className="w-5 h-5"/>
                 </div>
                 <div className="text-left">
-                  <p className="font-bold text-foreground">
-                    +{estimatedRewards} Reward Points Earned
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Available for your next visit
-                  </p>
+                  <p className="font-bold text-foreground">+{estimatedRewards} Points Earned</p>
+                  <p className="text-xs text-muted-foreground">Available for next visit</p>
                 </div>
               </div>
 
-              <Button
-                size="lg"
-                className="w-full h-12"
-                onClick={() => navigate("/explore")}
-              >
-                Back to Explore
+              <Button size="lg" className="w-full h-12" onClick={() => navigate("/explore")}>
+                Done
               </Button>
             </motion.div>
           )}
+
         </AnimatePresence>
       </main>
     </div>
