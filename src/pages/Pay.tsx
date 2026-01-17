@@ -77,8 +77,9 @@ export default function Pay() {
   // --- Initialization ---
 
   useEffect(() => {
-    if (!restaurantId) {
-      toast({ title: "Invalid Link", variant: "destructive" });
+    // 🔒 Block "no-id" explicitly
+    if (!restaurantId || restaurantId === "no-id") {
+      toast({ title: "Invalid Payment Link", variant: "destructive" });
       navigate("/explore");
       return;
     }
@@ -178,7 +179,20 @@ export default function Pay() {
   // --- Payment Handler (Razorpay) ---
 
   const handlePayment = async () => {
-    if (!isRazorpayLoaded || !restaurant) return;
+    // 🔒 Guarantees restaurant.id is valid before calling backend
+    if (!restaurant || !restaurant.id) {
+      toast({
+        title: "Invalid Restaurant",
+        description: "Please open payment from a restaurant page.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isRazorpayLoaded) return;
+    
+    // 🧪 Debug Log
+    console.log("💳 Initiating payment for restaurant:", restaurant.id);
     
     setIsProcessing(true);
     toast({ title: "Securing connection..." });
