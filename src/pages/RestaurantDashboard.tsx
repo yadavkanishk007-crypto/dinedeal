@@ -145,17 +145,18 @@ const RestaurantDashboard = () => {
       // Fetch transaction stats
       const { data: txData } = await supabase
         .from("transactions")
-        .select("bill_amount, user_id")
+        .select("final_amount, restaurant_earning, user_id")
         .eq("restaurant_id", restaurantData.id)
         .eq("payment_status", "completed");
 
       if (txData) {
         const uniqueCustomers = new Set(txData.map(t => t.user_id)).size;
-        const totalRevenue = txData.reduce((sum, t) => sum + Number(t.bill_amount), 0);
+        const totalRevenue = txData.reduce((sum, t) => sum + Number(t.restaurant_earning || 0), 0);
+        const totalOrders = txData.length;
         
         setStats({
           totalRevenue,
-          totalTransactions: txData.length,
+          totalTransactions: totalOrders,
           totalCustomers: uniqueCustomers,
           avgOrderValue: txData.length > 0 ? totalRevenue / txData.length : 0,
         });
@@ -1017,5 +1018,6 @@ const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | n
     </div>
   );
 };
+
 
 export default RestaurantDashboard;
