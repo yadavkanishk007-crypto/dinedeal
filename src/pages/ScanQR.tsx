@@ -73,6 +73,7 @@ const ScanQR = () => {
     }
     setIsScanning(false);
   };
+  console.log("SCAN_QR_VERSION = v2_NO_HOST_CHECK");
 
   const handleScanSuccess = async (decodedText: string) => {
     // Stop scanning immediately
