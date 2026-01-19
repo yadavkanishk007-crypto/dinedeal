@@ -17,6 +17,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import TransactionHistory from "./pages/TransactionHistory";
 import MyReservations from "./pages/MyReservations";
+import Dinein from "./pages/DineIn" ;
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -36,7 +37,7 @@ const App = () => (
             <Route path="/restaurant/:id" element={<RestaurantDetail />} />
             <Route path="/pay" element={<Pay />} />
             <Route path="/rewards" element={<Rewards />} />
-
+            <Route path="/dine-in" element={<DineIn />} />
             <Route
               path="/profile"
               element={
