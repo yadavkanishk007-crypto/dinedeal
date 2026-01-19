@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,81 +7,176 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Clock, Receipt, CheckCircle2, UtensilsCrossed, Percent, CreditCard, Download } from "lucide-react";
+import {
+  Loader2,
+  Clock,
+  Receipt,
+  CheckCircle2,
+  UtensilsCrossed,
+  Percent,
+  CreditCard,
+  Download,
+} from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
 import { loadRazorpay, createRazorpayOptions } from "@/utils/razorpay";
+
+/* =========================
+   TYPES (SHALLOW & SAFE)
+========================= */
+
+interface RestaurantInfo {
+  name: string;
+  address: string;
+  image_url: string | null;
+}
 
 interface DineInSession {
   id: string;
   restaurant_id: string;
   customer_id: string;
-  status: string;
+  status: "open" | "bill_posted" | "paid";
   created_at: string;
-  restaurants: {
-    name: string;
-    address: string;
-    image_url: string | null;
-  };
+  restaurants: RestaurantInfo;
 }
 
-interface PostedBill {
+interface Transaction {
   id: string;
-  session_id: string;
+  dinein_session_id: string | null;
   bill_amount: number;
-  pos_bill_no: string | null;
   discount_amount: number;
   final_amount: number;
-  status: string;
+  payment_status: "pending" | "completed" | "failed";
   payment_reference: string | null;
+  pos_bill_no: string | null;
   offer_id: string | null;
-  offers?: {
-    title: string;
-    discount_percent: number;
-  } | null;
 }
+
+/* =========================
+   COMPONENT
+========================= */
 
 const DineIn = () => {
   const { user, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
   const restaurantId = searchParams.get("restaurant");
-  
+
   const [session, setSession] = useState<DineInSession | null>(null);
-  const [bill, setBill] = useState<PostedBill | null>(null);
+  const [bill, setBill] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
 
+  /* =========================
+     AUTH + SESSION INIT
+  ========================= */
+
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate(`/auth?redirect=/dine-in${restaurantId ? `?restaurant=${restaurantId}` : ''}`);
+      navigate(`/auth?redirect=/dine-in?restaurant=${restaurantId ?? ""}`);
       return;
     }
 
-    if (user) {
+    if (user && restaurantId) {
       initializeSession();
     }
-  }, [user, authLoading, restaurantId]);
+  }, [authLoading, user, restaurantId]);
 
-  // Subscribe to realtime updates for bills
+  const initializeSession = async () => {
+    if (!user?.id || !restaurantId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data: existing, error } = await supabase
+        .from("dinein_sessions")
+        .select(
+          `
+          id,
+          restaurant_id,
+          customer_id,
+          status,
+          created_at,
+          restaurants (
+            name,
+            address,
+            image_url
+          )
+        `
+        )
+        .eq("restaurant_id", restaurantId)
+        .eq("customer_id", user.id)
+        .in("status", ["open", "bill_posted"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (existing) {
+        setSession(existing as DineInSession);
+        if (existing.status === "bill_posted") {
+          fetchBill(existing.id);
+        }
+      } else {
+        const { data: created, error: createError } = await supabase
+          .from("dinein_sessions")
+          .insert({
+            restaurant_id: restaurantId,
+            customer_id: user.id,
+            status: "open",
+          })
+          .select(
+            `
+            id,
+            restaurant_id,
+            customer_id,
+            status,
+            created_at,
+            restaurants (
+              name,
+              address,
+              image_url
+            )
+          `
+          )
+          .single();
+
+        if (createError) throw createError;
+
+        setSession(created as DineInSession);
+        toast.success("Dine-in session started!");
+      }
+    } catch (err) {
+      console.error("DINEIN_INIT_ERROR", err);
+      toast.error("Failed to start dine-in session");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* =========================
+     BILL FETCH + REALTIME
+  ========================= */
+
   useEffect(() => {
     if (!session) return;
 
+    fetchBill(session.id);
+
     const channel = supabase
-      .channel(`bill-updates-${session.id}`)
+      .channel(`txn-updates-${session.id}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'transactions',
-          filter: `session_id=eq.${session.id}`
+          event: "*",
+          schema: "public",
+          table: "transactions",
+          filter: `dinein_session_id=eq.${session.id}`,
         },
-        (payload) => {
-          if (payload.new) {
-            fetchBill(session.id);
-          }
-        }
+        () => fetchBill(session.id)
       )
       .subscribe();
 
@@ -90,359 +185,220 @@ const DineIn = () => {
     };
   }, [session?.id]);
 
-  const initializeSession = async () => {
-    if (!user || !restaurantId) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Check for existing open session at this restaurant
-      const { data: existingSession, error: fetchError } = await supabase
-        .from('dinein_sessions')
-        .select(`
-          *,
-          restaurants (name, address, image_url)
-        `)
-        .eq('restaurant_id', restaurantId)
-        .eq('customer_id', user.id)
-        .in('status', ['open', 'bill_posted'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-
-      if (existingSession) {
-        setSession(existingSession as unknown as DineInSession);
-        if (existingSession.status === 'bill_posted') {
-          await fetchBill(existingSession.id);
-        }
-      } else {
-        // Create new session
-        const { data: newSession, error: createError } = await supabase
-          .from('dinein_sessions')
-          .insert({
-            restaurant_id: restaurantId,
-            customer_id: user.id,
-            status: 'open'
-          })
-          .select(`
-            *,
-            restaurants (name, address, image_url)
-          `)
-          .single();
-
-        if (createError) throw createError;
-        setSession(newSession as unknown as DineInSession);
-        toast.success("Dine-in session started!");
-      }
-    } catch (error: any) {
-      console.error('Error initializing session:', error);
-      toast.error("Failed to start dine-in session");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchBill = async (sessionId: string) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select(`
-        *,
-        offers (title, discount_percent)
-      `)
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: false })
+    const { data } = await supabase
+      .from("transactions")
+      .select(
+        `
+        id,
+        dinein_session_id,
+        bill_amount,
+        discount_amount,
+        final_amount,
+        payment_status,
+        payment_reference,
+        pos_bill_no,
+        offer_id
+      `
+      )
+      .eq("dinein_session_id", sessionId)
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!error && data) {
-      setBill(data as unknown as PostedBill);
+    if (data) {
+      setBill(data as Transaction);
     }
   };
+
+  /* =========================
+     PAYMENT
+  ========================= */
 
   const handlePayment = async () => {
     if (!bill || !session || !user) return;
 
     setPaying(true);
+
     try {
-      const razorpayLoaded = await loadRazorpay();
-      if (!razorpayLoaded) {
-        throw new Error("Failed to load payment gateway");
-      }
+      const loaded = await loadRazorpay();
+      if (!loaded) throw new Error("Razorpay failed to load");
 
       const options = createRazorpayOptions({
         amount: bill.final_amount,
         restaurantName: session.restaurants.name,
-        userEmail: user.email || '',
-        userPhone: '',
-        onSuccess: async (response) => {
-          // Update bill status
-          const { error: billError } = await supabase
-            .from('transactions')
+        userEmail: user.email ?? "",
+        userPhone: "",
+        onSuccess: async (res) => {
+          await supabase
+            .from("transactions")
             .update({
-              status: 'paid',
-              payment_reference: response.razorpay_payment_id
-            })
-            .eq('id', bill.id);
-
-          if (billError) throw billError;
-
-          // Update session status
-          const { error: sessionError } = await supabase
-            .from('dinein_sessions')
-            .update({ status: 'paid' })
-            .eq('id', session.id);
-
-          if (sessionError) throw sessionError;
-
-          // Create transaction record
-          const { error: transactionError } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: user.id,
-              restaurant_id: session.restaurant_id,
-              bill_amount: bill.bill_amount,
-              discount_amount: bill.discount_amount,
-              final_amount: bill.final_amount,
-              offer_id: bill.offer_id,
-              payment_status: 'completed',
-              payment_reference: response.razorpay_payment_id,
-              payment_method: 'razorpay',
+              payment_status: "completed",
+              payment_reference: res.razorpay_payment_id,
+              payment_method: "razorpay",
               platform_commission: bill.final_amount * 0.02,
-              restaurant_earning: bill.final_amount * 0.98
-            });
+              restaurant_earning: bill.final_amount * 0.98,
+            })
+            .eq("id", bill.id);
 
-          if (transactionError) throw transactionError;
+          await supabase
+            .from("dinein_sessions")
+            .update({ status: "paid" })
+            .eq("id", session.id);
 
-          setBill(prev => prev ? { ...prev, status: 'paid', payment_reference: response.razorpay_payment_id } : null);
+          setBill((b) =>
+            b
+              ? {
+                  ...b,
+                  payment_status: "completed",
+                  payment_reference: res.razorpay_payment_id,
+                }
+              : null
+          );
+
           toast.success("Payment successful!");
         },
-        onError: (error) => {
-          console.error('Payment error:', error);
-          toast.error("Payment failed. Please try again.");
-        }
+        onError: () => toast.error("Payment failed"),
       });
 
-      const razorpay = new (window as any).Razorpay(options);
-      razorpay.open();
-    } catch (error: any) {
-      console.error('Payment error:', error);
-      toast.error(error.message || "Payment failed");
+      new (window as any).Razorpay(options).open();
+    } catch (err: any) {
+      toast.error(err.message || "Payment failed");
     } finally {
       setPaying(false);
     }
   };
 
+  /* =========================
+     UI STATES
+  ========================= */
+
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (!restaurantId) {
     return (
-      <div className="min-h-screen bg-background pb-20">
-        <div className="p-4">
-          <Logo />
-        </div>
-        <div className="flex flex-col items-center justify-center p-8 text-center">
-          <UtensilsCrossed className="h-16 w-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold mb-2">No Restaurant Selected</h2>
-          <p className="text-muted-foreground mb-4">
-            Scan a QR code at a restaurant to start your dine-in session
-          </p>
-          <Button onClick={() => navigate('/explore')}>
-            Explore Restaurants
-          </Button>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <UtensilsCrossed className="h-16 w-16 mb-4" />
+        <p>Scan a restaurant QR to start dine-in</p>
         <BottomNav />
       </div>
     );
   }
 
+  /* =========================
+     RENDER
+  ========================= */
+
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen pb-20">
       <div className="p-4">
         <Logo />
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Restaurant Info */}
         {session && (
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-4">
-                {session.restaurants.image_url && (
-                  <img 
-                    src={session.restaurants.image_url} 
-                    alt={session.restaurants.name}
-                    className="w-16 h-16 rounded-lg object-cover"
-                  />
-                )}
-                <div className="flex-1">
-                  <h2 className="font-semibold text-lg">{session.restaurants.name}</h2>
-                  <p className="text-sm text-muted-foreground">{session.restaurants.address}</p>
-                </div>
-                <Badge variant={session.status === 'paid' ? 'default' : 'secondary'}>
-                  {session.status === 'open' && 'Active'}
-                  {session.status === 'bill_posted' && 'Bill Ready'}
-                  {session.status === 'paid' && 'Paid'}
-                </Badge>
+            <CardContent className="flex gap-4 p-4">
+              {session.restaurants.image_url && (
+                <img
+                  src={session.restaurants.image_url}
+                  className="w-16 h-16 rounded-lg object-cover"
+                />
+              )}
+              <div className="flex-1">
+                <h2 className="font-semibold">{session.restaurants.name}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {session.restaurants.address}
+                </p>
               </div>
+              <Badge>
+                {session.status === "open"
+                  ? "Active"
+                  : session.status === "bill_posted"
+                  ? "Bill Ready"
+                  : "Paid"}
+              </Badge>
             </CardContent>
           </Card>
         )}
 
-        {/* Status Cards */}
-        {session?.status === 'open' && !bill && (
+        {session?.status === "open" && !bill && (
           <Card className="border-dashed">
             <CardContent className="p-8 text-center">
-              <div className="animate-pulse">
-                <Clock className="h-16 w-16 mx-auto text-primary mb-4" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Waiting for Bill</h3>
-              <p className="text-muted-foreground">
-                Enjoy your meal! The restaurant will post your bill here when you're ready to pay.
-              </p>
+              <Clock className="h-12 w-12 mx-auto mb-4" />
+              <p>Waiting for restaurant to post bill</p>
             </CardContent>
           </Card>
         )}
 
-        {/* Bill Posted - Ready to Pay */}
-        {bill && bill.status === 'pending' && (
+        {bill?.payment_status === "pending" && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5" />
-                Your Bill
-              </CardTitle>
+              <CardTitle>Your Bill</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {bill.pos_bill_no && (
-                <p className="text-sm text-muted-foreground">
-                  POS Bill No: {bill.pos_bill_no}
-                </p>
+              <div className="flex justify-between">
+                <span>Bill Amount</span>
+                <span>₹{bill.bill_amount}</span>
+              </div>
+              {bill.discount_amount > 0 && (
+                <div className="flex justify-between text-green-500">
+                  <span>Discount</span>
+                  <span>-₹{bill.discount_amount}</span>
+                </div>
               )}
-              
-              <div className="space-y-3">
-                <div className="flex justify-between text-lg">
-                  <span>Bill Amount</span>
-                  <span>₹{bill.bill_amount.toLocaleString('en-IN')}</span>
-                </div>
-                
-                {bill.discount_amount > 0 && (
-                  <div className="flex justify-between text-green-500">
-                    <span className="flex items-center gap-1">
-                      <Percent className="h-4 w-4" />
-                      DineDeal Discount
-                      {bill.offers && (
-                        <Badge variant="outline" className="ml-2 text-xs">
-                          {bill.offers.discount_percent}% off
-                        </Badge>
-                      )}
-                    </span>
-                    <span>-₹{bill.discount_amount.toLocaleString('en-IN')}</span>
-                  </div>
-                )}
-                
-                <Separator />
-                
-                <div className="flex justify-between text-xl font-bold">
-                  <span>Pay via DineDeal</span>
-                  <span className="text-primary">₹{bill.final_amount.toLocaleString('en-IN')}</span>
-                </div>
-                
-                {bill.discount_amount > 0 && (
-                  <p className="text-sm text-green-500 text-center">
-                    🎉 You're saving ₹{bill.discount_amount.toLocaleString('en-IN')}!
-                  </p>
-                )}
+              <Separator />
+              <div className="flex justify-between font-bold">
+                <span>Pay</span>
+                <span>₹{bill.final_amount}</span>
               </div>
 
-              <Button 
-                onClick={handlePayment} 
-                className="w-full" 
-                size="lg"
+              <Button
+                onClick={handlePayment}
                 disabled={paying}
+                className="w-full"
               >
                 {paying ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="animate-spin mr-2 h-4 w-4" />
                 ) : (
-                  <CreditCard className="h-4 w-4 mr-2" />
+                  <CreditCard className="mr-2 h-4 w-4" />
                 )}
-                Pay ₹{bill.final_amount.toLocaleString('en-IN')}
+                Pay Now
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
-                GST bill will be provided by the restaurant separately
+                GST bill will be provided by restaurant
               </p>
             </CardContent>
           </Card>
         )}
 
-        {/* Payment Complete - Receipt */}
-        {bill && bill.status === 'paid' && (
-          <Card className="border-green-500/50">
-            <CardHeader className="bg-green-500/10">
-              <CardTitle className="flex items-center gap-2 text-green-500">
-                <CheckCircle2 className="h-5 w-5" />
-                Payment Successful
+        {bill?.payment_status === "completed" && (
+          <Card className="border-green-500">
+            <CardHeader>
+              <CardTitle className="text-green-500 flex gap-2">
+                <CheckCircle2 /> Payment Successful
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              <div className="text-center py-4">
-                <p className="text-3xl font-bold text-primary">
-                  ₹{bill.final_amount.toLocaleString('en-IN')}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">Amount Paid</p>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Original Bill</span>
-                  <span>₹{bill.bill_amount.toLocaleString('en-IN')}</span>
-                </div>
-                {bill.discount_amount > 0 && (
-                  <div className="flex justify-between text-green-500">
-                    <span>Discount Applied</span>
-                    <span>-₹{bill.discount_amount.toLocaleString('en-IN')}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-medium">
-                  <span>Amount Paid</span>
-                  <span>₹{bill.final_amount.toLocaleString('en-IN')}</span>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2 text-sm">
-                {bill.pos_bill_no && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">POS Bill No</span>
-                    <span>{bill.pos_bill_no}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Payment Ref</span>
-                  <span className="font-mono text-xs">{bill.payment_reference}</span>
-                </div>
-              </div>
-
-              <Button variant="outline" className="w-full" onClick={() => navigate('/transactions')}>
-                <Download className="h-4 w-4 mr-2" />
-                View All Transactions
-              </Button>
-
-              <p className="text-xs text-center text-muted-foreground">
-                Please collect your GST bill from the restaurant
+            <CardContent>
+              <p className="text-center font-bold text-xl">
+                ₹{bill.final_amount}
               </p>
+
+              <Button
+                variant="outline"
+                className="w-full mt-4"
+                onClick={() => navigate("/transactions")}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                View Transactions
+              </Button>
             </CardContent>
           </Card>
         )}
