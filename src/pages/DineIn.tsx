@@ -74,7 +74,7 @@ const DineIn = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'posted_bills',
+          table: 'transactions',
           filter: `session_id=eq.${session.id}`
         },
         (payload) => {
