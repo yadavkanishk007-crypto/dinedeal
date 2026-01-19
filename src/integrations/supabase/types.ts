@@ -391,73 +391,7 @@ export type Database = {
         }
         Relationships: []
       }
-      posted_bills: {
-        Row: {
-          bill_amount: number
-          created_at: string
-          discount_amount: number | null
-          final_amount: number
-          id: string
-          offer_id: string | null
-          payment_reference: string | null
-          pos_bill_no: string | null
-          restaurant_id: string
-          session_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          bill_amount: number
-          created_at?: string
-          discount_amount?: number | null
-          final_amount: number
-          id?: string
-          offer_id?: string | null
-          payment_reference?: string | null
-          pos_bill_no?: string | null
-          restaurant_id: string
-          session_id: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          bill_amount?: number
-          created_at?: string
-          discount_amount?: number | null
-          final_amount?: number
-          id?: string
-          offer_id?: string | null
-          payment_reference?: string | null
-          pos_bill_no?: string | null
-          restaurant_id?: string
-          session_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "posted_bills_offer_id_fkey"
-            columns: ["offer_id"]
-            isOneToOne: false
-            referencedRelation: "offers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "posted_bills_restaurant_id_fkey"
-            columns: ["restaurant_id"]
-            isOneToOne: false
-            referencedRelation: "restaurants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "posted_bills_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "dinein_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      /* POSTED_BILLS DELETED AS REQUESTED */
       profiles: {
         Row: {
           avatar_url: string | null
@@ -829,58 +763,64 @@ export type Database = {
       }
       transactions: {
         Row: {
+          id: string
           bill_amount: number
           created_at: string
           discount_amount: number
           final_amount: number
-          id: string
           is_settled: boolean | null
           offer_id: string | null
           payment_method: string | null
           payment_reference: string | null
-          payment_status: string | null
+          payment_status: 'pending' | 'completed' | 'failed' | string | null
           platform_commission: number | null
           restaurant_earning: number | null
-          restaurant_id: string | null
+          restaurant_id: string
           rewards_earned: number | null
           settlement_id: string | null
-          user_id: string | null
+          user_id: string
+          dinein_session_id: string | null
+          pos_bill_no: string | null
         }
         Insert: {
+          id?: string
           bill_amount: number
           created_at?: string
           discount_amount?: number
           final_amount: number
-          id?: string
           is_settled?: boolean | null
           offer_id?: string | null
           payment_method?: string | null
           payment_reference?: string | null
-          payment_status?: string | null
+          payment_status?: 'pending' | 'completed' | 'failed' | string | null
           platform_commission?: number | null
           restaurant_earning?: number | null
-          restaurant_id?: string | null
+          restaurant_id: string
           rewards_earned?: number | null
           settlement_id?: string | null
-          user_id?: string | null
+          user_id: string
+          dinein_session_id?: string | null
+          pos_bill_no?: string | null
         }
         Update: {
+          id?: string
           bill_amount?: number
           created_at?: string
           discount_amount?: number
           final_amount?: number
-          id?: string
           is_settled?: boolean | null
           offer_id?: string | null
           payment_method?: string | null
           payment_reference?: string | null
-          payment_status?: string | null
+          payment_status?: 'pending' | 'completed' | 'failed' | string | null
           platform_commission?: number | null
           restaurant_earning?: number | null
-          restaurant_id?: string | null
+          restaurant_id?: string
           rewards_earned?: number | null
           settlement_id?: string | null
-          user_id?: string | null
+          user_id?: string
+          dinein_session_id?: string | null
+          pos_bill_no?: string | null
         }
         Relationships: [
           {
@@ -902,6 +842,13 @@ export type Database = {
             columns: ["settlement_id"]
             isOneToOne: false
             referencedRelation: "settlements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_dinein_session_id_fkey"
+            columns: ["dinein_session_id"]
+            isOneToOne: false
+            referencedRelation: "dinein_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -1077,3 +1024,6 @@ export const Constants = {
     },
   },
 } as const
+
+// --- ADDED ENTITY EXPORT ---
+export type Transaction = Tables<'transactions'>
