@@ -38,7 +38,7 @@ import ReservationManager from "@/components/ReservationManager";
 import RestaurantGallery from "@/components/RestaurantGallery";
 import RestaurantEarningsTab from "@/components/RestaurantEarningsTab";
 import RestaurantSettlementsTab from "@/components/RestaurantSettlementsTab";
-
+import PostBillToCustomer from "@/components/PostBillToCustomer";
 interface Restaurant {
   id: string;
   name: string;
@@ -80,7 +80,7 @@ const RestaurantDashboard = () => {
   
   // Merged activeTab types to include Earnings and Settlements
   const [activeTab, setActiveTab] = useState<
-    "overview" | "menu" | "reservations" | "offers" | "transactions" | "earnings" | "settlements" | "settings"
+    "overview" | "menu" | "reservations" | "dinein" | "offers" | "transactions" | "earnings" | "settlements" | "settings"
   >("overview");
   
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -334,6 +334,7 @@ const RestaurantDashboard = () => {
             { id: "overview", label: "Overview", icon: BarChart3 },
             { id: "menu", label: "Menu", icon: UtensilsCrossed },
             { id: "reservations", label: "Reservations", icon: Calendar },
+            { id: "dinein", label: "Dine-In", icon: Users },
             { id: "offers", label: "Offers", icon: Percent },
             { id: "transactions", label: "Transactions", icon: Receipt },
             { id: "earnings", label: "Earnings", icon: PiggyBank },
@@ -1021,3 +1022,4 @@ const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | n
 
 
 export default RestaurantDashboard;
+
