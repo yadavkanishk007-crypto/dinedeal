@@ -167,9 +167,8 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
       const { error: billError } = await supabase
         .from('transactions')
         .insert({
-          session_id: selectedSession,
-          restaurant_id: restaurantId,
           dinein_session_id: selectedSession,
+          restaurant_id: restaurantId,
           bill_amount: amount,
           pos_bill_no: posBillNo || null,
           discount_amount: discountAmount,
