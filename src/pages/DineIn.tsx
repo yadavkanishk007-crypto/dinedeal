@@ -126,6 +126,8 @@ const DineIn = () => {
         if (existing.status === "bill_posted") {
           fetchBill(existing.id);
         }
+          setLoading(false);
+        }
       } else {
         const { data: created, error: createError } = await supabase
           .from("dinein_sessions")
@@ -155,6 +157,7 @@ const DineIn = () => {
         setSession(created as DineInSession);
         toast.success("Dine-in session started!");
         navigate(`/restaurant/${restaurantId}`);
+        setLoading(false);
       }
     } catch (error: any) {
         console.error("DINEIN_CREATE_FAILED", {
@@ -164,6 +167,7 @@ const DineIn = () => {
            hint: error?.hint
         });
         toast.error(error?.message || "Failed to start dine-in session");
+        setLoading(false);
    }
 
   };
