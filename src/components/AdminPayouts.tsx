@@ -7,7 +7,11 @@ import {
   AlertCircle,
   Search,
   ArrowRight,
-  Edit
+  Edit,
+  CreditCard,
+  Banknote,
+  Lock,
+  Eye
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +36,9 @@ interface Settlement {
   net_payable: number;
   status: string;
   payout_reference: string | null;
+  payout_method: 'manual' | 'razorpay' | null;
+  razorpay_payout_id?: string;
+  razorpay_status?: string;
   payout_date: string | null;
   created_at: string;
 }
@@ -132,6 +139,7 @@ const AdminPayouts = () => {
 
   const openUpdateDialog = (settlement: Settlement) => {
     setSelectedSettlement(settlement);
+    // If manual, allow flow. If razorpay, mostly read-only unless status override needed (but prevented by constraints)
     setNewStatus(settlement.status === "pending" ? "processing" : "completed");
     setPayoutReference(settlement.payout_reference || "");
     setIsUpdateDialogOpen(true);
@@ -140,27 +148,44 @@ const AdminPayouts = () => {
   const updatePayoutStatus = async () => {
     if (!selectedSettlement) return;
 
-    // Require payout reference for completing
-    if (newStatus === "completed" && !payoutReference.trim()) {
-      toast({ title: "Error", description: "Payout reference (UTR) is required to mark as completed", variant: "destructive" });
+    // Razorpay is strictly read-only in UI. Updates happen via webhooks.
+    if (selectedSettlement.payout_method === 'razorpay') {
+      toast({ title: "Restricted", description: "Razorpay payouts are updated automatically.", variant: "destructive" });
       return;
+    }
+
+    // Strict validation for manual payouts
+    if (selectedSettlement.payout_method === 'manual') {
+      if (newStatus === "completed" && !payoutReference.trim()) {
+        toast({ title: "Error", description: "Payout reference (UTR) is required to mark as completed", variant: "destructive" });
+        return;
+      }
     }
 
     setIsUpdating(true);
     try {
-      const updateData: any = { status: newStatus };
-      
+      // Use API for completion to handle any backend logic triggers (finalizing transaction settlement status)
       if (newStatus === "completed") {
-        updateData.payout_reference = payoutReference.trim();
-        updateData.payout_date = new Date().toISOString();
+        const response = await fetch(`/api/admin/settlements/${selectedSettlement.id}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reference: payoutReference.trim()
+          })
+        });
+        
+        if (!response.ok) {
+           throw new Error("Failed to complete payout via API");
+        }
+      } else {
+        // Fallback for simple status updates (e.g. pending -> processing)
+        const { error } = await supabase
+          .from("settlements")
+          .update({ status: newStatus })
+          .eq("id", selectedSettlement.id);
+        
+        if (error) throw error;
       }
-
-      const { error } = await supabase
-        .from("settlements")
-        .update(updateData)
-        .eq("id", selectedSettlement.id);
-
-      if (error) throw error;
 
       // Log action
       await logAction({
@@ -171,12 +196,13 @@ const AdminPayouts = () => {
           previous_status: selectedSettlement.status, 
           new_status: newStatus,
           payout_reference: payoutReference || null,
+          method: selectedSettlement.payout_method
         },
       });
 
       toast({ 
         title: "Payout Updated", 
-        description: `Settlement marked as ${newStatus}${newStatus === "completed" ? ` with reference ${payoutReference}` : ""}` 
+        description: `Settlement marked as ${newStatus}` 
       });
       setIsUpdateDialogOpen(false);
       fetchData();
@@ -203,7 +229,9 @@ const AdminPayouts = () => {
     }
   };
 
-  const getNextAction = (status: string) => {
+  const getNextAction = (status: string, method: string | null) => {
+    if (method === 'razorpay') return { label: "View Details", nextStatus: null };
+    
     switch (status) {
       case "pending":
         return { label: "Mark Processing", nextStatus: "processing" };
@@ -334,7 +362,7 @@ const AdminPayouts = () => {
                   <TableRow>
                     <TableHead>Settlement ID</TableHead>
                     <TableHead>Restaurant</TableHead>
-                    <TableHead className="text-center">Orders</TableHead>
+                    <TableHead>Method</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>UTR/Reference</TableHead>
@@ -344,14 +372,20 @@ const AdminPayouts = () => {
                 </TableHeader>
                 <TableBody>
                   {settlements.map((settlement) => {
-                    const action = getNextAction(settlement.status);
+                    const action = getNextAction(settlement.status, settlement.payout_method);
                     return (
                       <TableRow key={settlement.id}>
                         <TableCell className="font-mono text-sm">
                           #{settlement.id.slice(0, 8).toUpperCase()}
                         </TableCell>
                         <TableCell className="font-medium">{settlement.restaurant_name}</TableCell>
-                        <TableCell className="text-center">{settlement.total_orders}</TableCell>
+                        <TableCell>
+                          {settlement.payout_method === 'razorpay' ? (
+                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">Razorpay</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">Manual</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right font-medium text-green-600">
                           ₹{Number(settlement.net_payable).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </TableCell>
@@ -372,7 +406,7 @@ const AdminPayouts = () => {
                               variant="outline"
                               onClick={() => openUpdateDialog(settlement)}
                             >
-                              <Edit className="w-3 h-3 mr-1" />
+                              {settlement.payout_method === 'razorpay' ? <Eye className="w-3 h-3 mr-1" /> : <Edit className="w-3 h-3 mr-1" />}
                               {action.label}
                             </Button>
                           )}
@@ -391,52 +425,86 @@ const AdminPayouts = () => {
       <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update Payout Status</DialogTitle>
+            <DialogTitle>
+              {selectedSettlement?.payout_method === 'razorpay' ? "Payout Details" : "Update Payout Status"}
+            </DialogTitle>
             <DialogDescription>
               {selectedSettlement && (
                 <>
                   Settlement #{selectedSettlement.id.slice(0, 8).toUpperCase()} for {selectedSettlement.restaurant_name}
                   <br />
                   Amount: ₹{Number(selectedSettlement.net_payable).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  <br />
+                  Method: <span className="capitalize font-medium">{selectedSettlement.payout_method || 'manual'}</span>
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>New Status</Label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {selectedSettlement?.status === "pending" && (
-                    <SelectItem value="processing">Processing</SelectItem>
-                  )}
-                  {(selectedSettlement?.status === "pending" || selectedSettlement?.status === "processing") && (
-                    <SelectItem value="completed">Completed</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+
+          {selectedSettlement?.payout_method === 'razorpay' ? (
+            // Razorpay Read-Only View
+            <div className="space-y-4 py-4">
+               <div className="bg-slate-50 p-4 rounded-lg space-y-3 border">
+                 <div className="flex items-center gap-2 text-blue-700 font-medium pb-2 border-b">
+                   <CreditCard className="w-4 h-4" /> Razorpay Automated Payout
+                 </div>
+                 <div className="grid grid-cols-2 gap-2 text-sm">
+                   <span className="text-muted-foreground">Payout Status:</span>
+                   <span className="font-medium">{selectedSettlement.razorpay_status || selectedSettlement.status}</span>
+                   
+                   <span className="text-muted-foreground">Payout ID:</span>
+                   <span className="font-mono">{selectedSettlement.razorpay_payout_id || "Generating..."}</span>
+                   
+                   <span className="text-muted-foreground">UTR:</span>
+                   <span className="font-mono">{selectedSettlement.payout_reference || "Pending Bank"}</span>
+                 </div>
+               </div>
+               <p className="text-xs text-muted-foreground text-center">
+                 <Lock className="w-3 h-3 inline mr-1" />
+                 This payout is managed automatically. No manual overrides allowed.
+               </p>
             </div>
-            {newStatus === "completed" && (
+          ) : (
+            // Manual Update View
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Payout Reference (UTR/Bank Ref) *</Label>
-                <Input
-                  placeholder="Enter UTR or bank reference number"
-                  value={payoutReference}
-                  onChange={(e) => setPayoutReference(e.target.value)}
-                />
+                <Label>Status</Label>
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedSettlement?.status === "pending" && (
+                      <SelectItem value="processing">Processing</SelectItem>
+                    )}
+                    {(selectedSettlement?.status === "pending" || selectedSettlement?.status === "processing") && (
+                      <SelectItem value="completed">Completed</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </div>
+              {newStatus === "completed" && (
+                <div className="space-y-2">
+                  <Label>Payout Reference (UTR/Bank Ref) *</Label>
+                  <Input
+                    placeholder="Enter UTR or bank reference number"
+                    value={payoutReference}
+                    onChange={(e) => setPayoutReference(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUpdateDialogOpen(false)}>
-              Cancel
+              Close
             </Button>
-            <Button onClick={updatePayoutStatus} disabled={isUpdating}>
-              {isUpdating ? "Updating..." : "Update Status"}
-            </Button>
+            {selectedSettlement?.payout_method !== 'razorpay' && (
+              <Button onClick={updatePayoutStatus} disabled={isUpdating}>
+                {isUpdating ? "Updating..." : "Update Status"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

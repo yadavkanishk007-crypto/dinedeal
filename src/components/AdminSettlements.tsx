@@ -7,7 +7,9 @@ import {
   Clock,
   AlertCircle,
   Search,
-  Filter
+  CreditCard,
+  Banknote,
+  Info
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,7 @@ interface Settlement {
   net_payable: number;
   status: string;
   payout_reference: string | null;
+  payout_method: 'manual' | 'razorpay' | null;
   payout_date: string | null;
   created_at: string;
 }
@@ -69,6 +72,11 @@ const AdminSettlements = () => {
   const [createRestaurantId, setCreateRestaurantId] = useState("");
   const [createDateFrom, setCreateDateFrom] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [createDateTo, setCreateDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
+  
+  // New Settlement Config State
+  const [commissionRate, setCommissionRate] = useState<string>("10");
+  const [payoutMethod, setPayoutMethod] = useState<"manual" | "razorpay">("manual");
+  
   const [isCreating, setIsCreating] = useState(false);
   
   const { toast } = useToast();
@@ -122,6 +130,7 @@ const AdminSettlements = () => {
       setSettlements(filteredSettlements);
 
       // Fetch pending settlements (unsettled transactions grouped by restaurant)
+      // IMPORTANT: Filter out transactions that already have a settlement_id
       const { data: pendingTxData } = await supabase
         .from("transactions")
         .select(`
@@ -133,7 +142,8 @@ const AdminSettlements = () => {
           restaurants!inner(name)
         `)
         .eq("payment_status", "completed")
-        .eq("is_settled", false);
+        .eq("is_settled", false)
+        .is("settlement_id", null);
 
       // Group by restaurant
       const pendingMap = new Map<string, PendingSettlement>();
@@ -172,21 +182,42 @@ const AdminSettlements = () => {
     fetchData();
   }, [selectedRestaurant, statusFilter, searchQuery]);
 
+  // Set default commission based on selected restaurant's pending data
+  useEffect(() => {
+    if (createRestaurantId) {
+      const pending = pendingSettlements.find(p => p.restaurant_id === createRestaurantId);
+      if (pending && pending.gross_amount > 0) {
+        const calculatedRate = (pending.platform_commission / pending.gross_amount) * 100;
+        setCommissionRate(calculatedRate.toFixed(2));
+      } else {
+        setCommissionRate("10");
+      }
+    }
+  }, [createRestaurantId, pendingSettlements]);
+
   const createSettlement = async () => {
     if (!createRestaurantId) {
       toast({ title: "Error", description: "Please select a restaurant", variant: "destructive" });
       return;
     }
 
+    const commRate = parseFloat(commissionRate);
+    if (isNaN(commRate) || commRate < 0 || commRate > 100) {
+      toast({ title: "Error", description: "Invalid commission rate", variant: "destructive" });
+      return;
+    }
+
     setIsCreating(true);
     try {
-      // Get unsettled transactions for the selected restaurant and date range
+      // Get unsettled transactions within date range
+      // Important: Ensure they are not already attached to a settlement
       const { data: txData, error: txError } = await supabase
         .from("transactions")
-        .select("id, final_amount, platform_commission, restaurant_earning")
+        .select("id, final_amount")
         .eq("restaurant_id", createRestaurantId)
         .eq("payment_status", "completed")
         .eq("is_settled", false)
+        .is("settlement_id", null)
         .gte("created_at", new Date(createDateFrom).toISOString())
         .lte("created_at", new Date(createDateTo + "T23:59:59").toISOString());
 
@@ -198,13 +229,13 @@ const AdminSettlements = () => {
         return;
       }
 
-      // Calculate totals
+      // Calculate totals based on locked commission rate
       const totalOrders = txData.length;
       const grossAmount = txData.reduce((sum, t) => sum + Number(t.final_amount), 0);
-      const platformCommission = txData.reduce((sum, t) => sum + Number(t.platform_commission || 0), 0);
-      const netPayable = txData.reduce((sum, t) => sum + Number(t.restaurant_earning || 0), 0);
+      const platformCommission = grossAmount * (commRate / 100);
+      const netPayable = grossAmount - platformCommission;
 
-      // Create settlement record
+      // 1. Create settlement record
       const { data: settlement, error: settError } = await supabase
         .from("settlements")
         .insert({
@@ -216,30 +247,64 @@ const AdminSettlements = () => {
           platform_commission: platformCommission,
           net_payable: netPayable,
           status: "pending",
+          payout_method: payoutMethod,
         })
         .select()
         .single();
 
       if (settError) throw settError;
 
-      // Mark transactions as settled
+      // 2. Link transactions to settlement
+      // CRITICAL: We do NOT set is_settled: true here. That only happens after payout completion.
+      // We only set settlement_id to lock them to this settlement.
       const txIds = txData.map(t => t.id);
       const { error: updateError } = await supabase
         .from("transactions")
-        .update({ is_settled: true, settlement_id: settlement.id })
+        .update({ settlement_id: settlement.id }) 
         .in("id", txIds);
 
       if (updateError) throw updateError;
+
+      // 3. Initiate Payout via API (if automated)
+      try {
+        const response = await fetch(`/api/admin/settlements/${settlement.id}/initiate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            commission_rate: commRate,
+            payout_method: payoutMethod
+          })
+        });
+
+        if (!response.ok) {
+          console.error("Failed to initiate payout via API");
+          toast({ 
+            title: "Warning", 
+            description: "Settlement record created, but auto-payout init failed. Check payouts.", 
+            variant: "destructive" 
+          });
+        }
+      } catch (apiError) {
+        console.error("API call failed:", apiError);
+      }
 
       // Log action
       await logAction({
         action: "create_settlement",
         entity_type: "settlement",
         entity_id: settlement.id,
-        details: { restaurant_id: createRestaurantId, total_orders: totalOrders, net_payable: netPayable },
+        details: { 
+          restaurant_id: createRestaurantId, 
+          net_payable, 
+          commission_rate: commRate,
+          payout_method: payoutMethod 
+        },
       });
 
-      toast({ title: "Settlement Created", description: `Settlement for ${totalOrders} orders (₹${netPayable.toFixed(2)}) created successfully` });
+      toast({ 
+        title: "Settlement Created", 
+        description: `Generated pending settlement. Awaiting ${payoutMethod === 'razorpay' ? 'automated' : 'manual'} payout.` 
+      });
       setIsCreateDialogOpen(false);
       fetchData();
     } catch (error: any) {
@@ -333,11 +398,11 @@ const AdminSettlements = () => {
                 Create Settlement
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Create New Settlement</DialogTitle>
                 <DialogDescription>
-                  Generate a settlement for a restaurant. This will lock the included transactions.
+                  Configure settlement details. This will create a pending settlement record for payout.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -354,6 +419,7 @@ const AdminSettlements = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>From Date</Label>
@@ -372,13 +438,63 @@ const AdminSettlements = () => {
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Commission (%)</Label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={commissionRate}
+                        onChange={(e) => setCommissionRate(e.target.value)}
+                        className="pr-6"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Payout Method</Label>
+                    <Select value={payoutMethod} onValueChange={(val: any) => setPayoutMethod(val)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual Transfer</SelectItem>
+                        <SelectItem value="razorpay">Razorpay</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {createRestaurantId && (
+                  <div className="bg-muted/50 p-3 rounded-md text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Method:</span>
+                      <span className="font-medium capitalize flex items-center gap-1">
+                        {payoutMethod === 'razorpay' ? <CreditCard className="w-3 h-3"/> : <Banknote className="w-3 h-3"/>}
+                        {payoutMethod}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Commission:</span>
+                      <span className="font-medium">{commissionRate}%</span>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="w-3 h-3" />
+                      Transactions will be locked but marked as settled only after payout completion.
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button onClick={createSettlement} disabled={isCreating}>
-                  {isCreating ? "Creating..." : "Create Settlement"}
+                  {isCreating ? "Processing..." : "Initiate Settlement"}
                 </Button>
               </DialogFooter>
             </DialogContent>
