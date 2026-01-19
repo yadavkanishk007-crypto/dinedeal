@@ -15,10 +15,12 @@ interface DineInSession {
   customer_id: string;
   status: string;
   created_at: string;
-  profiles?: {
-    full_name: string | null;
-    phone: string | null;
-  };
+}
+
+interface UserProfile {
+  user_id: string;
+  full_name: string | null;
+  phone: string | null;
 }
 
 interface ActiveOffer {
@@ -35,6 +37,7 @@ interface PostBillToCustomerProps {
 
 const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   const [sessions, setSessions] = useState<DineInSession[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeOffer, setActiveOffer] = useState<ActiveOffer | null>(null);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
@@ -74,32 +77,40 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   };
 
   const fetchSessions = async () => {
-    const { data, error } = await supabase
+    // 1. Fetch dine-in sessions (NO JOIN)
+    const { data: sessionsData, error: sessionsError } = await supabase
       .from('dinein_sessions')
-      .select(`
-        id,
-        status,
-        created_at,
-        customer_id,
-        profiles (
-          full_name,
-          phone
-        )
-      `)
+      .select('id, status, created_at, customer_id')
       .eq('restaurant_id', restaurantId)
       .in('status', ['open', 'bill_posted'])
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching sessions:', error);
+    if (sessionsError) {
+      console.error('Error fetching sessions:', sessionsError);
       return;
     }
 
-    if (data) {
-      // Supabase returns the joined data structure matching our interface
-      setSessions(data as unknown as DineInSession[]);
+    setSessions(sessionsData as DineInSession[]);
+
+    // 2. Fetch profiles separately (KEY PART)
+    if (sessionsData && sessionsData.length > 0) {
+      const customerIds = Array.from(
+        new Set(sessionsData.map(s => s.customer_id))
+      );
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, phone')
+        .in('user_id', customerIds);
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        return;
+      }
+
+      setProfiles(profilesData as UserProfile[]);
     } else {
-      setSessions([]);
+      setProfiles([]);
     }
   };
 
@@ -118,6 +129,11 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
     if (!error && data) {
       setActiveOffer(data);
     }
+  };
+
+  const getCustomerName = (customerId: string) => {
+    const profile = profiles.find(p => p.user_id === customerId);
+    return profile?.full_name || profile?.phone || 'Guest';
   };
 
   const calculateDiscount = (amount: number): { discountAmount: number; finalAmount: number } => {
@@ -157,13 +173,13 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
       const { discountAmount, finalAmount } = calculateDiscount(amount);
 
       // Create posted bill
-      
-     const selectedSessionObj = sessions.find(s => s.id === selectedSession);
-     if (!selectedSessionObj) {
-       toast.error("Session not found");
-       setPosting(false);
-       return;
+      const selectedSessionObj = sessions.find(s => s.id === selectedSession);
+      if (!selectedSessionObj) {
+        toast.error("Session not found");
+        setPosting(false);
+        return;
       }
+
       const { error: billError } = await supabase
         .from('transactions')
         .insert({
@@ -237,37 +253,30 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {sessions.map((session) => {
-                const displayName = session.profiles?.full_name || session.profiles?.phone || 'Guest';
-                
-                return (
-                  <div
-                    key={session.id}
-                    className={`p-4 rounded-lg border ${
-                      selectedSession === session.id ? 'border-primary bg-primary/5' : 'border-border'
-                    } cursor-pointer transition-colors`}
-                    onClick={() => setSelectedSession(session.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">
-                          {displayName}
-                        </p>
-                        {session.profiles?.phone && (
-                          <p className="text-sm text-muted-foreground">{session.profiles.phone}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Started {format(new Date(session.created_at), 'h:mm a')}
-                        </p>
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`p-4 rounded-lg border ${
+                    selectedSession === session.id ? 'border-primary bg-primary/5' : 'border-border'
+                  } cursor-pointer transition-colors`}
+                  onClick={() => setSelectedSession(session.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">
+                        {getCustomerName(session.customer_id)}
                       </div>
-                      <Badge variant="secondary">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {session.status === 'bill_posted' ? 'Bill Posted' : 'Active'}
-                      </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Started {format(new Date(session.created_at), 'h:mm a')}
+                      </p>
                     </div>
+                    <Badge variant="secondary">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {session.status === 'bill_posted' ? 'Bill Posted' : 'Active'}
+                    </Badge>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -292,14 +301,11 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
                 <SelectValue placeholder="Choose a customer session" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map((session) => {
-                   const displayName = session.profiles?.full_name || session.profiles?.phone || 'Guest';
-                   return (
-                    <SelectItem key={session.id} value={session.id}>
-                      {displayName} - {format(new Date(session.created_at), 'h:mm a')}
-                    </SelectItem>
-                   );
-                })}
+                {sessions.map((session) => (
+                  <SelectItem key={session.id} value={session.id}>
+                    {getCustomerName(session.customer_id)} - {format(new Date(session.created_at), 'h:mm a')}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
