@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
-import { loadRazorpay, createRazorpayOptions } from "@/utils/razorpay";
+
+// 1️⃣ REMOVED: loadRazorpay and createRazorpayOptions imports
 
 /* =========================
    TYPES (SHALLOW & SAFE)
@@ -143,8 +144,6 @@ const DineIn = () => {
 
         setSession(created as DineInSession);
         toast.success("Dine-in session started!");
-        // Optional: navigate if you want to update URL
-        // navigate(`/restaurant/${restaurantId}`); 
         setLoading(false);
       }
     } catch (error: any) {
@@ -166,6 +165,7 @@ const DineIn = () => {
 
     fetchBill(session.id);
 
+    // Keep realtime subscription: This will update the UI when payment is completed via webhook
     const channel = supabase
       .channel(`txn-updates-${session.id}`)
       .on(
@@ -210,57 +210,74 @@ const DineIn = () => {
   };
 
   /* =========================
-      PAYMENT
+      PAYMENT (UPDATED)
   ========================= */
 
+  // 2️⃣ PAY BUTTON HANDLER (REPLACED)
   const handlePayment = async () => {
-    if (!bill || !session || !user) return;
-
-    setPaying(true);
-
+    if (!bill || !session || !user || paying) return;
+  
     try {
-      const loaded = await loadRazorpay();
-      if (!loaded) throw new Error("Razorpay failed to load");
-
-      const options = createRazorpayOptions({
-        amount: bill.final_amount,
-        restaurantName: session.restaurants.name,
-        userEmail: user.email ?? "",
-        userPhone: "",
-        onSuccess: async (res) => {
-          await supabase
-            .from("transactions")
-            .update({
-              payment_status: "completed",
-              payment_reference: res.razorpay_payment_id,
-              payment_method: "razorpay",
-              platform_commission: bill.final_amount * 0.02,
-              restaurant_earning: bill.final_amount * 0.98,
-            })
-            .eq("id", bill.id);
-
-          await supabase
-            .from("dinein_sessions")
-            .update({ status: "paid" })
-            .eq("id", session.id);
-
-          setBill((b) =>
-            b
-              ? {
-                  ...b,
-                  payment_status: "completed",
-                  payment_reference: res.razorpay_payment_id,
-                }
-              : null
-          );
-
-          toast.success("Payment successful!");
+      setPaying(true);
+  
+      // 1️⃣ Ask backend to create Razorpay order
+      const res = await fetch(
+        "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount: bill.final_amount,
+            transactionId: bill.id,
+            dineinSessionId: session.id,
+            restaurantId: session.restaurant_id,
+          }),
+        }
+      );
+  
+      const data = await res.json();
+  
+      if (!data?.order?.id) {
+        throw new Error("Failed to create Razorpay order");
+      }
+  
+      // 2️⃣ Open Razorpay Checkout
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID, // ✅ REQUIRED
+        amount: data.order.amount,
+        currency: "INR",
+        name: "DineDeal",
+        description: "Dine-In Payment",
+        order_id: data.order.id,
+  
+        handler: () => {
+          // ❌ DO NOT update DB here
+          // The realtime subscription will catch the webhook update
+          toast.success("Payment processing...");
         },
-        onError: () => toast.error("Payment failed"),
-      });
-
-      new (window as any).Razorpay(options).open();
+  
+        modal: {
+          ondismiss: () => {
+            toast.info("Payment cancelled");
+          },
+        },
+  
+        prefill: {
+          email: user.email ?? "",
+        },
+  
+        theme: {
+          color: "#ff6a00",
+        },
+      };
+  
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+  
     } catch (err: any) {
+      console.error("DINEIN_PAYMENT_ERROR", err);
       toast.error(err.message || "Payment failed");
     } finally {
       setPaying(false);
@@ -358,17 +375,13 @@ const DineIn = () => {
                 <span>₹{bill.final_amount}</span>
               </div>
 
+              {/* 3️⃣ PAY BUTTON (UPDATED) */}
               <Button
                 onClick={handlePayment}
                 disabled={paying}
                 className="w-full"
               >
-                {paying ? (
-                  <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                ) : (
-                  <CreditCard className="mr-2 h-4 w-4" />
-                )}
-                Pay Now
+                {paying ? "Processing..." : "Pay Now"}
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
