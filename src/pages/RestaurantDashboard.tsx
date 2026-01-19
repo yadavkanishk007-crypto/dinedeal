@@ -454,6 +454,10 @@ const RestaurantDashboard = () => {
           <RestaurantSettlementsTab restaurantId={restaurant.id} />
         )}
 
+        {activeTab === "dinein" && restaurant && (
+          <PostBillToCustomer restaurantId={restaurant.id} />
+        )}
+
       </div>
     </div>
   );
@@ -1022,4 +1026,5 @@ const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | n
 
 
 export default RestaurantDashboard;
+
 
