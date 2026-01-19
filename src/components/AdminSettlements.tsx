@@ -295,7 +295,7 @@ const AdminSettlements = () => {
         entity_id: settlement.id,
         details: { 
           restaurant_id: createRestaurantId, 
-          net_payable, 
+          net_payable: netPayable, // FIXED: Explicit assignment
           commission_rate: commRate,
           payout_method: payoutMethod 
         },
