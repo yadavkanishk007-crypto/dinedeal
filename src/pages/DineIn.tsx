@@ -111,7 +111,7 @@ const DineIn = () => {
         .in("status", ["open", "bill_posted"])
         .order("created_at", { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .maybeSingle() as any;
 
       if (error) throw error;
 
