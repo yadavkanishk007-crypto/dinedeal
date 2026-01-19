@@ -165,16 +165,17 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
 
       // Create posted bill
       const { error: billError } = await supabase
-        .from('posted_bills')
+        .from('transactions')
         .insert({
           session_id: selectedSession,
           restaurant_id: restaurantId,
+          dinein_session_id: selectedSession,
           bill_amount: amount,
           pos_bill_no: posBillNo || null,
           discount_amount: discountAmount,
           final_amount: finalAmount,
           offer_id: activeOffer?.id || null,
-          status: 'pending'
+          payment_status: 'pending'
         });
 
       if (billError) throw billError;
