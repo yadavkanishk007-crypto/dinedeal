@@ -42,3 +42,55 @@ export async function startRazorpayPayment(amount: number) {
   const rzp = new (window as any).Razorpay(options);
   rzp.open();
 }
+
+// ---------------------------------------------------------
+//  Added Utilities (Preserved from the second snippet)
+// ---------------------------------------------------------
+
+// Load Razorpay SDK dynamically
+export function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+interface RazorpayOptions {
+  amount: number;
+  restaurantName: string;
+  userEmail: string;
+  userPhone: string;
+  onSuccess: (response: { razorpay_payment_id: string; razorpay_order_id?: string }) => void;
+  onError: (error: any) => void;
+}
+
+export function createRazorpayOptions(options: RazorpayOptions) {
+  return {
+    key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+    amount: Math.round(options.amount * 100), // Convert to paise
+    currency: "INR",
+    name: "DineDeal",
+    description: `Payment to ${options.restaurantName}`,
+    prefill: {
+      email: options.userEmail,
+      contact: options.userPhone,
+    },
+    handler: options.onSuccess,
+    modal: {
+      ondismiss: () => {
+        console.log("Payment modal dismissed");
+      },
+    },
+    theme: {
+      color: "#000000",
+    },
+  };
+}
