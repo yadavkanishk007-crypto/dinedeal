@@ -1,11 +1,11 @@
 import { motion } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Search, Wallet, User, QrCode } from "lucide-react";
+import { Home, Search, Wallet, User, ScanLine } from "lucide-react";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/" },
   { icon: Search, label: "Explore", path: "/explore" },
-  { icon: QrCode, label: "Pay", path: "/pay", primary: true },
+  { icon: ScanLine, label: "Scan", path: "/scan", primary: true },
   { icon: Wallet, label: "Rewards", path: "/rewards" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
