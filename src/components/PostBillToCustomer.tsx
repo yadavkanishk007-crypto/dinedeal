@@ -78,12 +78,16 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
       .from('dinein_sessions')
       .select(`
         id,
-        customer_id,
         status,
-        created_at
+        created_at,
+        customer_id,
+        profiles (
+          full_name,
+          phone
+        )
       `)
       .eq('restaurant_id', restaurantId)
-      .eq('status', 'open')
+      .in('status', ['open', 'bill_posted'])
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -91,20 +95,9 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
       return;
     }
 
-    // Fetch customer profiles separately
-    if (data && data.length > 0) {
-      const customerIds = data.map(s => s.customer_id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, full_name, phone')
-        .in('user_id', customerIds);
-
-      const sessionsWithProfiles = data.map(session => ({
-        ...session,
-        profiles: profiles?.find(p => p.user_id === session.customer_id) || null
-      }));
-
-      setSessions(sessionsWithProfiles as DineInSession[]);
+    if (data) {
+      // Supabase returns the joined data structure matching our interface
+      setSessions(data as unknown as DineInSession[]);
     } else {
       setSessions([]);
     }
@@ -244,33 +237,37 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`p-4 rounded-lg border ${
-                    selectedSession === session.id ? 'border-primary bg-primary/5' : 'border-border'
-                  } cursor-pointer transition-colors`}
-                  onClick={() => setSelectedSession(session.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">
-                        {session.profiles?.full_name || 'Guest Customer'}
-                      </p>
-                      {session.profiles?.phone && (
-                        <p className="text-sm text-muted-foreground">{session.profiles.phone}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Started {format(new Date(session.created_at), 'h:mm a')}
-                      </p>
+              {sessions.map((session) => {
+                const displayName = session.profiles?.full_name || session.profiles?.phone || 'Guest';
+                
+                return (
+                  <div
+                    key={session.id}
+                    className={`p-4 rounded-lg border ${
+                      selectedSession === session.id ? 'border-primary bg-primary/5' : 'border-border'
+                    } cursor-pointer transition-colors`}
+                    onClick={() => setSelectedSession(session.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {displayName}
+                        </p>
+                        {session.profiles?.phone && (
+                          <p className="text-sm text-muted-foreground">{session.profiles.phone}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Started {format(new Date(session.created_at), 'h:mm a')}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {session.status === 'bill_posted' ? 'Bill Posted' : 'Active'}
+                      </Badge>
                     </div>
-                    <Badge variant="secondary">
-                      <Clock className="h-3 w-3 mr-1" />
-                      Active
-                    </Badge>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -295,11 +292,14 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
                 <SelectValue placeholder="Choose a customer session" />
               </SelectTrigger>
               <SelectContent>
-                {sessions.map((session) => (
-                  <SelectItem key={session.id} value={session.id}>
-                    {session.profiles?.full_name || 'Guest'} - {format(new Date(session.created_at), 'h:mm a')}
-                  </SelectItem>
-                ))}
+                {sessions.map((session) => {
+                   const displayName = session.profiles?.full_name || session.profiles?.phone || 'Guest';
+                   return (
+                    <SelectItem key={session.id} value={session.id}>
+                      {displayName} - {format(new Date(session.created_at), 'h:mm a')}
+                    </SelectItem>
+                   );
+                })}
               </SelectContent>
             </Select>
           </div>
