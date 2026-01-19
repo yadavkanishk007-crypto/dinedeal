@@ -18,6 +18,7 @@ import AdminPanel from "./pages/AdminPanel";
 import TransactionHistory from "./pages/TransactionHistory";
 import MyReservations from "./pages/MyReservations";
 import Dinein from "./pages/DineIn" ;
+import ScanQr from "./pages/ScanQR" ;
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/pay" element={<Pay />} />
             <Route path="/rewards" element={<Rewards />} />
             <Route path="/dine-in" element={<DineIn />} />
+            <Route path="/scan" element={<ScanQR />} />
             <Route
               path="/profile"
               element={
