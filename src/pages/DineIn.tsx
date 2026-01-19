@@ -147,7 +147,7 @@ const DineIn = () => {
 
   const fetchBill = async (sessionId: string) => {
     const { data, error } = await supabase
-      .from('posted_bills')
+      .from('transactions')
       .select(`
         *,
         offers (title, discount_percent)
@@ -180,7 +180,7 @@ const DineIn = () => {
         onSuccess: async (response) => {
           // Update bill status
           const { error: billError } = await supabase
-            .from('posted_bills')
+            .from('transactions')
             .update({
               status: 'paid',
               payment_reference: response.razorpay_payment_id
