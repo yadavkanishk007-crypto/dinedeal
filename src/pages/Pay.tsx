@@ -25,13 +25,20 @@ import { useAuth } from "@/contexts/AuthContext";
 type PaymentStep = "loading" | "amount" | "breakdown" | "processing" | "success";
 type DisplayMethod = "upi" | "card";
 
+// ✅ Domain Model Fix: Restaurant has no discount data
 type Restaurant = {
   id: string;
   name: string;
-  discount: number;
-  max_discount: number;
   image_url: string;
   cuisine: string;
+};
+
+// ✅ Domain Model Fix: Offer is separate
+type ActiveOffer = {
+  id: string;
+  discount_percent: number;
+  max_discount: number;
+  min_order_amount: number | null;
 };
 
 type Coupon = {
@@ -52,6 +59,7 @@ export default function Pay() {
   // --- State ---
   const restaurantId = searchParams.get("restaurant");
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [activeOffer, setActiveOffer] = useState<ActiveOffer | null>(null);
   const [step, setStep] = useState<PaymentStep>("loading");
 
   const [billAmount, setBillAmount] = useState("");
@@ -86,15 +94,34 @@ export default function Pay() {
 
     const loadData = async () => {
       try {
-        const { data, error } = await supabase
-          .from("restaurants")
-          .select("*")
-          .eq("id", restaurantId)
-          .single();
+        const now = new Date().toISOString();
 
-        if (error || !data) throw new Error("Restaurant not found");
+        // ✅ Production-Grade Fix: Parallel Fetching & Domain Separation
+        const [{ data: restaurantData, error: restaurantError }, { data: offerData }] = await Promise.all([
+          // 1. Fetch Restaurant Profile
+          supabase
+            .from("restaurants")
+            .select("id, name, image_url, cuisine")
+            .eq("id", restaurantId)
+            .single(),
 
-        setRestaurant(data);
+          // 2. Fetch Best Active Offer
+          supabase
+            .from("offers")
+            .select("id, discount_percent, max_discount, min_order_amount")
+            .eq("restaurant_id", restaurantId)
+            .eq("is_active", true)
+            .lte("valid_from", now)
+            .gte("valid_until", now)
+            .order("discount_percent", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
+        if (restaurantError || !restaurantData) throw new Error("Restaurant not found");
+
+        setRestaurant(restaurantData);
+        setActiveOffer(offerData ?? null); // Offer might be null, that's okay
         setStep("amount");
         setTransactionId(`DD${Date.now().toString().slice(-6)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`);
       } catch (err) {
@@ -117,10 +144,11 @@ export default function Pay() {
 
   const amount = parseFloat(billAmount) || 0;
 
-  const restaurantDiscount = restaurant
+  // ✅ Fix: Calculate based on ActiveOffer entity
+  const restaurantDiscount = activeOffer
     ? Math.min(
-        amount * ((restaurant.discount || 0)/ 100),
-        restaurant.max_discount ?? Infinity 
+        (amount * activeOffer.discount_percent) / 100,
+        activeOffer.max_discount
       )
     : 0;
 
@@ -133,6 +161,7 @@ export default function Pay() {
 
   const totalDiscount = restaurantDiscount + couponDiscount;
   const finalAmount = Math.max(amount - totalDiscount, 0);
+  
   // Rewards are now calculated by the Webhook, but we can display an estimate
   const estimatedRewards = Math.floor(amount * 0.02);
 
@@ -211,6 +240,7 @@ export default function Pay() {
             metadata: {
               // We pass this data so the Backend Webhook knows what to apply
               couponCode: appliedCoupon?.code, 
+              offerId: activeOffer?.id, // Optional: Pass offer ID if backend tracks it
               frontendRef: transactionId
             }
           }),
@@ -342,7 +372,9 @@ export default function Pay() {
               {restaurant.name}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {restaurant.cuisine} • {restaurant.discount}% Off
+              {restaurant.cuisine} 
+              {/* ✅ Fix: Only show discount if offer exists */}
+              {activeOffer ? ` • ${activeOffer.discount_percent}% Off` : ""}
             </p>
           </div>
         </div>
@@ -394,10 +426,13 @@ export default function Pay() {
                   <img src={restaurant.image_url || "/placeholder.jpg"} className="w-16 h-16 rounded-md object-cover bg-muted" alt="" />
                   <div>
                     <p className="font-semibold">{restaurant.name}</p>
-                    <p className="text-xs text-success flex items-center gap-1 font-medium">
-                      <Sparkles className="w-3 h-3" />
-                      Save up to ₹{restaurant.max_discount}
-                    </p>
+                    {/* ✅ Fix: Only show savings msg if offer exists */}
+                    {activeOffer && (
+                      <p className="text-xs text-success flex items-center gap-1 font-medium">
+                        <Sparkles className="w-3 h-3" />
+                        Save up to ₹{activeOffer.max_discount}
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -428,10 +463,15 @@ export default function Pay() {
                     <span className="text-muted-foreground">Bill Amount</span>
                     <span>₹{amount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-success">
-                    <span className="flex items-center gap-2"><Sparkles className="w-4 h-4"/> DineDeal Offer</span>
-                    <span>- ₹{restaurantDiscount.toFixed(2)}</span>
-                  </div>
+                  
+                  {/* ✅ Fix: Only show discount row if > 0 */}
+                  {restaurantDiscount > 0 && (
+                    <div className="flex justify-between text-success">
+                      <span className="flex items-center gap-2"><Sparkles className="w-4 h-4"/> DineDeal Offer</span>
+                      <span>- ₹{restaurantDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+
                   {appliedCoupon && (
                     <div className="flex justify-between text-success">
                       <span className="flex items-center gap-2"><Tag className="w-4 h-4"/> Coupon ({appliedCoupon.code})</span>
