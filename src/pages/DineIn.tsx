@@ -84,6 +84,12 @@ const DineIn = () => {
   }, [authLoading, user, restaurantId]);
 
   const initializeSession = async () => {
+    console.log("DINEIN_DEBUG", {
+      authLoading,
+      user,
+      restaurantId
+    });
+
     if (!user?.id || !restaurantId) {
       setLoading(false);
       return;
@@ -149,12 +155,16 @@ const DineIn = () => {
         setSession(created as DineInSession);
         toast.success("Dine-in session started!");
       }
-    } catch (err) {
-      console.error("DINEIN_INIT_ERROR", err);
-      toast.error("Failed to start dine-in session");
-    } finally {
-      setLoading(false);
-    }
+    } catch (error: any) {
+        console.error("DINEIN_CREATE_FAILED", {
+           message: error?.message,
+           details: error,
+           code: error?.code,
+           hint: error?.hint
+        });
+        toast.error(error?.message || "Failed to start dine-in session");
+   }
+
   };
 
   /* =========================
