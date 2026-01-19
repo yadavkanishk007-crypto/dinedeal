@@ -82,21 +82,23 @@ const ScanQR = () => {
       // Parse the QR code URL
       const url = new URL(decodedText);
       
-      // Check if it's a valid DineDeal URL
-      const validHosts = [
-        'dinedeal.app',
-        'zave-flavor-joy.lovable.app',
-        'localhost',
-        window.location.host
-      ];
+      const allowedPaths = ['/dine-in', '/pay', '/restaurant'];
 
-      const isValidHost = validHosts.some(host => url.host.includes(host));
-      
-      if (!isValidHost) {
-        toast.error("Invalid QR code. Please scan a DineDeal restaurant QR.");
-        startScanner();
-        return;
+      const isDineDealPath = allowedPaths.some(p =>
+        url.pathname.startsWith(p)
+       );
+
+      const hasRestaurantParam =
+        url.searchParams.has('restaurant') ||
+        url.searchParams.has('id') ||
+        url.pathname.includes('/restaurant/');
+
+      if (!isDineDealPath && !hasRestaurantParam) {
+       toast.error("Invalid QR code. Please scan a DineDeal restaurant QR.");
+       startScanner();
+       return;
       }
+
 
       // Extract restaurant ID from various URL patterns
       let restaurantId: string | null = null;
