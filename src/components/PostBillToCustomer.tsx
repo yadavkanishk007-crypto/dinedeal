@@ -164,6 +164,13 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
       const { discountAmount, finalAmount } = calculateDiscount(amount);
 
       // Create posted bill
+      
+     const selectedSessionObj = sessions.find(s => s.id === selectedSession);
+     if (!selectedSessionObj) {
+       toast.error("Session not found");
+       setPosting(false);
+       return;
+      }
       const { error: billError } = await supabase
         .from('transactions')
         .insert({
