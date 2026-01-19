@@ -10,10 +10,8 @@ import { toast } from "sonner";
 import {
   Loader2,
   Clock,
-  Receipt,
   CheckCircle2,
   UtensilsCrossed,
-  Percent,
   CreditCard,
   Download,
 } from "lucide-react";
@@ -69,7 +67,7 @@ const DineIn = () => {
   const [paying, setPaying] = useState(false);
 
   /* =========================
-     AUTH + SESSION INIT
+      AUTH + SESSION INIT
   ========================= */
 
   useEffect(() => {
@@ -84,12 +82,6 @@ const DineIn = () => {
   }, [authLoading, user, restaurantId]);
 
   const initializeSession = async () => {
-    console.log("DINEIN_DEBUG", {
-      authLoading,
-      user,
-      restaurantId
-    });
-
     if (!user?.id || !restaurantId) {
       setLoading(false);
       return;
@@ -98,8 +90,7 @@ const DineIn = () => {
     try {
       const { data: existing, error } = await supabase
         .from("dinein_sessions")
-        .select(
-          `
+        .select(`
           id,
           restaurant_id,
           customer_id,
@@ -110,8 +101,7 @@ const DineIn = () => {
             address,
             image_url
           )
-        `
-        )
+        `)
         .eq("restaurant_id", restaurantId)
         .eq("customer_id", user.id)
         .in("status", ["open", "bill_posted"])
@@ -126,8 +116,7 @@ const DineIn = () => {
         if (existing.status === "bill_posted") {
           fetchBill(existing.id);
         }
-          setLoading(false);
-        }
+        setLoading(false);
       } else {
         const { data: created, error: createError } = await supabase
           .from("dinein_sessions")
@@ -136,8 +125,7 @@ const DineIn = () => {
             customer_id: user.id,
             status: "open",
           })
-          .select(
-            `
+          .select(`
             id,
             restaurant_id,
             customer_id,
@@ -148,32 +136,29 @@ const DineIn = () => {
               address,
               image_url
             )
-          `
-          )
+          `)
           .single();
 
         if (createError) throw createError;
 
         setSession(created as DineInSession);
         toast.success("Dine-in session started!");
-        navigate(`/restaurant/${restaurantId}`);
+        // Optional: navigate if you want to update URL
+        // navigate(`/restaurant/${restaurantId}`); 
         setLoading(false);
       }
     } catch (error: any) {
-        console.error("DINEIN_CREATE_FAILED", {
-           message: error?.message,
-           details: error,
-           code: error?.code,
-           hint: error?.hint
-        });
-        toast.error(error?.message || "Failed to start dine-in session");
-        setLoading(false);
-   }
-
+      console.error("DINEIN_CREATE_FAILED", {
+        message: error?.message,
+        details: error,
+      });
+      toast.error(error?.message || "Failed to start dine-in session");
+      setLoading(false);
+    }
   };
 
   /* =========================
-     BILL FETCH + REALTIME
+      BILL FETCH + REALTIME
   ========================= */
 
   useEffect(() => {
@@ -203,8 +188,7 @@ const DineIn = () => {
   const fetchBill = async (sessionId: string) => {
     const { data } = await supabase
       .from("transactions")
-      .select(
-        `
+      .select(`
         id,
         dinein_session_id,
         bill_amount,
@@ -214,8 +198,7 @@ const DineIn = () => {
         payment_reference,
         pos_bill_no,
         offer_id
-      `
-      )
+      `)
       .eq("dinein_session_id", sessionId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -227,7 +210,7 @@ const DineIn = () => {
   };
 
   /* =========================
-     PAYMENT
+      PAYMENT
   ========================= */
 
   const handlePayment = async () => {
@@ -285,7 +268,7 @@ const DineIn = () => {
   };
 
   /* =========================
-     UI STATES
+      UI STATES
   ========================= */
 
   if (authLoading || loading) {
@@ -307,7 +290,7 @@ const DineIn = () => {
   }
 
   /* =========================
-     RENDER
+      RENDER
   ========================= */
 
   return (
@@ -324,6 +307,7 @@ const DineIn = () => {
                 <img
                   src={session.restaurants.image_url}
                   className="w-16 h-16 rounded-lg object-cover"
+                  alt={session.restaurants.name}
                 />
               )}
               <div className="flex-1">
