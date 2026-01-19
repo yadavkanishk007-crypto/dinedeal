@@ -154,6 +154,7 @@ const DineIn = () => {
 
         setSession(created as DineInSession);
         toast.success("Dine-in session started!");
+        navigate(`/restaurant/${restaurantId}`);
       }
     } catch (error: any) {
         console.error("DINEIN_CREATE_FAILED", {
