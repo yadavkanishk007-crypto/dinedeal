@@ -130,6 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: UserRole,
     phone?: string
   ) => {
+    // 1. Create Auth User
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -144,39 +145,50 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const userId = data.user.id;
 
-    // 1️⃣ profile
-    // FIX: Using 'user_id' instead of 'id' based on previous error logs
-    // Casting to any to avoid "Property 'id' is missing" errors if local types are stale
-    await supabase.from("profiles").insert({
-      user_id: userId,
-      full_name: fullName,
-      phone,
-    } as any);
-
-    // 2️⃣ role
-    // FIX: Casting role to any to handle 'super_admin' or enum mismatches
-    await supabase.from("user_roles").insert({
-      user_id: userId,
-      role: role as any,
-    });
-
-    // 3️⃣ restaurant
-    if (role === "restaurant") {
-      // FIX: Matches your provided table columns exactly.
-      // Removed 'status' (does not exist in your table).
-      // Added required fields with placeholders to satisfy NOT NULL constraints if they exist.
-      await supabase.from("restaurants").insert({
-        owner_id: userId,
-        name: fullName + "'s Restaurant",
-        city: "Jhansi", // Default or required field placeholder
-        address: "TBD", // Default or required field placeholder
-        cuisine: "Multi-Cuisine", // Default or required field placeholder
-        is_approved: false, // Defaulting to false for safety
-        is_active: true
+    try {
+      // 2. Insert Profile
+      // FIX: Using 'user_id' instead of 'id' based on previous error logs
+      const { error: profileError } = await supabase.from("profiles").insert({
+        user_id: userId,
+        full_name: fullName,
+        phone,
       } as any);
-    }
 
-    return { error: null };
+      if (profileError) throw profileError;
+
+      // 3. Insert Role
+      const { error: roleError } = await supabase.from("user_roles").insert({
+        user_id: userId,
+        role: role as any,
+      });
+
+      if (roleError) throw roleError;
+
+      // 4. Insert Restaurant
+      if (role === "restaurant") {
+        const { error: restError } = await supabase.from("restaurants").insert({
+          owner_id: userId,
+          name: fullName + "'s Restaurant",
+          city: "Jhansi", 
+          address: "TBD", 
+          cuisine: "Multi-Cuisine", 
+          is_approved: false, 
+          is_active: true
+        } as any);
+
+        if (restError) throw restError;
+      }
+
+      // FIX: Force update the local state role to prevent race condition
+      setRole(role);
+
+      return { error: null };
+
+    } catch (err) {
+      // If DB inserts fail, sign out to prevent broken state
+      await supabase.auth.signOut();
+      return { error: err as Error };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
