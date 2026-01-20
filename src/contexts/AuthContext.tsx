@@ -130,19 +130,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: UserRole,
     phone?: string
   ) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          full_name: fullName,
-          role,
-          phone: phone || "",
-        },
+        data: { full_name: fullName }
       },
     });
 
-    return { error: error as Error | null };
+    if (error || !data.user) {
+      return { error: error as Error };
+    }
+
+    const userId = data.user.id;
+
+    // 1️⃣ profile
+    await supabase.from("profiles").insert({
+      id: userId,
+      full_name: fullName,
+      phone,
+    });
+
+    // 2️⃣ role
+    await supabase.from("user_roles").insert({
+      user_id: userId,
+      role,
+    });
+
+    // 3️⃣ restaurant
+    if (role === "restaurant") {
+      await supabase.from("restaurants").insert({
+        owner_id: userId,
+        name: fullName + "'s Restaurant",
+        status: "pending",
+      });
+    }
+
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
