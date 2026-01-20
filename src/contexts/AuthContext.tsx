@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   /**
    * Load base auth + user profile safely
-   * ❌ No admin queries here
+   * 🛡️ ZOMBIE PROOFED: Auto-clears broken sessions
    */
   const loadUserData = useCallback(async () => {
     setLoading(true);
@@ -51,8 +51,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        console.warn("Session error:", sessionError.message);
+      if (sessionError || !session) {
+        if (sessionError) console.warn("Session error:", sessionError.message);
         setSession(null);
         setUser(null);
         setRole(null);
@@ -62,18 +62,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       setSession(session);
-      setUser(session?.user ?? null);
-
-      if (!session?.user) {
-        setRole(null);
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
+      setUser(session.user);
 
       /**
        * Fetch role + profile in parallel
-       * Both MUST be RLS-safe
        */
       const [roleRes, profileRes] = await Promise.all([
         supabase
@@ -84,18 +76,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         supabase.from("profiles").select("*").maybeSingle(),
       ]);
 
-      if (roleRes.error) {
-        console.warn("Role fetch skipped:", roleRes.error.message);
+      /* ============================================================
+         🧟 ZOMBIE KILLER PROTOCOL
+         If we have a session (logged in) but NO profile/role data,
+         it means the previous signup crashed halfway.
+         We MUST force signout to break the 401 loop.
+         ============================================================ */
+      if (!profileRes.data && !roleRes.data) {
+        console.error("⛔ Zombie session detected (Auth exists but DB is empty). Force clearing...");
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setRole(null);
+        setProfile(null);
+        setLoading(false);
+        return;
       }
 
-      if (profileRes.error) {
-        console.warn("Profile fetch skipped:", profileRes.error.message);
-      }
+      if (roleRes.error) console.warn("Role fetch skipped:", roleRes.error.message);
+      if (profileRes.error) console.warn("Profile fetch skipped:", profileRes.error.message);
 
       setRole((roleRes.data?.role as UserRole) ?? "customer");
       setProfile(profileRes.data ?? null);
+
     } catch (err) {
       console.error("Auth bootstrap failed:", err);
+      // Failsafe: If unknown error, sign out to prevent lock-out
+      await supabase.auth.signOut();
       setSession(null);
       setUser(null);
       setRole(null);
@@ -113,8 +120,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      loadUserData();
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Small optimization: if session is null, we can clear immediately
+      if (!session) {
+        setSession(null);
+        setUser(null);
+        setRole(null);
+        setProfile(null);
+        setLoading(false);
+      } else {
+        loadUserData();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -147,7 +163,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       // 2. Insert Profile
-      // FIX: Using 'user_id' instead of 'id' based on previous error logs
       const { error: profileError } = await supabase.from("profiles").insert({
         user_id: userId,
         full_name: fullName,
@@ -186,6 +201,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     } catch (err) {
       // If DB inserts fail, sign out to prevent broken state
+      console.error("Signup DB failed, rolling back auth...", err);
       await supabase.auth.signOut();
       return { error: err as Error };
     }
