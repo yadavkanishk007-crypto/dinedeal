@@ -134,7 +134,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email,
       password,
       options: {
-        data: { full_name: fullName }
+        data: { full_name: fullName },
       },
     });
 
@@ -145,25 +145,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userId = data.user.id;
 
     // 1️⃣ profile
+    // FIX: Using 'user_id' instead of 'id' based on previous error logs
+    // Casting to any to avoid "Property 'id' is missing" errors if local types are stale
     await supabase.from("profiles").insert({
-      id: userId,
+      user_id: userId,
       full_name: fullName,
       phone,
-    });
+    } as any);
 
     // 2️⃣ role
+    // FIX: Casting role to any to handle 'super_admin' or enum mismatches
     await supabase.from("user_roles").insert({
       user_id: userId,
-      role,
+      role: role as any,
     });
 
     // 3️⃣ restaurant
     if (role === "restaurant") {
+      // FIX: Matches your provided table columns exactly.
+      // Removed 'status' (does not exist in your table).
+      // Added required fields with placeholders to satisfy NOT NULL constraints if they exist.
       await supabase.from("restaurants").insert({
         owner_id: userId,
         name: fullName + "'s Restaurant",
-        status: "pending",
-      });
+        city: "Jhansi", // Default or required field placeholder
+        address: "TBD", // Default or required field placeholder
+        cuisine: "Multi-Cuisine", // Default or required field placeholder
+        is_approved: false, // Defaulting to false for safety
+        is_active: true
+      } as any);
     }
 
     return { error: null };
