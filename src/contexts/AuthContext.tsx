@@ -3,8 +3,8 @@ import {
   useContext,
   useEffect,
   useState,
-  ReactNode,
   useCallback,
+  ReactNode,
 } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,8 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   /**
-   * Load base auth + user profile safely
-   * 🛡️ ZOMBIE PROOFED: Auto-clears broken sessions
+   * SINGLE SOURCE OF TRUTH BOOTSTRAP
    */
   const loadUserData = useCallback(async () => {
     setLoading(true);
@@ -48,13 +47,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const {
         data: { session },
-        error: sessionError,
+        error,
       } = await supabase.auth.getSession();
 
-      if (sessionError || !session) {
-        if (sessionError) console.warn("Session error:", sessionError.message);
-        setSession(null);
+      if (error || !session) {
         setUser(null);
+        setSession(null);
         setRole(null);
         setProfile(null);
         setLoading(false);
@@ -64,47 +62,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session.user);
 
+      const userId = session.user.id;
+
       /**
-       * Fetch role + profile in parallel
+       * Fetch profile + role (safe & scoped)
        */
-      const [roleRes, profileRes] = await Promise.all([
+      const [{ data: profileData }, { data: roleData }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle(),
         supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", session.user.id)
+          .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("profiles").select("*").maybeSingle(),
       ]);
 
-      /* ============================================================
-         🧟 ZOMBIE KILLER PROTOCOL
-         If we have a session (logged in) but NO profile/role data,
-         it means the previous signup crashed halfway.
-         We MUST force signout to break the 401 loop.
-         ============================================================ */
-      if (!profileRes.data && !roleRes.data) {
-        console.error("⛔ Zombie session detected (Auth exists but DB is empty). Force clearing...");
-        await supabase.auth.signOut();
-        setSession(null);
-        setUser(null);
-        setRole(null);
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
-      if (roleRes.error) console.warn("Role fetch skipped:", roleRes.error.message);
-      if (profileRes.error) console.warn("Profile fetch skipped:", profileRes.error.message);
-
-      setRole((roleRes.data?.role as UserRole) ?? "customer");
-      setProfile(profileRes.data ?? null);
+      /**
+       * IMPORTANT:
+       * Do NOT force signout if DB rows are missing.
+       * This can happen during signup or migrations.
+       */
+      setProfile(profileData ?? null);
+      setRole((roleData?.role as UserRole) ?? null);
 
     } catch (err) {
-      console.error("Auth bootstrap failed:", err);
-      // Failsafe: If unknown error, sign out to prevent lock-out
-      await supabase.auth.signOut();
-      setSession(null);
+      console.error("Auth bootstrap error:", err);
+      // Fail-safe reset (NO signOut)
       setUser(null);
+      setSession(null);
       setRole(null);
       setProfile(null);
     } finally {
@@ -113,31 +101,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   /**
-   * Initial load + auth state changes
+   * Initial load + auth listener
    */
   useEffect(() => {
     loadUserData();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Small optimization: if session is null, we can clear immediately
-      if (!session) {
-        setSession(null);
-        setUser(null);
-        setRole(null);
-        setProfile(null);
-        setLoading(false);
-      } else {
-        loadUserData();
-      }
+    } = supabase.auth.onAuthStateChange(() => {
+      loadUserData();
     });
 
     return () => subscription.unsubscribe();
   }, [loadUserData]);
 
   /**
-   * Auth actions
+   * SIGN UP (SAFE, LINEAR)
    */
   const signUp = async (
     email: string,
@@ -146,7 +125,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: UserRole,
     phone?: string
   ) => {
-    // 1. Create Auth User
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -162,51 +140,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userId = data.user.id;
 
     try {
-      // 2. Insert Profile
-      const { error: profileError } = await supabase.from("profiles").insert({
+      // Insert profile
+      await supabase.from("profiles").insert({
         user_id: userId,
         full_name: fullName,
         phone,
-      } as any);
-
-      if (profileError) throw profileError;
-
-      // 3. Insert Role
-      const { error: roleError } = await supabase.from("user_roles").insert({
-        user_id: userId,
-        role: role as any,
       });
 
-      if (roleError) throw roleError;
+      // Insert role
+      await supabase.from("user_roles").insert({
+        user_id: userId,
+        role,
+      });
 
-      // 4. Insert Restaurant
+      // TEMP: frontend restaurant creation (move later)
       if (role === "restaurant") {
-        const { error: restError } = await supabase.from("restaurants").insert({
+        await supabase.from("restaurants").insert({
           owner_id: userId,
-          name: fullName + "'s Restaurant",
-          city: "Jhansi", 
-          address: "TBD", 
-          cuisine: "Multi-Cuisine", 
-          is_approved: false, 
-          is_active: true
-        } as any);
-
-        if (restError) throw restError;
+          name: `${fullName}'s Restaurant`,
+          city: "Jhansi",
+          address: "TBD",
+          cuisine: "Multi-Cuisine",
+          is_approved: false,
+          is_active: true,
+        });
       }
 
-      // FIX: Force update the local state role to prevent race condition
-      setRole(role);
+      // Soft refresh (NO race)
+      await loadUserData();
 
       return { error: null };
-
     } catch (err) {
-      // If DB inserts fail, sign out to prevent broken state
-      console.error("Signup DB failed, rolling back auth...", err);
-      await supabase.auth.signOut();
+      console.error("Signup DB error:", err);
       return { error: err as Error };
     }
   };
 
+  /**
+   * SIGN IN
+   */
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -215,6 +187,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error: error as Error | null };
   };
 
+  /**
+   * SIGN OUT (ONLY EXPLICIT)
+   */
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
