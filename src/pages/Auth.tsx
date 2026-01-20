@@ -80,7 +80,8 @@ const Auth = () => {
      🔐 IMMEDIATE REDIRECT GUARD
      (MOVED AFTER ALL HOOKS)
      ========================= */
-  if (!loading && user && role) {
+  // FIX: Added !isLoading to prevent premature redirect during signup process
+  if (!loading && !isLoading && user && role) {
     if (role === "admin") {
       return <Navigate to="/admin" replace />;
     }
