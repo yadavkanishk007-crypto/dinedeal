@@ -9,9 +9,7 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type UserRole = "customer" | "restaurant" | "admin";
-type DbRole = "customer" | "restaurant" | "admin";
-const toDbRole = (role: UserRole): DbRole => role;
+type UserRole = "customer" | "restaurant" | "admin" | "super_admin" ;
 
 interface AuthContextType {
   user: User | null;
@@ -152,21 +150,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Insert role
       await supabase.from("user_roles").insert({
         user_id: userId,
-        role: toDbRole(role),
+        role: role === "super_admin" ? "admin" : role,
       });
 
-      // TEMP: frontend restaurant creation (move later)
+      // Create restaurant for restaurant-role users
       if (role === "restaurant") {
-        await supabase.from("restaurants").insert({
-          owner_id: userId,
-          name: `${fullName}'s Restaurant`,
-          city: "Jhansi",
-          address: "TBD",
-          cuisine: "Multi-Cuisine",
-          is_approved: false,
-          is_active: true,
-        });
-      }
+       const { error: restError } = await supabase
+         .from("restaurants")
+        .insert({
+        owner_id: userId,
+        name: `${fullName}'s Restaurant`,
+        city: "Jhansi",
+        address: "TBD",
+        cuisine: "Multi-Cuisine",
+        is_approved: false,
+        is_active: true,
+     });
+   console.log("RESTAURANT INSERT ERROR:", restError); 
+   if (restError) {
+    throw restError; // IMPORTANT
+  }
+}
+
 
       // Soft refresh (NO race)
       await loadUserData();
