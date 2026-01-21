@@ -9,7 +9,7 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type UserRole = "customer" | "restaurant" | "admin" | "super_admin" ;
+type UserRole = "customer" | "restaurant" | "admin" | "super_admin";
 
 interface AuthContextType {
   user: User | null;
@@ -155,23 +155,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Create restaurant for restaurant-role users
       if (role === "restaurant") {
-       const { error: restError } = await supabase
-         .from("restaurants")
-        .insert({
-        owner_id: userId,
-        name: `${fullName}'s Restaurant`,
-        city: "Jhansi",
-        address: "TBD",
-        cuisine: "Multi-Cuisine",
-        is_approved: false,
-        is_active: true,
-     });
-   console.log("RESTAURANT INSERT ERROR:", restError); 
-   if (restError) {
-    throw restError; // IMPORTANT
-  }
-}
-
+        const { error: restError } = await supabase
+          .from("restaurants")
+          .insert({
+            owner_id: userId,
+            name: `${fullName}'s Restaurant`,
+            city: "Jhansi",
+            address: "TBD",
+            cuisine: "Multi-Cuisine",
+            is_approved: false,
+            is_active: true,
+          });
+        console.log("RESTAURANT INSERT ERROR:", restError);
+        if (restError) {
+          throw restError; // IMPORTANT
+        }
+      }
 
       // Soft refresh (NO race)
       await loadUserData();
