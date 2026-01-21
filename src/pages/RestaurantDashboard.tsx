@@ -39,6 +39,7 @@ import RestaurantGallery from "@/components/RestaurantGallery";
 import RestaurantEarningsTab from "@/components/RestaurantEarningsTab";
 import RestaurantSettlementsTab from "@/components/RestaurantSettlementsTab";
 import PostBillToCustomer from "@/components/PostBillToCustomer";
+
 interface Restaurant {
   id: string;
   name: string;
@@ -47,6 +48,15 @@ interface Restaurant {
   is_active: boolean;
   is_approved: boolean;
   image_url: string | null;
+  description?: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  open_hours?: string;
+  upi_id?: string;
+  bank_account_number?: string;
+  bank_ifsc?: string;
+  bank_account_holder?: string;
 }
 
 interface Offer {
@@ -66,7 +76,7 @@ interface DashboardStats {
 
 const RestaurantDashboard = () => {
   const navigate = useNavigate();
-  const { user, role, signOut, loading } = useAuth();
+  const { user, role, signOut, loading, needsRestaurantOnboarding, refresh } = useAuth();
   const { toast } = useToast();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -78,13 +88,11 @@ const RestaurantDashboard = () => {
     avgOrderValue: 0,
   });
   
-  // Merged activeTab types to include Earnings and Settlements
   const [activeTab, setActiveTab] = useState<
     "overview" | "menu" | "reservations" | "dinein" | "offers" | "transactions" | "earnings" | "settlements" | "settings"
   >("overview");
   
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Onboarding form state
   const [formData, setFormData] = useState({
@@ -126,40 +134,53 @@ const RestaurantDashboard = () => {
 
       if (restaurantError) throw restaurantError;
 
-      if (!restaurantData) {
-        setShowOnboarding(true);
-        setIsLoadingData(false);
-        return;
-      }
+      if (restaurantData) {
+        setRestaurant(restaurantData);
 
-      setRestaurant(restaurantData);
+        // Pre-fill form data if we have an existing row (essential for the update flow)
+        setFormData(prev => ({
+          ...prev,
+          name: restaurantData.name || prev.name,
+          cuisine: restaurantData.cuisine || prev.cuisine,
+          description: restaurantData.description || prev.description,
+          address: restaurantData.address || prev.address,
+          city: restaurantData.city || prev.city,
+          phone: restaurantData.phone || prev.phone,
+          email: restaurantData.email || prev.email,
+          openHours: restaurantData.open_hours || prev.openHours,
+          upiId: restaurantData.upi_id || prev.upiId,
+          bankAccountNumber: restaurantData.bank_account_number || prev.bankAccountNumber,
+          bankIfsc: restaurantData.bank_ifsc || prev.bankIfsc,
+          bankAccountHolder: restaurantData.bank_account_holder || prev.bankAccountHolder,
+        }));
 
-      // Fetch offers
-      const { data: offersData } = await supabase
-        .from("offers")
-        .select("*")
-        .eq("restaurant_id", restaurantData.id);
+        // Fetch offers
+        const { data: offersData } = await supabase
+          .from("offers")
+          .select("*")
+          .eq("restaurant_id", restaurantData.id);
 
-      setOffers(offersData || []);
+        setOffers(offersData || []);
 
-      // Fetch transaction stats
-      const { data: txData } = await supabase
-        .from("transactions")
-        .select("final_amount, restaurant_earning, user_id")
-        .eq("restaurant_id", restaurantData.id)
-        .eq("payment_status", "completed");
+        // Fetch transaction stats
+        const { data: txData } = await supabase
+          .from("transactions")
+          .select("final_amount, restaurant_earning, user_id")
+          .eq("restaurant_id", restaurantData.id)
+          .eq("payment_status", "completed");
 
-      if (txData) {
-        const uniqueCustomers = new Set(txData.map(t => t.user_id)).size;
-        const totalRevenue = txData.reduce((sum, t) => sum + Number(t.restaurant_earning || 0), 0);
-        const totalOrders = txData.length;
-        
-        setStats({
-          totalRevenue,
-          totalTransactions: totalOrders,
-          totalCustomers: uniqueCustomers,
-          avgOrderValue: txData.length > 0 ? totalRevenue / txData.length : 0,
-        });
+        if (txData) {
+          const uniqueCustomers = new Set(txData.map(t => t.user_id)).size;
+          const totalRevenue = txData.reduce((sum, t) => sum + Number(t.restaurant_earning || 0), 0);
+          const totalOrders = txData.length;
+          
+          setStats({
+            totalRevenue,
+            totalTransactions: totalOrders,
+            totalCustomers: uniqueCustomers,
+            avgOrderValue: txData.length > 0 ? totalRevenue / txData.length : 0,
+          });
+        }
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -182,15 +203,15 @@ const RestaurantDashboard = () => {
     },
   });
 
-  const handleCreateRestaurant = async (e: React.FormEvent) => {
+  const handleUpdateRestaurant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     try {
+      // UPDATE existing row instead of inserting
       const { data, error } = await supabase
         .from("restaurants")
-        .insert({
-          owner_id: user.id,
+        .update({
           name: formData.name,
           cuisine: formData.cuisine,
           description: formData.description,
@@ -203,19 +224,22 @@ const RestaurantDashboard = () => {
           bank_account_number: formData.bankAccountNumber,
           bank_ifsc: formData.bankIfsc,
           bank_account_holder: formData.bankAccountHolder,
-          is_active: false,
-          is_approved: false,
+          // We do not force is_approved/is_active here, preserving existing state or admin logic
         })
+        .eq("owner_id", user.id)
         .select()
         .single();
 
       if (error) throw error;
 
       setRestaurant(data);
-      setShowOnboarding(false);
+      
+      // Refresh auth context to update needsRestaurantOnboarding state
+      await refresh();
+      
       toast({
-        title: "Restaurant Created!",
-        description: "Your restaurant is pending approval. We'll notify you soon.",
+        title: "Setup Complete!",
+        description: "Your restaurant details have been updated.",
       });
     } catch (error: any) {
       toast({
@@ -264,8 +288,9 @@ const RestaurantDashboard = () => {
     );
   }
 
-  if (showOnboarding) {
-    return <RestaurantOnboarding formData={formData} setFormData={setFormData} onSubmit={handleCreateRestaurant} />;
+  // Driven purely by AuthContext state
+  if (needsRestaurantOnboarding) {
+    return <RestaurantOnboarding formData={formData} setFormData={setFormData} onSubmit={handleUpdateRestaurant} />;
   }
 
   return (
@@ -590,7 +615,7 @@ const RestaurantOnboarding = ({ formData, setFormData, onSubmit }: any) => (
           </div>
 
           <Button type="submit" variant="gradient" size="xl" className="w-full">
-            Create Restaurant
+            Complete Setup
           </Button>
         </form>
       </motion.div>
@@ -1024,7 +1049,4 @@ const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | n
   );
 };
 
-
 export default RestaurantDashboard;
-
-
