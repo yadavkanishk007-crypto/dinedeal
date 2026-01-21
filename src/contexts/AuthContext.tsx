@@ -136,7 +136,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error || !data.user) {
       return { error: error as Error };
     }
+    const {
+      data: { session },
+    } = await supabse.auth.getSession();
 
+    if (!session) {
+      throw new Error("Session not ready after signup");
+    }
     const userId = data.user.id;
 
     try {
