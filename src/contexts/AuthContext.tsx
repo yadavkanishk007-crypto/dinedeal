@@ -138,7 +138,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     const {
       data: { session },
-    } = await supabse.auth.getSession();
+    } = await supabase.auth.getSession();
 
     if (!session) {
       throw new Error("Session not ready after signup");
