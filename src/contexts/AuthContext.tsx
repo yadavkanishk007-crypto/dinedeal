@@ -9,7 +9,9 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type UserRole = "customer" | "restaurant" | "admin" ;
+type UserRole = "customer" | "restaurant" | "admin";
+type DbRole = "customer" | "restaurant" | "admin";
+const toDbRole = (role: UserRole): DbRole => role;
 
 interface AuthContextType {
   user: User | null;
@@ -150,7 +152,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Insert role
       await supabase.from("user_roles").insert({
         user_id: userId,
-        role,
+        role: toDbRole(role),
       });
 
       // TEMP: frontend restaurant creation (move later)
