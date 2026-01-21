@@ -9,7 +9,15 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type UserRole = "customer" | "restaurant" | "admin" | "super_admin";
+/**
+ * Frontend roles (business logic)
+ */
+export type UserRole = "customer" | "restaurant" | "admin" | "super_admin";
+
+/**
+ * DB roles (Supabase enum)
+ */
+type DbRole = "customer" | "restaurant" | "admin";
 
 interface AuthContextType {
   user: User | null;
@@ -31,6 +39,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Map frontend role → DB-safe role
+ */
+const toDbRole = (role: UserRole): DbRole =>
+  role === "super_admin" ? "admin" : role;
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -39,7 +53,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   /**
-   * SINGLE SOURCE OF TRUTH BOOTSTRAP
+   * POST-CONFIRMATION BOOTSTRAP
+   * Runs after login / magic link confirmation
+   * Safe, idempotent, RLS-compliant
+   */
+  const bootstrapUser = useCallback(
+    async (session: Session) => {
+      const user = session.user;
+      const userId = user.id;
+      const meta = user.user_metadata || {};
+
+      const signupRole = meta.signup_role as UserRole | undefined;
+
+      // 1️⃣ Profile
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        await supabase.from("profiles").insert({
+          user_id: userId,
+          full_name: meta.full_name ?? "",
+          phone: meta.phone ?? null,
+        });
+      }
+
+      // 2️⃣ Role
+      const { data: existingRole } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!existingRole && signupRole) {
+        await supabase.from("user_roles").insert({
+          user_id: userId,
+          role: toDbRole(signupRole),
+        });
+      }
+
+      // 3️⃣ Restaurant
+      if (signupRole === "restaurant") {
+        const { data: existingRestaurant } = await supabase
+          .from("restaurants")
+          .select("id")
+          .eq("owner_id", userId)
+          .maybeSingle();
+
+        if (!existingRestaurant) {
+          await supabase.from("restaurants").insert({
+            owner_id: userId,
+            name: `${meta.full_name}'s Restaurant`,
+            city: "Jhansi",
+            address: "TBD",
+            cuisine: "Multi-Cuisine",
+            is_approved: false,
+            is_active: true,
+          });
+        }
+      }
+    },
+    []
+  );
+
+  /**
+   * SINGLE SOURCE OF TRUTH
    */
   const loadUserData = useCallback(async () => {
     setLoading(true);
@@ -47,10 +127,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const {
         data: { session },
-        error,
       } = await supabase.auth.getSession();
 
-      if (error || !session) {
+      if (!session) {
         setUser(null);
         setSession(null);
         setRole(null);
@@ -62,11 +141,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session.user);
 
+      // 🔑 Ensure DB is bootstrapped AFTER confirmation
+      await bootstrapUser(session);
+
       const userId = session.user.id;
 
-      /**
-       * Fetch profile + role (safe & scoped)
-       */
       const [{ data: profileData }, { data: roleData }] = await Promise.all([
         supabase
           .from("profiles")
@@ -80,17 +159,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .maybeSingle(),
       ]);
 
-      /**
-       * IMPORTANT:
-       * Do NOT force signout if DB rows are missing.
-       * This can happen during signup or migrations.
-       */
       setProfile(profileData ?? null);
-      setRole((roleData?.role as UserRole) ?? null);
-
+      setRole((roleData?.role as UserRole) ?? "customer");
     } catch (err) {
       console.error("Auth bootstrap error:", err);
-      // Fail-safe reset (NO signOut)
       setUser(null);
       setSession(null);
       setRole(null);
@@ -98,10 +170,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [bootstrapUser]);
 
   /**
-   * Initial load + auth listener
+   * Init + Auth listener
    */
   useEffect(() => {
     loadUserData();
@@ -116,7 +188,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [loadUserData]);
 
   /**
-   * SIGN UP (SAFE, LINEAR)
+   * SIGN UP (EMAIL CONFIRMATION SAFE)
+   * Only stores intent
    */
   const signUp = async (
     email: string,
@@ -125,67 +198,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: UserRole,
     phone?: string
   ) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          phone,
+          signup_role: role,
+        },
       },
     });
 
-    if (error || !data.user) {
-      return { error: error as Error };
-    }
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      throw new Error("Session not ready after signup");
-    }
-    const userId = data.user.id;
-
-    try {
-      // Insert profile
-      await supabase.from("profiles").insert({
-        user_id: userId,
-        full_name: fullName,
-        phone,
-      });
-
-      // Insert role
-      await supabase.from("user_roles").insert({
-        user_id: userId,
-        role: role === "super_admin" ? "admin" : role,
-      });
-
-      // Create restaurant for restaurant-role users
-      if (role === "restaurant") {
-        const { error: restError } = await supabase
-          .from("restaurants")
-          .insert({
-            owner_id: userId,
-            name: `${fullName}'s Restaurant`,
-            city: "Jhansi",
-            address: "TBD",
-            cuisine: "Multi-Cuisine",
-            is_approved: false,
-            is_active: true,
-          });
-        console.log("RESTAURANT INSERT ERROR:", restError);
-        if (restError) {
-          throw restError; // IMPORTANT
-        }
-      }
-
-      // Soft refresh (NO race)
-      await loadUserData();
-
-      return { error: null };
-    } catch (err) {
-      console.error("Signup DB error:", err);
-      return { error: err as Error };
-    }
+    return { error: error as Error | null };
   };
 
   /**
@@ -200,7 +225,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   /**
-   * SIGN OUT (ONLY EXPLICIT)
+   * SIGN OUT
    */
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -230,9 +255,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 };
