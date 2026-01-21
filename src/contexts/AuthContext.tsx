@@ -67,10 +67,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   /* =======================
-     POST-CONFIRMATION BOOTSTRAP
+      POST-CONFIRMATION BOOTSTRAP
   ======================= */
 
   const bootstrapUser = useCallback(async (session: Session) => {
+    // C) At the VERY START of bootstrapUser
+    console.log("🟠 bootstrapUser RUNNING for:", session.user.id);
+    console.log("🟠 signup_role:", session.user.user_metadata?.signup_role);
+
     const user = session.user;
     const userId = user.id;
     const meta = user.user_metadata || {};
@@ -137,16 +141,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   /* =======================
-     LOAD USER DATA
+      LOAD USER DATA
   ======================= */
 
   const loadUserData = useCallback(async () => {
+    // A) At the VERY START of loadUserData
+    console.log("🟡 loadUserData START");
+
     setLoading(true);
 
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
+      // B) Immediately AFTER supabase.auth.getSession()
+      console.log("🟡 SESSION:", session);
 
       if (!session) {
         setUser(null);
@@ -170,6 +180,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
       ]);
 
+      // D) Immediately AFTER fetching profile and role rows
+      console.log("🟢 PROFILE ROW:", profileRow);
+      console.log("🟢 ROLE ROW:", roleRow);
+
       const userRole = (roleRow?.role as UserRole) ?? "customer";
       setProfile(profileRow ?? null);
       setRole(userRole);
@@ -187,6 +201,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         restaurantRow = data;
 
+        // E) Immediately AFTER fetching restaurant row
+        console.log("🔵 RESTAURANT ROW:", restaurantRow);
+
         if (restaurantRow) {
           const bank = clean(restaurantRow.bank_account_number);
           const upi = clean(restaurantRow.upi_id);
@@ -201,6 +218,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       }
+
+      // F) Immediately BEFORE setting onboarding flag
+      console.log("🔴 NEEDS ONBOARDING:", onboarding);
 
       setRestaurant(restaurantRow);
       setNeedsRestaurantOnboarding(onboarding);
@@ -218,7 +238,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [bootstrapUser]);
 
   /* =======================
-     AUTH LISTENER
+      AUTH LISTENER
   ======================= */
 
   useEffect(() => {
@@ -244,7 +264,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [loadUserData]);
 
   /* =======================
-     AUTH ACTIONS
+      AUTH ACTIONS
   ======================= */
 
   const signUp = async (
@@ -273,7 +293,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
-    });
+      });
     return { error: error as Error | null };
   };
 
@@ -288,7 +308,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   /* =======================
-     PROVIDER
+      PROVIDER
   ======================= */
 
   return (
