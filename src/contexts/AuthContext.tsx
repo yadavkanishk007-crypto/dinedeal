@@ -9,15 +9,16 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * Frontend roles (business logic)
- */
-export type UserRole = "customer" | "restaurant" | "admin" | "super_admin";
+/* =======================
+   ROLE DEFINITIONS
+======================= */
 
-/**
- * DB roles (Supabase enum)
- */
+export type UserRole = "customer" | "restaurant" | "admin" | "super_admin";
 type DbRole = "customer" | "restaurant" | "admin";
+
+/* =======================
+   CONTEXT SHAPE
+======================= */
 
 interface AuthContextType {
   user: User | null;
@@ -41,11 +42,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * Map frontend role → DB-safe role
- */
+/* =======================
+   HELPERS
+======================= */
+
 const toDbRole = (role: UserRole): DbRole =>
   role === "super_admin" ? "admin" : role;
+
+const clean = (v: unknown) =>
+  typeof v === "string" ? v.trim() : "";
+
+/* =======================
+   PROVIDER
+======================= */
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -57,83 +66,80 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     useState(false);
   const [loading, setLoading] = useState(true);
 
-  /**
-   * POST-CONFIRMATION BOOTSTRAP
-   * Runs after login / magic link confirmation
-   * Safe, idempotent, RLS-compliant
-   * Ensures Profile, Role, and Restaurant rows exist
-   */
+  /* =======================
+     POST-CONFIRMATION BOOTSTRAP
+  ======================= */
+
   const bootstrapUser = useCallback(async (session: Session) => {
     const user = session.user;
     const userId = user.id;
     const meta = user.user_metadata || {};
     const signupRole = meta.signup_role as UserRole | undefined;
 
-    // 1️⃣ Profile
-    const { data: existingProfile } = await supabase
+    /* PROFILE */
+    const { data: profileRow } = await supabase
       .from("profiles")
       .select("user_id")
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (!existingProfile) {
-      const { error: profileError } = await supabase.from("profiles").insert({
+    if (!profileRow) {
+      const { error } = await supabase.from("profiles").insert({
         user_id: userId,
         full_name: meta.full_name ?? "",
         phone: meta.phone ?? null,
       });
-      if (profileError) throw profileError;
+      if (error) throw error;
     }
 
-    // 2️⃣ Role
-    const { data: existingRole } = await supabase
+    /* ROLE */
+    const { data: roleRow } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (!existingRole && signupRole) {
-      await supabase.from("user_roles").insert({
+    if (!roleRow && signupRole) {
+      const { error } = await supabase.from("user_roles").insert({
         user_id: userId,
         role: toDbRole(signupRole),
       });
+      if (error) throw error;
     }
 
-    // 3️⃣ Restaurant (Only if role is restaurant)
-    // Check both existing role AND signup_role to be safe during first boot
     const effectiveRole =
-      existingRole?.role ?? (signupRole ? toDbRole(signupRole) : "customer");
+      roleRow?.role ?? (signupRole ? toDbRole(signupRole) : "customer");
 
+    /* RESTAURANT */
     if (effectiveRole === "restaurant") {
-      const { data: existingRestaurant } = await supabase
+      const { data: restaurantRow } = await supabase
         .from("restaurants")
         .select("id")
         .eq("owner_id", userId)
         .maybeSingle();
 
-      if (!existingRestaurant) {
-        // Permanent creation of restaurant row
-        await supabase.from("restaurants").insert({
+      if (!restaurantRow) {
+        const { error } = await supabase.from("restaurants").insert({
           owner_id: userId,
-          name: `${meta.full_name || "User"}'s Restaurant`,
+          name: `${meta.full_name || "Restaurant"}`,
           city: "Jhansi",
           address: "TBD",
           cuisine: "Multi-Cuisine",
           is_approved: false,
           is_active: true,
-          // Initialize bank fields as null to trigger onboarding logic
           bank_account_number: null,
-          upi_id: null,
           bank_account_holder: null,
+          upi_id: null,
         });
+        if (error) throw error;
       }
     }
   }, []);
 
-  /**
-   * SINGLE SOURCE OF TRUTH
-   * Loads User, Profile, Role, and Restaurant Data
-   */
+  /* =======================
+     LOAD USER DATA
+  ======================= */
+
   const loadUserData = useCallback(async () => {
     setLoading(true);
 
@@ -149,40 +155,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setProfile(null);
         setRestaurant(null);
         setNeedsRestaurantOnboarding(false);
-        setLoading(false);
         return;
       }
 
       setSession(session);
       setUser(session.user);
 
-      // 🔑 Ensure DB is bootstrapped AFTER confirmation
-      // This is safe to run on every refresh as it checks existence first
       await bootstrapUser(session);
 
       const userId = session.user.id;
 
-      // Fetch Core Data
-      const [{ data: profileData }, { data: roleData }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", userId)
-          .maybeSingle(),
+      const [{ data: profileRow }, { data: roleRow }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
       ]);
 
-      const userRole = (roleData?.role as UserRole) ?? "customer";
-      setProfile(profileData ?? null);
+      const userRole = (roleRow?.role as UserRole) ?? "customer";
+      setProfile(profileRow ?? null);
       setRole(userRole);
 
-      // Fetch Restaurant Data if applicable
-      let restaurantData = null;
-      let needsOnboarding = false;
+      /* RESTAURANT + ONBOARDING CHECK */
+      let restaurantRow = null;
+      let onboarding = false;
 
       if (userRole === "restaurant") {
         const { data } = await supabase
@@ -191,25 +185,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .eq("owner_id", userId)
           .maybeSingle();
 
-        restaurantData = data;
+        restaurantRow = data;
 
-        if (restaurantData) {
-          // LOGIC: Needs onboarding if (No Bank AND No UPI) OR (No Holder)
-          const hasBank = !!restaurantData.bank_account_number;
-          const hasUpi = !!restaurantData.upi_id;
-          const hasHolder = !!restaurantData.bank_account_holder;
+        if (restaurantRow) {
+          const bank = clean(restaurantRow.bank_account_number);
+          const upi = clean(restaurantRow.upi_id);
+          const holder = clean(restaurantRow.bank_account_holder);
+
+          const hasBank = bank.length > 0;
+          const hasUpi = upi.length > 0;
+          const hasHolder = holder.length > 0;
 
           if ((!hasBank && !hasUpi) || !hasHolder) {
-            needsOnboarding = true;
+            onboarding = true;
           }
         }
       }
 
-      setRestaurant(restaurantData);
-      setNeedsRestaurantOnboarding(needsOnboarding);
+      setRestaurant(restaurantRow);
+      setNeedsRestaurantOnboarding(onboarding);
     } catch (err) {
-      console.error("Auth bootstrap error:", err);
-      // Reset sensitive state on error
+      console.error("AUTH ERROR:", err);
       setUser(null);
       setSession(null);
       setRole(null);
@@ -221,21 +217,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [bootstrapUser]);
 
-  /**
-   * Init + Auth listener
-   */
+  /* =======================
+     AUTH LISTENER
+  ======================= */
+
   useEffect(() => {
     loadUserData();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      // If session changes (sign in/out), reload data
-      // We pass session explicitly to handle timing, though loadUserData pulls it freshly
       if (session) {
         loadUserData();
       } else {
-        // Immediate cleanup for sign out
         setUser(null);
         setSession(null);
         setRole(null);
@@ -249,10 +243,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, [loadUserData]);
 
-  /**
-   * SIGN UP (EMAIL CONFIRMATION SAFE)
-   * Only stores intent in user_metadata
-   */
+  /* =======================
+     AUTH ACTIONS
+  ======================= */
+
   const signUp = async (
     email: string,
     password: string,
@@ -275,9 +269,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error: error as Error | null };
   };
 
-  /**
-   * SIGN IN
-   */
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -286,9 +277,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error: error as Error | null };
   };
 
-  /**
-   * SIGN OUT
-   */
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -298,6 +286,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setRestaurant(null);
     setNeedsRestaurantOnboarding(false);
   };
+
+  /* =======================
+     PROVIDER
+  ======================= */
 
   return (
     <AuthContext.Provider
