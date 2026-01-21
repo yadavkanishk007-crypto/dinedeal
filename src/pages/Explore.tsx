@@ -10,25 +10,45 @@ import Logo from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
 
 /* ------------------------------------------------------------------ */
-/* Types */
+/* RAW DATABASE TYPE (matches Supabase table) */
 /* ------------------------------------------------------------------ */
+interface RestaurantDBRow {
+  id: string;
+  name: string;
+  cuisine: string | null;
+  city: string | null;
+  image_url: string | null;
+  rating: number | null;
+  discount: number | null;
+  is_popular: boolean | null;
+  distance: number | null;
 
-interface RestaurantDB {
+  // extra fields from DB (ignored by UI)
+  address?: string;
+  email?: string;
+  upi_id?: string;
+  bank_account_number?: string;
+  bank_ifsc?: string;
+  created_at?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* UI-SAFE TYPE (what the UI actually uses) */
+/* ------------------------------------------------------------------ */
+interface RestaurantUI {
   id: string;
   name: string;
   cuisine: string;
-  distance: number | string;
+  distance: string;
   rating: number;
   discount: number;
-  image_url: string;
-  is_popular: boolean;
-  location?: string;
+  imageUrl: string;
+  isPopular: boolean;
 }
 
 /* ------------------------------------------------------------------ */
 /* Filters */
 /* ------------------------------------------------------------------ */
-
 const filters = [
   { id: "all", label: "All" },
   { id: "popular", label: "🔥 Popular" },
@@ -40,12 +60,8 @@ const filters = [
   { id: "fine-dining", label: "🍷 Fine Dining" },
 ];
 
-/* ------------------------------------------------------------------ */
-/* Component */
-/* ------------------------------------------------------------------ */
-
 const Explore = () => {
-  const [restaurants, setRestaurants] = useState<RestaurantDB[]>([]);
+  const [restaurants, setRestaurants] = useState<RestaurantUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [activeFilter, setActiveFilter] = useState("all");
@@ -55,11 +71,11 @@ const Explore = () => {
   const [isLocating, setIsLocating] = useState(false);
 
   /* ---------------------------------------------------------------- */
-  /* Fetch Restaurants */
+  /* Fetch + Normalize */
   /* ---------------------------------------------------------------- */
-
   const fetchRestaurants = useCallback(async () => {
     setIsLoading(true);
+
     try {
       const { data, error } = await supabase
         .from("restaurants")
@@ -67,7 +83,20 @@ const Explore = () => {
 
       if (error) throw error;
 
-      setRestaurants((data as RestaurantDB[]) ?? []);
+      const normalized: RestaurantUI[] = (data as RestaurantDBRow[]).map(
+        (r) => ({
+          id: r.id,
+          name: r.name,
+          cuisine: r.cuisine ?? "Multi-cuisine",
+          distance: `${r.distance ?? 0} km`,
+          rating: r.rating ?? 4.0,
+          discount: r.discount ?? 0,
+          imageUrl: r.image_url ?? "/images/restaurant-placeholder.jpg",
+          isPopular: Boolean(r.is_popular),
+        })
+      );
+
+      setRestaurants(normalized);
     } catch (err) {
       console.error("Failed to fetch restaurants:", err);
     } finally {
@@ -76,9 +105,8 @@ const Explore = () => {
   }, []);
 
   /* ---------------------------------------------------------------- */
-  /* Detect Location (UI only for now) */
+  /* Location (UI only) */
   /* ---------------------------------------------------------------- */
-
   const detectLocation = async () => {
     setIsLocating(true);
 
@@ -95,15 +123,12 @@ const Explore = () => {
             `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json`
           );
           const data = await res.json();
-
-          const city =
+          setLocation(
             data.address?.city ||
-            data.address?.town ||
-            data.address?.village ||
-            data.address?.district ||
-            "Jhansi";
-
-          setLocation(city);
+              data.address?.town ||
+              data.address?.district ||
+              "Jhansi"
+          );
         } catch {
           setLocation("Jhansi");
         } finally {
@@ -113,14 +138,9 @@ const Explore = () => {
       () => {
         setLocation("Jhansi");
         setIsLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
+      }
     );
   };
-
-  /* ---------------------------------------------------------------- */
-  /* Effects */
-  /* ---------------------------------------------------------------- */
 
   useEffect(() => {
     detectLocation();
@@ -128,43 +148,31 @@ const Explore = () => {
   }, [fetchRestaurants]);
 
   /* ---------------------------------------------------------------- */
-  /* Filtering Logic */
+  /* Filters */
   /* ---------------------------------------------------------------- */
-
   const filteredRestaurants = restaurants.filter((r) => {
-    const name = r.name?.toLowerCase() ?? "";
-    const cuisine = r.cuisine?.toLowerCase() ?? "";
-    const query = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase();
+    const name = r.name.toLowerCase();
+    const cuisine = r.cuisine.toLowerCase();
+    const distanceVal = Number(r.distance.replace(" km", ""));
 
-    const distanceVal = Number(r.distance) || 0;
-
-    const matchesSearch =
-      name.includes(query) || cuisine.includes(query);
-
-    if (!matchesSearch) return false;
+    if (!name.includes(q) && !cuisine.includes(q)) return false;
 
     switch (activeFilter) {
       case "popular":
-        return r.is_popular;
-
+        return r.isPopular;
       case "nearby":
         return distanceVal < 2;
-
       case "high-discount":
         return r.discount >= 20;
-
       case "cafe":
         return cuisine.includes("cafe");
-
       case "italian":
         return cuisine.includes("italian");
-
       case "asian":
         return cuisine.includes("asian") || cuisine.includes("japanese");
-
       case "fine-dining":
         return cuisine.includes("fine dining");
-
       default:
         return true;
     }
@@ -173,10 +181,8 @@ const Explore = () => {
   /* ---------------------------------------------------------------- */
   /* Render */
   /* ---------------------------------------------------------------- */
-
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <motion.header
         className="sticky top-0 z-40 glass border-b border-border/30"
         initial={{ y: -100 }}
@@ -193,10 +199,10 @@ const Explore = () => {
 
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" />
               <Input
                 placeholder="Search restaurants, cuisines..."
-                className="pl-10 bg-secondary border-transparent"
+                className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -208,7 +214,6 @@ const Explore = () => {
         </div>
       </motion.header>
 
-      {/* Content */}
       <main className="container py-4 space-y-4">
         <FilterChips
           filters={filters}
@@ -223,44 +228,19 @@ const Explore = () => {
         </p>
 
         <motion.div className="grid gap-4" layout>
-          <AnimatePresence mode="popLayout">
-            {filteredRestaurants.map((r, index) => (
+          <AnimatePresence>
+            {filteredRestaurants.map((r, i) => (
               <motion.div
                 key={r.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: index * 0.05 }}
-                layout
+                transition={{ delay: i * 0.05 }}
               >
-                <RestaurantCard
-                  id={r.id}
-                  name={r.name}
-                  cuisine={r.cuisine}
-                  distance={`${Number(r.distance) || 0} km`}
-                  rating={r.rating}
-                  discount={r.discount}
-                  imageUrl={r.image_url}
-                  isPopular={r.is_popular}
-                />
+                <RestaurantCard {...r} />
               </motion.div>
             ))}
           </AnimatePresence>
         </motion.div>
-
-        {!isLoading && filteredRestaurants.length === 0 && (
-          <motion.div
-            className="text-center py-16"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <Search className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <h3 className="font-bold text-lg">No restaurants found</h3>
-            <p className="text-sm text-muted-foreground">
-              Try adjusting your search or filters
-            </p>
-          </motion.div>
-        )}
       </main>
 
       <BottomNav />
