@@ -9,32 +9,9 @@ import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
 
-/* ------------------------------------------------------------------ */
-/* RAW DATABASE TYPE (matches Supabase table) */
-/* ------------------------------------------------------------------ */
-interface RestaurantDBRow {
-  id: string;
-  name: string;
-  cuisine: string | null;
-  city: string | null;
-  image_url: string | null;
-  rating: number | null;
-  discount: number | null;
-  is_popular: boolean | null;
-  distance: number | null;
-
-  // extra fields from DB (ignored by UI)
-  address?: string;
-  email?: string;
-  upi_id?: string;
-  bank_account_number?: string;
-  bank_ifsc?: string;
-  created_at?: string;
-}
-
-/* ------------------------------------------------------------------ */
-/* UI-SAFE TYPE (what the UI actually uses) */
-/* ------------------------------------------------------------------ */
+/* =========================================================
+   UI MODEL (ONLY what the UI is allowed to know)
+========================================================= */
 interface RestaurantUI {
   id: string;
   name: string;
@@ -46,9 +23,9 @@ interface RestaurantUI {
   isPopular: boolean;
 }
 
-/* ------------------------------------------------------------------ */
-/* Filters */
-/* ------------------------------------------------------------------ */
+/* =========================================================
+   FILTERS
+========================================================= */
 const filters = [
   { id: "all", label: "All" },
   { id: "popular", label: "🔥 Popular" },
@@ -70,9 +47,9 @@ const Explore = () => {
   const [location, setLocation] = useState("Jhansi");
   const [isLocating, setIsLocating] = useState(false);
 
-  /* ---------------------------------------------------------------- */
-  /* Fetch + Normalize */
-  /* ---------------------------------------------------------------- */
+  /* =========================================================
+     FETCH + NORMALIZE (BULLETPROOF)
+  ========================================================= */
   const fetchRestaurants = useCallback(async () => {
     setIsLoading(true);
 
@@ -83,30 +60,35 @@ const Explore = () => {
 
       if (error) throw error;
 
-      const normalized: RestaurantUI[] = (data as RestaurantDBRow[]).map(
-        (r) => ({
-          id: r.id,
-          name: r.name,
-          cuisine: r.cuisine ?? "Multi-cuisine",
-          distance: `${r.distance ?? 0} km`,
-          rating: r.rating ?? 4.0,
-          discount: r.discount ?? 0,
-          imageUrl: r.image_url ?? "/images/restaurant-placeholder.jpg",
-          isPopular: Boolean(r.is_popular),
-        })
-      );
+      // 🚨 CRITICAL: treat Supabase data as unknown
+      const rows = Array.isArray(data) ? data : [];
+
+      const normalized: RestaurantUI[] = rows.map((row: any) => ({
+        id: String(row.id),
+        name: String(row.name ?? "Unnamed Restaurant"),
+        cuisine: String(row.cuisine ?? "Multi-cuisine"),
+        distance: `${Number(row.distance ?? 0)} km`,
+        rating: Number(row.rating ?? 4),
+        discount: Number(row.discount ?? 0),
+        imageUrl:
+          typeof row.image_url === "string" && row.image_url.length > 0
+            ? row.image_url
+            : "/images/restaurant-placeholder.jpg",
+        isPopular: Boolean(row.is_popular),
+      }));
 
       setRestaurants(normalized);
     } catch (err) {
-      console.error("Failed to fetch restaurants:", err);
+      console.error("❌ Failed to fetch restaurants:", err);
+      setRestaurants([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  /* ---------------------------------------------------------------- */
-  /* Location (UI only) */
-  /* ---------------------------------------------------------------- */
+  /* =========================================================
+     LOCATION (UI ONLY)
+  ========================================================= */
   const detectLocation = async () => {
     setIsLocating(true);
 
@@ -122,11 +104,11 @@ const Explore = () => {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json`
           );
-          const data = await res.json();
+          const json = await res.json();
           setLocation(
-            data.address?.city ||
-              data.address?.town ||
-              data.address?.district ||
+            json.address?.city ||
+              json.address?.town ||
+              json.address?.district ||
               "Jhansi"
           );
         } catch {
@@ -147,9 +129,9 @@ const Explore = () => {
     fetchRestaurants();
   }, [fetchRestaurants]);
 
-  /* ---------------------------------------------------------------- */
-  /* Filters */
-  /* ---------------------------------------------------------------- */
+  /* =========================================================
+     FILTER LOGIC
+  ========================================================= */
   const filteredRestaurants = restaurants.filter((r) => {
     const q = searchQuery.toLowerCase();
     const name = r.name.toLowerCase();
@@ -178,9 +160,9 @@ const Explore = () => {
     }
   });
 
-  /* ---------------------------------------------------------------- */
-  /* Render */
-  /* ---------------------------------------------------------------- */
+  /* =========================================================
+     RENDER
+  ========================================================= */
   return (
     <div className="min-h-screen bg-background pb-24">
       <motion.header
@@ -234,7 +216,7 @@ const Explore = () => {
                 key={r.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: i * 0.04 }}
               >
                 <RestaurantCard {...r} />
               </motion.div>
