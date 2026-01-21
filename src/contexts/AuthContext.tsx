@@ -9,7 +9,7 @@ import {
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type UserRole = "customer" | "restaurant" | "admin" | "super_admin";
+type UserRole = "customer" | "restaurant" | "admin" ;
 
 interface AuthContextType {
   user: User | null;
