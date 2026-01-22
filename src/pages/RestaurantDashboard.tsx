@@ -487,7 +487,7 @@ const RestaurantDashboard = () => {
         )}
 
         {activeTab === "support" && restaurant && ( 
-          <RestaurantSupportTab restaurantId={resaturant.id} />
+          <RestaurantSupportTab restaurantId={restaurant.id} />
         )}
 
       </div>
@@ -1057,4 +1057,5 @@ const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | n
 };
 
 export default RestaurantDashboard;
+
 
