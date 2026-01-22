@@ -33,7 +33,7 @@ interface SupportMessage {
 }
 export interface RestaurantSupportTabProps {
   restaurantId: string;
-
+}
 const RestaurantSupportTab = ({ restaurantId }: RestaurantSupportTabProps) => {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
