@@ -158,7 +158,7 @@ const Profile = () => {
         </motion.div>
 
         <motion.p className="text-center text-xs text-muted-foreground" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-          Zave v1.0.0
+           DineDeal © 2026
         </motion.p>
       </main>
 
