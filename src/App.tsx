@@ -24,6 +24,8 @@ import FavoriteRestaurants from "./pages/FavoriteRestaurants";
 import PaymentMethods from "./pages/PaymentMethods";
 import PrivacySecurity from "./pages/PrivacySecurity";
 import FAQs from "./pages/FAQs";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsConditions from "./pages/TermsConditions";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -61,6 +63,8 @@ const App = () => (
             <Route path="/favorites" element={<FavoriteRestaurants />} />
             <Route path="/payments" element={<PaymentMethods />} />
             <Route path="/security" element={<PrivacySecurity />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsConditions />} />
             <Route path="/help" element={<FAQs />} /> 
             <Route path="/auth" element={<Auth />} />
 
