@@ -19,6 +19,7 @@ import TransactionHistory from "./pages/TransactionHistory";
 import MyReservations from "./pages/MyReservations";
 import DineIn from "./pages/DineIn" ;
 import ScanQR from "./pages/ScanQR" ;
+import Support from "./pages/Support";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -40,9 +41,11 @@ const App = () => (
             <Route path="/rewards" element={<Rewards />} />
             <Route path="/dine-in" element={<DineIn />} />
             <Route path="/scan" element={<ScanQR />} />
+            <Route path="/support" element={<Support />} />
             <Route
               path="/profile"
               element={
+              
                 <ProtectedRoute>
                   <Profile />
                 </ProtectedRoute>
