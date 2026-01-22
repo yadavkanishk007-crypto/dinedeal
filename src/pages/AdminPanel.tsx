@@ -19,6 +19,7 @@ import {
   Wallet,
   PiggyBank,
   CreditCard,
+  Headphones
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +38,7 @@ import AdminRestaurantDetail from "@/components/AdminRestaurantDetail";
 import AdminRestaurantEarnings from "@/components/AdminRestaurantEarnings";
 import AdminSettlements from "@/components/AdminSettlements";
 import AdminPayouts from "@/components/AdminPayouts";
-
+import AdminSupport from "@/components/AdminSupport"; 
 interface RestaurantStats {
   totalRevenue: number;
   totalTransactions: number;
@@ -83,6 +84,7 @@ const AdminPanel = () => {
     | "audit"
     | "earnings"
     | "settlements"
+    | "support"
     | "payouts"
   >("overview");
   
@@ -221,6 +223,7 @@ const AdminPanel = () => {
             { id: "payouts", label: "Payouts", icon: CreditCard },
             { id: "users", label: "Users" },
             isSuperAdmin && { id: "admins", label: "Create Admin" },
+            { id: "support", label: "Support", icon: Headphones },
             { id: "notifications", label: "Notifications", icon: Bell },
             { id: "coupons", label: "Coupons" },
             { id: "audit", label: "Audit Log" },
@@ -460,9 +463,13 @@ const AdminPanel = () => {
 
         {/* 11. PAYOUTS */}
         {activeTab === "payouts" && <AdminPayouts />}
+
+        {/* 12. SUPPORT */}
+        {activeTab === "support" && <AdminSupport />}
       </div>
     </div>
   );
 };
+
 
 export default AdminPanel;
