@@ -31,7 +31,8 @@ interface SupportMessage {
   is_from_support: boolean;
   created_at: string;
 }
-
+export interface RestaurantSupportTabProps {
+  restaurantId: string;
 
 const RestaurantSupportTab = ({ restaurantId }: RestaurantSupportTabProps) => {
   const { user } = useAuth();
