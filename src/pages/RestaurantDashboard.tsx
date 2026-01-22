@@ -20,7 +20,8 @@ import {
   UtensilsCrossed,
   Calendar,
   Wallet,
-  PiggyBank
+  PiggyBank,
+  Headphones
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,7 @@ import RestaurantGallery from "@/components/RestaurantGallery";
 import RestaurantEarningsTab from "@/components/RestaurantEarningsTab";
 import RestaurantSettlementsTab from "@/components/RestaurantSettlementsTab";
 import PostBillToCustomer from "@/components/PostBillToCustomer";
+import RestaurantSupportTab from "@/components/RestaurantSupportTab";
 
 interface Restaurant {
   id: string;
@@ -89,7 +91,7 @@ const RestaurantDashboard = () => {
   });
   
   const [activeTab, setActiveTab] = useState<
-    "overview" | "menu" | "reservations" | "dinein" | "offers" | "transactions" | "earnings" | "settlements" | "settings"
+    "overview" | "menu" | "reservations" | "dinein" | "offers" | "transactions" | "earnings" | "settlements" | "support" |"settings"
   >("overview");
   
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -364,6 +366,7 @@ const RestaurantDashboard = () => {
             { id: "transactions", label: "Transactions", icon: Receipt },
             { id: "earnings", label: "Earnings", icon: PiggyBank },
             { id: "settlements", label: "Settlements", icon: Wallet },
+            { id: "support", label: "Support", icon: Headphones },
             { id: "settings", label: "Settings", icon: Settings },
           ].map((tab) => (
             <Button
@@ -481,6 +484,10 @@ const RestaurantDashboard = () => {
 
         {activeTab === "dinein" && restaurant && (
           <PostBillToCustomer restaurantId={restaurant.id} />
+        )}
+
+        {activeTab === "support" && restaurant && ( 
+          <RestaurantSupportTab restaurantId={resaturant.id} />
         )}
 
       </div>
@@ -1050,3 +1057,4 @@ const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | n
 };
 
 export default RestaurantDashboard;
+
