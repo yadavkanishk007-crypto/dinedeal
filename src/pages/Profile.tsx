@@ -8,6 +8,7 @@ import {
   CreditCard, 
   Bell, 
   HelpCircle, 
+  Headphones,
   LogOut,
   ChevronRight,
   TrendingUp,
@@ -62,8 +63,9 @@ const Profile = () => {
     { icon: Receipt, label: "Transaction History", value: `${stats.totalTransactions} payments`, path: "/transactions" },
     { icon: Heart, label: "Favorite Restaurants", value: `${stats.favoriteRestaurants} saved`, path: "/favorites" },
     { icon: CreditCard, label: "Payment Methods", value: "UPI linked", path: "/payments" },
+    { icon: Headphones, label: "Customer Support", value: "Get help", path: "/support" },
     { icon: Shield, label: "Privacy & Security", value: "", path: "/security" },
-    { icon: HelpCircle, label: "Help & Support", value: "", path: "/help" },
+    { icon: HelpCircle, label: "FAQs", value: "", path: "/help" },
   ];
 
   return (
