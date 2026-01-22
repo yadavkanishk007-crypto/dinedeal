@@ -20,6 +20,10 @@ import MyReservations from "./pages/MyReservations";
 import DineIn from "./pages/DineIn" ;
 import ScanQR from "./pages/ScanQR" ;
 import Support from "./pages/Support";
+import FavoriteRestaurants from "./pages/FavoriteRestaurants";
+import PaymentMethods from "./pages/PaymentMethods";
+import PrivacySecurity from "./pages/PrivacySecurity";
+import FAQs from "./pages/FAQs";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -54,6 +58,10 @@ const App = () => (
 
             <Route path="/transactions" element={<TransactionHistory />} />
             <Route path="/reservations" element={<MyReservations />} />
+            <Route path="/favorites" element={<FavoriteRestaurants />} />
+            <Route path="/payments" element={<PaymentMethods />} />
+            <Route path="/security" element={<PrivacySecurity />} />
+            <Route path="/help" element={<FAQs />} /> 
             <Route path="/auth" element={<Auth />} />
 
             {/* ✅ PASSWORD RESET ROUTE */}
