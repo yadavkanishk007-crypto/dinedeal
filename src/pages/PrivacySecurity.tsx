@@ -30,13 +30,13 @@ const PrivacySecurity = () => {
       icon: FileText,
       label: "Privacy Policy",
       description: "Read our privacy policy",
-      action: () => window.open("https://dinedeal.in/privacy", "_blank"),
+      action: () => window.open("https://dinedeal-tau.vercel.app/privacy", "_blank"),
     },
     {
       icon: FileText,
       label: "Terms of Service",
       description: "Read our terms of service",
-      action: () => window.open("https://dinedeal.in/terms", "_blank"),
+      action: () => window.open("https://dinedeal-tau.vercel.app/terms", "_blank"),
     },
   ];
 
