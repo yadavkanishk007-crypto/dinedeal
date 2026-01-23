@@ -644,13 +644,13 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
                     icon: FileText,
                     label: "Privacy Policy",
                     description: "Read our privacy policy",
-                    action: () => window.open("https://dinedeal.in/privacy", "_blank"),
+                    action: () => window.open("https://dinedeal-tau.vercel.app/RestaurantPrivacyPolicy", "_blank"),
                   },
                   {
                     icon: FileText,
                     label: "Terms of Service",
                     description: "Read our terms of service",
-                    action: () => window.open("https://dinedeal.in/terms", "_blank"),
+                    action: () => window.open("https://dinedeal-tau.vercel.app/RestaurantTermsCondition", "_blank"),
                   },
                 ].map((item, index) => (
                   <motion.div
