@@ -1,43 +1,25 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useNotificationSound } from "@/hooks/useNotificationSound";
 
 interface UseOrderNotificationsOptions {
   restaurantId?: string;
   isAdmin?: boolean;
   onNewOrder?: (order: any) => void;
   enabled?: boolean;
+  soundEnabled?: boolean;
 }
-
-// Notification sound as base64 (short pleasant chime)
-const NOTIFICATION_SOUND = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYb/////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//tQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQZB0P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
 
 export const useOrderNotifications = ({
   restaurantId,
   isAdmin = false,
   onNewOrder,
   enabled = true,
+  soundEnabled = true,
 }: UseOrderNotificationsOptions) => {
   const { toast } = useToast();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const hasInteractedRef = useRef(false);
-
-  // Initialize audio on user interaction
-  const initAudio = useCallback(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio(NOTIFICATION_SOUND);
-      audioRef.current.volume = 0.7;
-    }
-    hasInteractedRef.current = true;
-  }, []);
-
-  // Play notification sound
-  const playSound = useCallback(() => {
-    if (audioRef.current && hasInteractedRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(console.error);
-    }
-  }, []);
+  const { playSound, initAudio } = useNotificationSound();
 
   // Show browser notification if permitted
   const showBrowserNotification = useCallback((title: string, body: string) => {
@@ -58,17 +40,9 @@ export const useOrderNotifications = ({
   }, []);
 
   useEffect(() => {
-    // Add click listener to enable audio
-    const handleClick = () => initAudio();
-    document.addEventListener('click', handleClick, { once: true });
-    
     // Request notification permission
     requestPermission();
-
-    return () => {
-      document.removeEventListener('click', handleClick);
-    };
-  }, [initAudio, requestPermission]);
+  }, [requestPermission]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -96,8 +70,10 @@ export const useOrderNotifications = ({
         async (payload) => {
           const newTx = payload.new as any;
           
-          // Play sound
-          playSound();
+          // Play sound if enabled
+          if (soundEnabled) {
+            playSound();
+          }
           
           // Fetch restaurant name for better notification
           let restaurantName = '';
@@ -139,7 +115,7 @@ export const useOrderNotifications = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [restaurantId, isAdmin, enabled, onNewOrder, toast, playSound, showBrowserNotification]);
+  }, [restaurantId, isAdmin, enabled, soundEnabled, onNewOrder, toast, playSound, showBrowserNotification]);
 
   return { requestPermission, initAudio };
 };
