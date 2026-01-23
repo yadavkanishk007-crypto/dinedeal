@@ -41,6 +41,7 @@ import RestaurantEarningsTab from "@/components/RestaurantEarningsTab";
 import RestaurantSettlementsTab from "@/components/RestaurantSettlementsTab";
 import PostBillToCustomer from "@/components/PostBillToCustomer";
 import RestaurantSupportTab from "@/components/RestaurantSupportTab";
+import RestaurantSettings from "@/components/RestaurantSettings";
 
 interface Restaurant {
   id: string;
@@ -460,7 +461,7 @@ const RestaurantDashboard = () => {
         {activeTab === "settings" && restaurant && (
           <div className="space-y-6">
             <RestaurantGallery restaurantId={restaurant.id} editable />
-            <SettingsTab restaurant={restaurant} setRestaurant={setRestaurant} />
+            <RestaurantSettings restaurant={restaurant} setRestaurant={setRestaurant} />
           </div>
         )}
 
@@ -853,209 +854,9 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
   );
 };
 
-// Settings Tab
-const SettingsTab = ({ restaurant, setRestaurant }: { restaurant: Restaurant | null; setRestaurant: (r: Restaurant) => void }) => {
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [formData, setFormData] = useState({
-    name: restaurant?.name || "",
-    cuisine: restaurant?.cuisine || "",
-    address: restaurant?.address || "",
-  });
-  const [uploading, setUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(restaurant?.image_url || null);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !restaurant) return;
-
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Invalid file", description: "Please select an image file", variant: "destructive" });
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Image must be less than 5MB", variant: "destructive" });
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      // Generate unique filename
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${restaurant.id}/${Date.now()}.${fileExt}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("restaurant-images")
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("restaurant-images")
-        .getPublicUrl(fileName);
-
-      // Update restaurant record
-      const { error: updateError } = await supabase
-        .from("restaurants")
-        .update({ image_url: publicUrl })
-        .eq("id", restaurant.id);
-
-      if (updateError) throw updateError;
-
-      setImagePreview(publicUrl);
-      setRestaurant({ ...restaurant, image_url: publicUrl });
-      toast({ title: "Image uploaded", description: "Your restaurant image has been updated" });
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const removeImage = async () => {
-    if (!restaurant) return;
-
-    try {
-      // Update restaurant record to remove image
-      const { error } = await supabase
-        .from("restaurants")
-        .update({ image_url: null })
-        .eq("id", restaurant.id);
-
-      if (error) throw error;
-
-      setImagePreview(null);
-      setRestaurant({ ...restaurant, image_url: null });
-      toast({ title: "Image removed", description: "Your restaurant image has been removed" });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  };
-
-  const handleUpdate = async () => {
-    if (!restaurant) return;
-
-    try {
-      const { error } = await supabase
-        .from("restaurants")
-        .update(formData)
-        .eq("id", restaurant.id);
-
-      if (error) throw error;
-
-      setRestaurant({ ...restaurant, ...formData });
-      toast({ title: "Settings Updated", description: "Your changes have been saved." });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  };
-
-  return (
-    <div className="space-y-4 max-w-md">
-      <h2 className="font-display font-bold text-lg text-foreground">Restaurant Settings</h2>
-      
-      {/* Image Upload Section */}
-      <Card className="border-border/50">
-        <CardContent className="p-4">
-          <label className="text-sm text-muted-foreground mb-3 block">Restaurant Image</label>
-          
-          <div className="relative">
-            {imagePreview ? (
-              <div className="relative">
-                <img
-                  src={imagePreview}
-                  alt="Restaurant"
-                  className="w-full h-48 object-cover rounded-xl"
-                />
-                <button
-                  onClick={removeImage}
-                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition-colors"
-                >
-                  <X className="w-4 h-4 text-foreground" />
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-2 right-2 px-3 py-1.5 rounded-full bg-background/80 backdrop-blur flex items-center gap-2 hover:bg-background transition-colors text-sm font-medium"
-                  disabled={uploading}
-                >
-                  <Camera className="w-4 h-4" />
-                  Change
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="w-full h-48 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3 hover:border-primary/50 hover:bg-secondary/50 transition-colors"
-              >
-                {uploading ? (
-                  <>
-                    <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    <p className="text-sm text-muted-foreground">Uploading...</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
-                      <Upload className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-foreground">Upload Image</p>
-                      <p className="text-xs text-muted-foreground">JPG, PNG up to 5MB</p>
-                    </div>
-                  </>
-                )}
-              </button>
-            )}
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Restaurant Details */}
-      <Card className="border-border/50">
-        <CardContent className="p-4 space-y-4">
-          <div>
-            <label className="text-sm text-muted-foreground">Restaurant Name</label>
-            <Input
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-sm text-muted-foreground">Cuisine</label>
-            <Input
-              value={formData.cuisine}
-              onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="text-sm text-muted-foreground">Address</label>
-            <Input
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-            />
-          </div>
-          <Button variant="gradient" onClick={handleUpdate}>Save Changes</Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
 
 export default RestaurantDashboard;
+
 
 
