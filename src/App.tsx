@@ -26,6 +26,8 @@ import PrivacySecurity from "./pages/PrivacySecurity";
 import FAQs from "./pages/FAQs";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
+import RestaurantPrivacyPolicy from "./pages/RestaurantPrivacyPolicy"; 
+import RestaurantTermsCondition from "./pages/RestaurantTermsCondition";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -65,6 +67,8 @@ const App = () => (
             <Route path="/security" element={<PrivacySecurity />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsConditions />} />
+            <Route path="/RestaurantPrivacyPolicy" element={<RestaurantPrivacyPolicy />} />
+            <Route path="/RestaurantTermsCondition" element={<RestaurantTermsCondition />} />
             <Route path="/help" element={<FAQs />} /> 
             <Route path="/auth" element={<Auth />} />
 
