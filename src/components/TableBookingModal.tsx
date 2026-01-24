@@ -48,6 +48,13 @@ const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: Ta
 
     setLoading(true);
     try {
+      // Fetch restaurant email for notification
+      const { data: restaurantData } = await supabase
+        .from("restaurants")
+        .select("email")
+        .eq("id", restaurantId)
+        .single();
+
       const { error } = await supabase.from("reservations").insert({
         restaurant_id: restaurantId,
         user_id: user.id,
@@ -63,7 +70,7 @@ const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: Ta
 
       if (error) throw error;
 
-      // Send confirmation email if email provided
+      // Send confirmation email to customer if email provided
       if (formData.email) {
         await supabase.functions.invoke("send-reservation-email", {
           body: {
@@ -77,6 +84,26 @@ const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: Ta
               partySize: formData.partySize,
               status: "pending",
               specialRequests: formData.specialRequests,
+            },
+          },
+        });
+      }
+
+      // Send alert email to restaurant if restaurant has email
+      if (restaurantData?.email) {
+        await supabase.functions.invoke("send-reservation-email", {
+          body: {
+            to: restaurantData.email,
+            type: "restaurant_alert",
+            data: {
+              customerName: formData.name,
+              restaurantName,
+              reservationDate: formData.date,
+              reservationTime: formData.time,
+              partySize: formData.partySize,
+              status: "pending",
+              specialRequests: formData.specialRequests,
+              phone: formData.phone,
             },
           },
         });
