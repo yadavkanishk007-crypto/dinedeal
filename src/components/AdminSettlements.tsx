@@ -264,7 +264,7 @@ const AdminSettlements = () => {
         .in("id", txIds);
 
       if (updateError) throw updateError;
-
+      setPendingSettlements(prev => prev.filter(p => p.restaurant_id !== createRestaurantId));
       // 3. Initiate Payout via API (if automated)
       try {
         const response = await fetch(`/api/admin/settlements/${settlement.id}/initiate`, {
