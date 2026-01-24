@@ -166,13 +166,23 @@ const AdminPayouts = () => {
     try {
       // Use API for completion to handle any backend logic triggers (finalizing transaction settlement status)
       if (newStatus === "completed") {
-        const response = await fetch(`/api/admin/settlements/${selectedSettlement.id}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch(
+          `${import.meta.env.PROD
+           ? "https://YOUR_RENDER_BACKEND_URL"
+           : "http://localhost:5000"
+         }/api/admin/settlements/${selectedSettlement.id}/complete`,
+         {
+           method: 'POST',
+           headers: {
+          'Content-Type': 'application/json',
+         },
+          credentials: 'include',
           body: JSON.stringify({
-            reference: payoutReference.trim()
-          })
-        });
+          reference: payoutReference.trim(),
+      }),
+     }
+      );
+
         
         if (!response.ok) {
            throw new Error("Failed to complete payout via API");
