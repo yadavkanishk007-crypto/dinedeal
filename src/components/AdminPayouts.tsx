@@ -168,7 +168,7 @@ const AdminPayouts = () => {
       if (newStatus === "completed") {
         const response = await fetch(
           `${import.meta.env.PROD
-           ? "https://https://dinedeal-backend-076n.onrender.com/"
+           ? "https://dinedeal-backend-076n.onrender.com"
            : "http://localhost:5000"
          }/api/admin/settlements/${selectedSettlement.id}/complete`,
          {
