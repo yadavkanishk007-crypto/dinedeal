@@ -66,20 +66,29 @@ const AdminNotificationSender = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-push-notification", {
-        body: {
+     const response = await fetch("https://dinedeal-backend-076n.onrender.com/api/notifications/send",
+       {
+         method: "POST",
+         headers: {
+           "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
           title: formData.title,
           body: formData.body,
-          url: formData.url || undefined,
-          targetType: "all",
-        },
-      });
+          data: {
+            url: formData.url || undefined,
+            targetType: "all",
+      },
+    }),
+  }
+);
 
-      if (error) throw error;
+if (!response.ok) {
+  throw new Error("Failed to send notification");
+}
 
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+const data = await response.json();
+
 
       toast({
         title: "Notification Sent!",
