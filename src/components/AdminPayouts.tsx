@@ -178,7 +178,7 @@ const AdminPayouts = () => {
          },
           credentials: 'include',
           body: JSON.stringify({
-          reference: payoutReference.trim(),
+          payout_reference: payoutReference.trim(),
       }),
      }
       );
