@@ -33,7 +33,8 @@ interface AuthContextType {
     password: string,
     fullName: string,
     role: UserRole,
-    phone?: string
+    phone?: string,
+    agreedToTerms?: boolean
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -263,7 +264,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     password: string,
     fullName: string,
     role: UserRole,
-    phone?: string
+    phone?: string,
+    agreedToTerms?: boolean
   ) => {
     const { error } = await supabase.auth.signUp({
       email,
@@ -273,6 +275,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           full_name: fullName,
           phone,
           signup_role: role,
+          agreed_to_terms: agreedToTerms,
         },
       },
     });
@@ -290,6 +293,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setUser(null);
+    setSession(session); // Keep session logic consistent with original
     setUser(null);
     setSession(null);
     setRole(null);
