@@ -196,7 +196,21 @@ const AdminPayouts = () => {
         
         if (error) throw error;
       }
-
+      toast({ title: "Success", description: `Payout marked as ${newStatus}` });
+      setIsUpdateDialogOpen(false);
+      await fetchData(); 
+    } catch (error: any) {
+      console.error("PAYOUT ERROR:", error);
+      toast({ 
+        title: "Error", 
+        description: error.message || "An unexpected error occurred", 
+        variant: "destructive" 
+      });
+   }  finally {
+      setIsUpdating(false);
+  }
+};
+      
       // Log action
       await logAction({
         action: "update_payout_status",
