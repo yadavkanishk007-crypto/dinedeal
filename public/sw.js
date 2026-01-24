@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dinedeal-v1';
+const CACHE_NAME = 'dinedeal-v2';
 const urlsToCache = [
   '/',
   '/manifest.json',
@@ -33,11 +33,31 @@ self.addEventListener("activate", (event) => {
 
 // Fetch event - network first, fallback to cache
 self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // 🚨 NEVER touch API or non-GET requests
+  if (
+    req.method !== "GET" ||
+    url.pathname.startsWith("/api/")
+  ) {
+    return;
+  }
+
+  // ✅ Only cache safe GET requests
   event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request))
+    fetch(req)
+      .then((res) => {
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(req, resClone);
+        });
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });
+
 
 // Push notification event
 self.addEventListener("push", (event) => {
