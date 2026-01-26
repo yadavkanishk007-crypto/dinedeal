@@ -1170,8 +1170,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["customer", "restaurant", "admin", "event_organiser"],
-      booking_status: "confirmed" | "cancelled" | "attended"
-      event_status: "draft" | "published" | "cancelled" | "completed"
+      booking_status: ["confirmed" | "cancelled" | "attended"],
+      event_status: ["draft" | "published" | "cancelled" | "completed"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: ["open", "in_progress", "resolved", "closed"],
     },
