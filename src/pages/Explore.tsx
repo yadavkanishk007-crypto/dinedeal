@@ -59,7 +59,7 @@ const Explore = () => {
         .from("restaurants")
         .select("*")
         .eq("status", "approved") 
-        .eq("is_deleted", false); 
+        .eq("is_deleted", false) as any; 
 
       if (error) throw error;
 
