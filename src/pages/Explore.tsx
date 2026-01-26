@@ -54,12 +54,13 @@ const Explore = () => {
     setIsLoading(true);
 
     try {
-      // Added filter: status must be 'approved' and is_deleted must be false
-      const { data, error } = await (supabase
+      // PRODUCTION FIX: Cast 'supabase' to 'any' IMMEDIATELY at the start.
+      // This stops TypeScript from trying to calculate the infinite type depth of the query chain.
+      const { data, error } = await (supabase as any)
         .from("restaurants")
         .select("*")
         .eq("status", "approved") 
-        .eq("is_deleted", false) as any); 
+        .eq("is_deleted", false); 
 
       if (error) throw error;
 
@@ -166,7 +167,7 @@ const Explore = () => {
             </div>
           </div>
 
-          {/* View Mode Toggle from Explore(1) */}
+          {/* View Mode Toggle */}
           <div className="flex gap-2 p-1 bg-secondary rounded-lg">
             <Button
               variant={viewMode === "restaurants" ? "default" : "ghost"}
@@ -230,7 +231,7 @@ const Explore = () => {
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ delay: i * 0.04 }}
                     layout
-                     {...({} as any)}
+                    {...({} as any)}
                   >
                     <RestaurantCard {...r} />
                   </motion.div>
