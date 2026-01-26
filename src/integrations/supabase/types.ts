@@ -299,8 +299,8 @@ export type Database = {
           id: string
           event_id: string
           user_id: string
-          tickets_count: number
-          total_price: number
+          seats_booked: number
+          amount_paid: number
           status: Database["public"]["Enums"]["booking_status"]
           created_at: string
         }
