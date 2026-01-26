@@ -21,13 +21,17 @@ import {
   Calendar,
   Wallet,
   PiggyBank,
-  Headphones
+  Headphones,
+  Sparkles,
+  QrCode,
+  Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +46,9 @@ import RestaurantSettlementsTab from "@/components/RestaurantSettlementsTab";
 import PostBillToCustomer from "@/components/PostBillToCustomer";
 import RestaurantSupportTab from "@/components/RestaurantSupportTab";
 import RestaurantSettings from "@/components/RestaurantSettings";
+import EventManager from "@/components/events/EventManager";
+import EventBookingsList from "@/components/events/EventBookingsList";
+import EventCheckIn from "@/components/events/EventCheckIn";
 
 interface Restaurant {
   id: string;
@@ -51,6 +58,8 @@ interface Restaurant {
   is_active: boolean;
   is_approved: boolean;
   image_url: string | null;
+  is_event_organiser?: boolean;
+  organiser_type?: string;
   description?: string;
   city?: string;
   phone?: string;
@@ -92,7 +101,7 @@ const RestaurantDashboard = () => {
   });
   
   const [activeTab, setActiveTab] = useState<
-    "overview" | "menu" | "reservations" | "dinein" | "offers" | "transactions" | "earnings" | "settlements" | "support" |"settings"
+    "overview" | "menu" | "reservations" | "dinein" | "offers" | "transactions" | "earnings" | "settlements" | "support" |"settings"| "events" | "event-bookings" | "checkin"
   >("overview");
   
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -114,12 +123,12 @@ const RestaurantDashboard = () => {
   });
 
   useEffect(() => {
-    if (!loading && (!user || role !== "restaurant")) {
+    if (!loading && (!user || role !== "restaurant" && role !== "event_organiser")) {
       navigate("/auth");
       return;
     }
     
-    if (user && role === "restaurant") {
+    if (user && (role === "restaurant" || role === "event_organiser")) {
       fetchRestaurantData();
     }
   }, [user, role, loading, navigate]);
@@ -304,7 +313,8 @@ const RestaurantDashboard = () => {
           <div className="flex items-center gap-4">
             <Logo size="default" />
             <div className="h-6 w-px bg-border" />
-            <span className="text-sm font-medium text-muted-foreground">Restaurant Dashboard</span>
+            span className="text-sm font-medium text-muted-foreground">
+              {isEventOnlyOrganiser ? "Event Organiser Dashboard" : "Restaurant Dashboard"}
           </div>
           <div className="flex items-center gap-4">
             {restaurant && (
@@ -359,12 +369,24 @@ const RestaurantDashboard = () => {
         {/* Tab Navigation */}
         <div className="flex gap-2 mb-6 overflow-x-auto scrollbar-hide">
           {[
-            { id: "overview", label: "Overview", icon: BarChart3 },
-            { id: "menu", label: "Menu", icon: UtensilsCrossed },
-            { id: "reservations", label: "Reservations", icon: Calendar },
-            { id: "dinein", label: "Dine-In", icon: Users },
-            { id: "offers", label: "Offers", icon: Percent },
-            { id: "transactions", label: "Transactions", icon: Receipt },
+             // Restaurant-only tabs
+            ...(!isEventOnlyOrganiser ? [
+              { id: "overview", label: "Overview", icon: BarChart3 },
+              { id: "menu", label: "Menu", icon: UtensilsCrossed },
+              { id: "reservations", label: "Reservations", icon: Calendar },
+              { id: "dinein", label: "Dine-In", icon: Users },
+              { id: "offers", label: "Offers", icon: Percent },
+              { id: "transactions", label: "Transactions", icon: Receipt },
+            ] : [
+              { id: "overview", label: "Overview", icon: BarChart3 },
+            ]),
+            // Events tabs - shown for both restaurants with events and event organisers
+            ...(restaurant?.is_event_organiser || isEventOnlyOrganiser ? [
+              { id: "events", label: "Events", icon: Sparkles },
+              { id: "event-bookings", label: "Bookings", icon: Ticket },
+              { id: "checkin", label: "Check-In", icon: QrCode },
+            ] : []),
+            // Common tabs
             { id: "earnings", label: "Earnings", icon: PiggyBank },
             { id: "settlements", label: "Settlements", icon: Wallet },
             { id: "support", label: "Support", icon: Headphones },
@@ -489,6 +511,18 @@ const RestaurantDashboard = () => {
 
         {activeTab === "support" && restaurant && ( 
           <RestaurantSupportTab restaurantId={restaurant.id} />
+        )}
+         {/* Event Tabs */}
+        {activeTab === "events" && restaurant && (
+          <EventManager restaurantId={restaurant.id} restaurantName={restaurant.name} />
+        )}
+
+        {activeTab === "event-bookings" && restaurant && (
+          <EventBookingsList restaurantId={restaurant.id} />
+        )}
+
+        {activeTab === "checkin" && restaurant && (
+          <EventCheckIn restaurantId={restaurant.id} />
         )}
 
       </div>
@@ -857,6 +891,7 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
 
 
 export default RestaurantDashboard;
+
 
 
 
