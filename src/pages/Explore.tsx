@@ -55,11 +55,11 @@ const Explore = () => {
 
     try {
       // Added filter: status must be 'approved' and is_deleted must be false
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("restaurants")
         .select("*")
         .eq("status", "approved") 
-        .eq("is_deleted", false) as any; 
+        .eq("is_deleted", false)) as any; 
 
       if (error) throw error;
 
