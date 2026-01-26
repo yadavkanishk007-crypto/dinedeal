@@ -225,6 +225,78 @@ export type Database = {
           },
         ]
       }
+       events: {
+        Row: {
+          booking_deadline: string | null
+          city: string
+          cover_image: string | null
+          created_at: string | null
+          created_by_id: string
+          description: string | null
+          end_time: string | null
+          event_date: string
+          id: string
+          is_paid: boolean | null
+          remaining_seats: number
+          start_time: string
+          status: Database["public"]["Enums"]["event_status"] | null
+          ticket_price: number | null
+          title: string
+          total_seats: number
+          updated_at: string | null
+          venue_name: string
+        }
+        Insert: {
+          booking_deadline?: string | null
+          city?: string
+          cover_image?: string | null
+          created_at?: string | null
+          created_by_id: string
+          description?: string | null
+          end_time?: string | null
+          event_date: string
+          id?: string
+          is_paid?: boolean | null
+          remaining_seats?: number
+          start_time: string
+          status?: Database["public"]["Enums"]["event_status"] | null
+          ticket_price?: number | null
+          title: string
+          total_seats?: number
+          updated_at?: string | null
+          venue_name: string
+        }
+        Update: {
+          booking_deadline?: string | null
+          city?: string
+          cover_image?: string | null
+          created_at?: string | null
+          created_by_id?: string
+          description?: string | null
+          end_time?: string | null
+          event_date?: string
+          id?: string
+          is_paid?: boolean | null
+          remaining_seats?: number
+          start_time?: string
+          status?: Database["public"]["Enums"]["event_status"] | null
+          ticket_price?: number | null
+          title?: string
+          total_seats?: number
+          updated_at?: string | null
+          venue_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      
       menu_items: {
         Row: {
           category: string | null
@@ -608,10 +680,12 @@ export type Database = {
           image_url: string | null
           is_active: boolean | null
           is_approved: boolean | null
+          is_event_organiser: boolean | null
           latitude: number | null
           longitude: number | null
           name: string
           open_hours: string | null
+          organiser_type: string | null
           owner_id: string
           phone: string | null
           rating: number | null
@@ -632,10 +706,12 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean | null
           is_approved?: boolean | null
+          is_event_organiser?: boolean | null
           latitude?: number | null
           longitude?: number | null
           name: string
           open_hours?: string | null
+            organiser_type?: string | null
           owner_id: string
           phone?: string | null
           rating?: number | null
@@ -656,10 +732,12 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean | null
           is_approved?: boolean | null
+          is_event_organiser?: boolean | null
           latitude?: number | null
           longitude?: number | null
           name?: string
           open_hours?: string | null
+          organiser_type?: string | null
           owner_id?: string
           phone?: string | null
           rating?: number | null
@@ -959,7 +1037,9 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "customer" | "restaurant" | "admin"
+      app_role: "customer" | "restaurant" | "admin" | "event_organiser"
+      booking_status: "confirmed" | "cancelled" | "attended"
+      event_status: "draft" | "published" | "cancelled" | "completed"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status: "open" | "in_progress" | "resolved" | "closed"
     }
@@ -1089,7 +1169,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["customer", "restaurant", "admin"],
+      app_role: ["customer", "restaurant", "admin", "event_organiser"],
+      booking_status: "confirmed" | "cancelled" | "attended"
+      event_status: "draft" | "published" | "cancelled" | "completed"
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: ["open", "in_progress", "resolved", "closed"],
     },
