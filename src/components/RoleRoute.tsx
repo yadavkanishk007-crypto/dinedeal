@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-type Role = "customer" | "restaurant" | "admin" | "super_admin";
+type Role = "customer" | "restaurant" | "admin" | "super_admin" | "event_organiser";
 
 export default function RoleRoute({
   allowed,
@@ -19,7 +19,7 @@ export default function RoleRoute({
   }
 
   if (!role || !allowed.includes(role)) {
-    if (role === "restaurant") return <Navigate to="/restaurant-dashboard" replace />;
+    if (role === "restaurant"|| role ==== "event_organiser") return <Navigate to="/restaurant-dashboard" replace />;
     if (role === "admin" || role === "super_admin") return <Navigate to="/admin" replace />;
     return <Navigate to="/" replace />;
   }
