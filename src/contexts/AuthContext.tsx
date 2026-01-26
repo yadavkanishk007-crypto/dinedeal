@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 ======================= */
 
 export type UserRole = "customer" | "restaurant" | "admin" | "super_admin" | "event_organiser" ; 
-type DbRole = "customer" | "restaurant" | "admin";
+type DbRole = "customer" | "restaurant" | "admin" | "event_organiser" ;
 
 /* =======================
    CONTEXT SHAPE
