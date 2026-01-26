@@ -319,7 +319,7 @@ const RestaurantDashboard = () => {
           <div className="flex items-center gap-4">
             <Logo size="default" />
             <div className="h-6 w-px bg-border" />
-            span className="text-sm font-medium text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               {isEventOnlyOrganiser ? "Event Organiser Dashboard" : "Restaurant Dashboard"}
           </div>
           <div className="flex items-center gap-4">
@@ -897,6 +897,7 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
 
 
 export default RestaurantDashboard;
+
 
 
 
