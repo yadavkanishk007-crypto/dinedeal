@@ -59,7 +59,7 @@ interface Restaurant {
   is_approved: boolean;
   image_url: string | null;
   is_event_organiser?: boolean;
-  organiser_type?: string;
+ organiser_type?: "restaurant" | "event_group";
   description?: string;
   city?: string;
   phone?: string;
@@ -898,6 +898,7 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
 
 
 export default RestaurantDashboard;
+
 
 
 
