@@ -230,6 +230,7 @@ const Explore = () => {
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ delay: i * 0.04 }}
                     layout
+                     {...({} as any)}
                   >
                     <RestaurantCard {...r} />
                   </motion.div>
