@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
@@ -296,6 +294,44 @@ export type Database = {
           },
         ]
       }
+      event_bookings: {
+        Row: {
+          id: string
+          event_id: string
+          user_id: string
+          tickets_count: number
+          total_price: number
+          status: Database["public"]["Enums"]["booking_status"]
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          user_id: string
+          tickets_count: number
+          total_price: number
+          status?: Database["public"]["Enums"]["booking_status"]
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          user_id?: string
+          tickets_count?: number
+          total_price?: number
+          status?: Database["public"]["Enums"]["booking_status"]
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_bookings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          }
+        ]
+      },
       
       menu_items: {
         Row: {
@@ -1170,8 +1206,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["customer", "restaurant", "admin", "event_organiser"],
-      booking_status: ["confirmed" | "cancelled" | "attended"],
-      event_status: ["draft" | "published" | "cancelled" | "completed"],
+      booking_status: ["confirmed", "cancelled", "attended"],
+      event_status: ["draft", "published", "cancelled", "completed"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: ["open", "in_progress", "resolved", "closed"],
     },
