@@ -19,7 +19,8 @@ import {
   Volume2,
   VolumeX,
   Save,
-  Mail
+  Mail,
+  Sparkles 
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,9 @@ interface Restaurant {
   bank_account_number?: string | null;
   bank_ifsc?: string | null;
   bank_account_holder?: string | null;
+  // [STEP 1: Added Interface Fields]
+  is_event_organiser?: boolean;
+  organiser_type?: "restaurant" | "event_group";
 }
 
 interface RestaurantSettingsProps {
@@ -91,6 +95,13 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
   const [savingBanking, setSavingBanking] = useState(false);
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
 
+  // [STEP 2: Added Local State]
+  const [eventEnabled, setEventEnabled] = useState(
+    restaurant?.is_event_organiser ?? false
+  );
+  useEffect(() => {
+  setEventEnabled(restaurant?.is_event_organiser ?? false);
+}, [restaurant?.is_event_organiser]);
   // Load notification permission status
   useEffect(() => {
     if ("Notification" in window) {
@@ -221,7 +232,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
       toast({ title: "Notifications Enabled", description: "You'll receive alerts for new bookings" });
       // Test notification
       new Notification("DineDeal", {
-        body: "🔔 Notifications enabled! You'll hear a bell for new bookings.",
+        body: "粕 Notifications enabled! You'll hear a bell for new bookings.",
         icon: "/favicon.png"
       });
     }
@@ -229,7 +240,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
 
   const playTestSound = () => {
     testSound();
-    toast({ title: "🔔 Sound Test", description: "This is how notification sounds will play" });
+    toast({ title: "粕 Sound Test", description: "This is how notification sounds will play" });
   };
 
   return (
@@ -388,6 +399,74 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
                 </Button>
               </CardContent>
             </Card>
+
+            {/* [STEP 3: Added Events Settings UI] */}
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  Events & Experiences
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">
+                      Host Events at this Venue
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Enable this if you host live music, DJ nights, comedy shows, workshops,
+                      or any ticketed events.
+                    </p>
+                  </div>
+
+                  <Switch
+                    checked={eventEnabled}
+                    onCheckedChange={setEventEnabled}
+                  />
+                </div>
+
+                <Button
+                  variant="gradient"
+                  disabled={eventEnabled === restaurant.is_event_organiser || !restuarant.is_approved}
+                  onClick={async () => {
+                    const { error } = await supabase
+                      .from("restaurants")
+                      .update({
+                        is_event_organiser: eventEnabled,
+                        organiser_type: restaurant.organiser_type??"restaurant",
+                      })
+                      .eq("id", restaurant.id);
+
+                    if (error) {
+                      toast({
+                        title: "Error",
+                        description: error.message,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    setRestaurant({
+                      ...restaurant,
+                      is_event_organiser: eventEnabled,
+                      organiser_type: "restaurant",
+                    });
+
+                    toast({
+                      title: eventEnabled ? "Events Enabled 🎉" : "Events Disabled",
+                      description: eventEnabled
+                        ? "You can now create and manage events from your dashboard."
+                        : "Event features have been turned off.",
+                    });
+                  }}
+                >
+                  Save Event Settings
+                </Button>
+              </CardContent>
+            </Card>
+
           </motion.div>
         </TabsContent>
 
@@ -408,7 +487,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
               <CardContent className="space-y-4">
                 <div className="p-4 rounded-xl bg-gold/10 border border-gold/30">
                   <p className="text-sm text-muted-foreground">
-                    💳 Your payment details are securely encrypted. Settlements are processed weekly to your linked bank account.
+                    諜 Your payment details are securely encrypted. Settlements are processed weekly to your linked bank account.
                   </p>
                 </div>
 
@@ -690,7 +769,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
             <Card className="border-border/50 bg-secondary/30">
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground">
-                  🔒 Your data is encrypted and stored securely. We never share your business information 
+                  白 Your data is encrypted and stored securely. We never share your business information 
                   with third parties without your consent.
                 </p>
               </CardContent>
