@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, SlidersHorizontal } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, Utensils, Calendar} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -8,7 +8,7 @@ import FilterChips from "@/components/FilterChips";
 import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
-
+import ExploreEvents from "@/components/ExploreEvents";
 /* =========================================================
    UI MODEL (ONLY what the UI is allowed to know)
 ========================================================= */
