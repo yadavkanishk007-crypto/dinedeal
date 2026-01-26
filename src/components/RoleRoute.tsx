@@ -19,7 +19,7 @@ export default function RoleRoute({
   }
 
   if (!role || !allowed.includes(role)) {
-    if (role === "restaurant"|| role ==== "event_organiser") return <Navigate to="/restaurant-dashboard" replace />;
+    if (role === "restaurant"|| role === "event_organiser") return <Navigate to="/restaurant-dashboard" replace />;
     if (role === "admin" || role === "super_admin") return <Navigate to="/admin" replace />;
     return <Navigate to="/" replace />;
   }
