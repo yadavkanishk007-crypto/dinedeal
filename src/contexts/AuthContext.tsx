@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
    ROLE DEFINITIONS
 ======================= */
 
-export type UserRole = "customer" | "restaurant" | "admin" | "super_admin | "event_organiser";
+export type UserRole = "customer" | "restaurant" | "admin" | "super_admin | "event_organiser" ; 
 type DbRole = "customer" | "restaurant" | "admin";
 
 /* =======================
