@@ -314,8 +314,8 @@ export type Database = {
           amount_paid: number
           qr_code_hash: string | null
           booking_status: Database["public"]["Enums"]["booking_status"]
-          checked_in_at: string | null
-          created_at: string
+          checked_in_at?: string | null
+          created_at?: string
         }
         Update: {
           id?: string
