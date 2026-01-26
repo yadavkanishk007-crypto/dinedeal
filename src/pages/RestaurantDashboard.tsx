@@ -105,6 +105,7 @@ const RestaurantDashboard = () => {
   >("overview");
   
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const isEventOnlyOrganiser = restaurant?.organiser_type === "event_group";
 
   // Onboarding form state
   const [formData, setFormData] = useState({
@@ -298,6 +299,11 @@ const RestaurantDashboard = () => {
         </div>
       </div>
     );
+  }
+  // Check if this is an event organiser needing onboarding
+  if (needsRestaurantOnboarding && role === "event_organiser") {
+    navigate("/event-organiser-onboarding");
+    return null;
   }
 
   // Driven purely by AuthContext state
@@ -891,6 +897,7 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
 
 
 export default RestaurantDashboard;
+
 
 
 
