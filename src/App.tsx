@@ -79,7 +79,7 @@ const App = () => (
             <Route
               path="/restaurant-dashboard"
               element={
-                <RoleRoute allowed={["restaurant", "event_organiser]}>
+                <RoleRoute allowed={["restaurant", "event_organiser"]}>
                   <RestaurantDashboard />
                 </RoleRoute>
               }
