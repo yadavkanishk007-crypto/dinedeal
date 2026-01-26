@@ -429,7 +429,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
 
                 <Button
                   variant="gradient"
-                  disabled={eventEnabled === restaurant.is_event_organiser || !restuarant.is_approved}
+                  disabled={eventEnabled === restaurant.is_event_organiser || !restaurant.is_approved}
                   onClick={async () => {
                     const { error } = await supabase
                       .from("restaurants")
