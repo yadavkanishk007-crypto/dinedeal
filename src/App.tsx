@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import RestaurantDetail from "./pages/RestaurantDetail";
+import EventDetail from "./pages/EventDetail";
 import Pay from "./pages/Pay";
 import Rewards from "./pages/Rewards";
 import Profile from "./pages/Profile";
@@ -78,11 +79,12 @@ const App = () => (
             <Route
               path="/restaurant-dashboard"
               element={
-                <RoleRoute allowed={["restaurant"]}>
+                <RoleRoute allowed={["restaurant", "event_organiser]}>
                   <RestaurantDashboard />
                 </RoleRoute>
               }
             />
+            <Route path="/event/:id" element={<EventDetail />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin"
