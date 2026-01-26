@@ -321,6 +321,7 @@ const RestaurantDashboard = () => {
             <div className="h-6 w-px bg-border" />
             <span className="text-sm font-medium text-muted-foreground">
               {isEventOnlyOrganiser ? "Event Organiser Dashboard" : "Restaurant Dashboard"}
+            </span>  
           </div>
           <div className="flex items-center gap-4">
             {restaurant && (
@@ -897,6 +898,7 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
 
 
 export default RestaurantDashboard;
+
 
 
 
