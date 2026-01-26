@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, SlidersHorizontal, Utensils, Calendar} from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, Utensils, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -9,8 +9,9 @@ import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
 import ExploreEvents from "@/components/ExploreEvents";
+
 /* =========================================================
-   UI MODEL (ONLY what the UI is allowed to know)
+   UI MODEL
 ========================================================= */
 interface RestaurantUI {
   id: string;
@@ -40,27 +41,28 @@ const filters = [
 const Explore = () => {
   const [restaurants, setRestaurants] = useState<RestaurantUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-
   const [location, setLocation] = useState("Jhansi");
   const [isLocating, setIsLocating] = useState(false);
+  const [viewMode, setViewMode] = useState<"restaurants" | "events">("restaurants");
 
   /* =========================================================
-     FETCH + NORMALIZE (BULLETPROOF)
+     FETCH + NORMALIZE (FILTERED FOR APPROVED & NOT DELETED)
   ========================================================= */
   const fetchRestaurants = useCallback(async () => {
     setIsLoading(true);
 
     try {
+      // Added filter: status must be 'approved' and is_deleted must be false
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*");
+        .select("*")
+        .eq("status", "approved") 
+        .eq("is_deleted", false); 
 
       if (error) throw error;
 
-      // 🚨 CRITICAL: treat Supabase data as unknown
       const rows = Array.isArray(data) ? data : [];
 
       const normalized: RestaurantUI[] = rows.map((row: any) => ({
@@ -91,7 +93,6 @@ const Explore = () => {
   ========================================================= */
   const detectLocation = async () => {
     setIsLocating(true);
-
     if (!("geolocation" in navigator)) {
       setLocation("Jhansi");
       setIsLocating(false);
@@ -106,10 +107,7 @@ const Explore = () => {
           );
           const json = await res.json();
           setLocation(
-            json.address?.city ||
-              json.address?.town ||
-              json.address?.district ||
-              "Jhansi"
+            json.address?.city || json.address?.town || json.address?.district || "Jhansi"
           );
         } catch {
           setLocation("Jhansi");
@@ -141,28 +139,17 @@ const Explore = () => {
     if (!name.includes(q) && !cuisine.includes(q)) return false;
 
     switch (activeFilter) {
-      case "popular":
-        return r.isPopular;
-      case "nearby":
-        return distanceVal < 2;
-      case "high-discount":
-        return r.discount >= 20;
-      case "cafe":
-        return cuisine.includes("cafe");
-      case "italian":
-        return cuisine.includes("italian");
-      case "asian":
-        return cuisine.includes("asian") || cuisine.includes("japanese");
-      case "fine-dining":
-        return cuisine.includes("fine dining");
-      default:
-        return true;
+      case "popular": return r.isPopular;
+      case "nearby": return distanceVal < 2;
+      case "high-discount": return r.discount >= 20;
+      case "cafe": return cuisine.includes("cafe");
+      case "italian": return cuisine.includes("italian");
+      case "asian": return cuisine.includes("asian") || cuisine.includes("japanese");
+      case "fine-dining": return cuisine.includes("fine dining");
+      default: return true;
     }
   });
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
   return (
     <div className="min-h-screen bg-background pb-24">
       <motion.header
@@ -179,17 +166,39 @@ const Explore = () => {
             </div>
           </div>
 
+          {/* View Mode Toggle from Explore(1) */}
+          <div className="flex gap-2 p-1 bg-secondary rounded-lg">
+            <Button
+              variant={viewMode === "restaurants" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("restaurants")}
+              className="flex-1"
+            >
+              <Utensils className="w-4 h-4 mr-2" />
+              Restaurants
+            </Button>
+            <Button
+              variant={viewMode === "events" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("events")}
+              className="flex-1"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Events
+            </Button>
+          </div>
+
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search restaurants, cuisines..."
-                className="pl-10"
+                placeholder={viewMode === "restaurants" ? "Search restaurants, cuisines..." : "Search events, venues..."}
+                className="pl-10 bg-secondary border-transparent"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" className="shrink-0">
               <SlidersHorizontal className="w-4 h-4" />
             </Button>
           </div>
@@ -197,32 +206,48 @@ const Explore = () => {
       </motion.header>
 
       <main className="container py-4 space-y-4">
-        <FilterChips
-          filters={filters}
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
-        />
+        {viewMode === "restaurants" ? (
+          <>
+            <FilterChips
+              filters={filters}
+              activeFilter={activeFilter}
+              onFilterChange={setActiveFilter}
+            />
 
-        <p className="text-sm text-muted-foreground">
-          {isLoading
-            ? "Loading restaurants..."
-            : `${filteredRestaurants.length} restaurants found`}
-        </p>
+            <p className="text-sm text-muted-foreground">
+              {isLoading
+                ? "Loading restaurants..."
+                : `${filteredRestaurants.length} restaurants found`}
+            </p>
 
-        <motion.div className="grid gap-4" layout>
-          <AnimatePresence>
-            {filteredRestaurants.map((r, i) => (
-              <motion.div
-                key={r.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-              >
-                <RestaurantCard {...r} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+            <motion.div className="grid gap-4" layout>
+              <AnimatePresence mode="popLayout">
+                {filteredRestaurants.map((r, i) => (
+                  <motion.div
+                    key={r.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: i * 0.04 }}
+                    layout
+                  >
+                    <RestaurantCard {...r} />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </motion.div>
+
+            {!isLoading && filteredRestaurants.length === 0 && (
+              <div className="text-center py-16">
+                <Search className="w-8 h-8 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-bold text-lg">No restaurants found</h3>
+                <p className="text-muted-foreground text-sm">Try adjusting your filters.</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <ExploreEvents searchQuery={searchQuery} location={location} />
+        )}
       </main>
 
       <BottomNav />
