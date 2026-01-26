@@ -49,6 +49,7 @@ import RestaurantSettings from "@/components/RestaurantSettings";
 import EventManager from "@/components/events/EventManager";
 import EventBookingsList from "@/components/events/EventBookingsList";
 import EventCheckIn from "@/components/events/EventCheckIn";
+type OrganiserType = "restaurant" | "event_group";
 
 interface Restaurant {
   id: string;
@@ -59,7 +60,7 @@ interface Restaurant {
   is_approved: boolean;
   image_url: string | null;
   is_event_organiser?: boolean;
- organiser_type?: "restaurant" | "event_group";
+  organiser_type?: OrganiserType;
   description?: string;
   city?: string;
   phone?: string;
@@ -148,7 +149,11 @@ const RestaurantDashboard = () => {
       if (restaurantError) throw restaurantError;
 
       if (restaurantData) {
-        setRestaurant(restaurantData);
+        setRestaurant({...restaurantData,
+            organiser_type:
+            restaurantData.organiser_type === "event_group"
+            ? "event_group"
+            : "restaurant",});
 
         // Pre-fill form data if we have an existing row (essential for the update flow)
         setFormData(prev => ({
@@ -245,7 +250,11 @@ const RestaurantDashboard = () => {
 
       if (error) throw error;
 
-      setRestaurant(data);
+      setRestaurant({...data,
+                     organiser_type:
+                       data.organiser_type==="event_group"
+                       ?"event_group"
+                       : "restaurant" });
       
       // Refresh auth context to update needsRestaurantOnboarding state
       await refresh();
@@ -898,6 +907,7 @@ const TransactionsTab = ({ restaurantId }: { restaurantId?: string }) => {
 
 
 export default RestaurantDashboard;
+
 
 
 
