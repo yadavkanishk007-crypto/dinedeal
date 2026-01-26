@@ -29,6 +29,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsConditions from "./pages/TermsConditions";
 import RestaurantPrivacyPolicy from "./pages/RestaurantPrivacyPolicy"; 
 import RestaurantTermsCondition from "./pages/RestaurantTermsCondition";
+import EventOrganiserOnboarding from "./pages/EventOrganiserOnboarding";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
@@ -85,6 +86,14 @@ const App = () => (
               }
             />
             <Route path="/event/:id" element={<EventDetail />} />
+             <Route
+              path="/event-organiser-onboarding"
+              element={
+                <RoleRoute allowed={["event_organiser"]}>
+                  <EventOrganiserOnboarding />
+                </RoleRoute>
+              }
+
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin"
