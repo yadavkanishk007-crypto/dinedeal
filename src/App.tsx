@@ -93,6 +93,7 @@ const App = () => (
                   <EventOrganiserOnboarding />
                 </RoleRoute>
               }
+               />
 
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
