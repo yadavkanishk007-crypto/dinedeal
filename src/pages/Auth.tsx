@@ -1,4 +1,4 @@
-console.log("AUTH PAGE VERSION: 2026-01-11");
+console.log("AUTH PAGE VERSION: 2026-01-28");
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +10,7 @@ import {
   MapPin,
   User,
   Store,
+  Sparkles,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -20,17 +21,15 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
+// Added event_organiser to the role type
 type AuthMode = "signin" | "signup" | "forgot-password";
-type UserRole = "customer" | "restaurant" | "admin";
+type UserRole = "customer" | "restaurant" | "admin" | "event_organiser";
 
 const Auth = () => {
   const { signUp, signIn, user, role, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  /* =========================
-     LOCAL STATE (MOVED UP)
-     ========================= */
   const [mode, setMode] = useState<AuthMode>("signin");
   const [selectedRole, setSelectedRole] = useState<UserRole>("customer");
   const [email, setEmail] = useState("");
@@ -43,9 +42,6 @@ const Auth = () => {
   const [location, setLocation] = useState("Jhansi");
   const [isLocating, setIsLocating] = useState(false);
 
-  /* =========================
-     LOCATION (MOVED UP)
-     ========================= */
   useEffect(() => {
     const detect = async () => {
       setIsLocating(true);
@@ -64,124 +60,73 @@ const Auth = () => {
             );
             setIsLocating(false);
           },
-          () => {
-            setIsLocating(false);
-          }
+          () => setIsLocating(false)
         );
       } catch {
         setIsLocating(false);
       }
     };
-
     detect();
   }, []);
 
   /* =========================
      🔐 IMMEDIATE REDIRECT GUARD
-     (MOVED AFTER ALL HOOKS)
      ========================= */
-  // FIX: Added !isLoading to prevent premature redirect during signup process
   if (!loading && !isLoading && user && role) {
     if (role === "admin") {
       return <Navigate to="/admin" replace />;
     }
-    if (role === "restaurant") {
+    // Both restaurant and event_organiser go to the dashboard; 
+    // The dashboard handles their specific onboarding redirects.
+    if (role === "restaurant" || role === "event_organiser") {
       return <Navigate to="/restaurant-dashboard" replace />;
     }
     return <Navigate to="/" replace />;
   }
 
-  /* =========================
-     PASSWORD RESET
-     ========================= */
   const handleResetEmail = async () => {
     if (!email) {
-      toast({
-        title: "Email required",
-        description: "Please enter your email",
-        variant: "destructive",
-      });
+      toast({ title: "Email required", description: "Please enter your email", variant: "destructive" });
       return;
     }
-
     setIsLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-
     setIsLoading(false);
-
     if (error) {
-      toast({
-        title: "Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
       return;
     }
-
-    toast({
-      title: "Email sent",
-      description: "Check your inbox for reset link",
-    });
-
+    toast({ title: "Email sent", description: "Check your inbox for reset link" });
     setMode("signin");
   };
 
-  /* =========================
-     SUBMIT HANDLER
-     ========================= */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
     try {
       if (mode === "signup") {
-        const { error } = await signUp(
-          email,
-          password,
-          fullName,
-          selectedRole,
-          phone
-        );
-
+        const { error } = await signUp(email, password, fullName, selectedRole, phone);
         if (error) throw error;
-
-        toast({
-          title: "Account created",
-          description: "Signing you in…",
-        });
+        toast({ title: "Account created", description: "Signing you in…" });
       }
-
       if (mode === "signin") {
         const { error } = await signIn(email, password);
         if (error) throw error;
-
-        toast({
-          title: "Welcome",
-          description: "Signing you in…",
-        });
+        toast({ title: "Welcome", description: "Signing you in…" });
       }
     } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message || "Something went wrong",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: err.message || "Something went wrong", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  /* =========================
-     UI
-     ========================= */
   return (
     <div className="min-h-screen flex flex-col">
       <header className="container py-6 flex items-center justify-between">
-        <button onClick={() => navigate("/")}>
-          <ArrowLeft />
-        </button>
+        <button onClick={() => navigate("/")}><ArrowLeft /></button>
         <Logo />
         <div />
       </header>
@@ -189,46 +134,18 @@ const Auth = () => {
       <main className="container max-w-md mx-auto py-8 flex-1">
         <AnimatePresence mode="wait">
           {mode === "forgot-password" ? (
-            <motion.div
-              key="forgot"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-6"
-            >
+            <motion.div key="forgot" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
               <h1 className="text-3xl font-bold text-center">Forgot Password</h1>
-
-              <Input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-
-              <Button
-                className="w-full"
-                onClick={handleResetEmail}
-                disabled={isLoading}
-              >
+              <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Button className="w-full" onClick={handleResetEmail} disabled={isLoading}>
                 {isLoading ? "Sending…" : "Send reset link"}
               </Button>
-
-              <button
-                className="text-sm text-primary underline block mx-auto"
-                onClick={() => setMode("signin")}
-              >
+              <button className="text-sm text-primary underline block mx-auto" onClick={() => setMode("signin")}>
                 Back to sign in
               </button>
             </motion.div>
           ) : (
-            <motion.form
-              key="auth"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onSubmit={handleSubmit}
-              className="space-y-5"
-            >
+            <motion.form key="auth" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onSubmit={handleSubmit} className="space-y-5">
               <h1 className="text-3xl font-bold text-center">
                 {mode === "signin" ? "Welcome Back" : "Create Account"}
               </h1>
@@ -240,123 +157,78 @@ const Auth = () => {
 
               {mode === "signup" && (
                 <>
-                  {/* Role Selector */}
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground text-center">I want to sign up as:</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2"> {/* Responsive 3-column grid */}
                       <button
                         type="button"
                         onClick={() => setSelectedRole("customer")}
                         className={cn(
-                          "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
-                          selectedRole === "customer"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border hover:border-primary/50"
+                          "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                          selectedRole === "customer" ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"
                         )}
                       >
-                        <User className="w-6 h-6" />
-                        <span className="font-medium">Customer</span>
-                        <span className="text-xs text-muted-foreground">Discover & dine</span>
+                        <User className="w-5 h-5" />
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Customer</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedRole("restaurant")}
                         className={cn(
-                          "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
-                          selectedRole === "restaurant"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border hover:border-primary/50"
+                          "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                          selectedRole === "restaurant" ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"
                         )}
                       >
-                        <Store className="w-6 h-6" />
-                        <span className="font-medium">Restaurant</span>
-                        <span className="text-xs text-muted-foreground">List your business</span>
+                        <Store className="w-5 h-5" />
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Dine-in</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRole("event_organiser")}
+                        className={cn(
+                          "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all",
+                          selectedRole === "event_organiser" ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <Sparkles className="w-5 h-5" />
+                        <span className="text-[10px] font-bold uppercase tracking-tight">Events</span>
                       </button>
                     </div>
                   </div>
 
-                  <Input
-                    placeholder="Full name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                  <Input
-                    placeholder="Phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
+                  <Input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                  <Input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
                 </>
               )}
 
-              <Input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
               <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
+                <Input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? <EyeOff /> : <Eye />}
                 </button>
               </div>
 
               {mode === "signin" && (
-                <button
-                  type="button"
-                  onClick={() => setMode("forgot-password")}
-                  className="text-sm text-primary underline text-right block"
-                >
+                <button type="button" onClick={() => setMode("forgot-password")} className="text-sm text-primary underline text-right block">
                   Forgot password?
                 </button>
               )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "Please wait…" : mode === "signin" ? "Sign In" : "Sign Up"}
               </Button>
 
               <p className="text-center text-sm">
                 {mode === "signin" ? (
-                  <>
-                    No account?{" "}
-                    <button
-                      className="text-primary underline"
-                      onClick={() => setMode("signup")}
-                    >
-                      Sign up
-                    </button>
-                  </>
+                  <>No account? <button className="text-primary underline" onClick={() => setMode("signup")}>Sign up</button></>
                 ) : (
-                  <>
-                    Already have an account?{" "}
-                    <button
-                      className="text-primary underline"
-                      onClick={() => setMode("signin")}
-                    >
-                      Sign in
-                    </button>
-                  </>
+                  <>Already have an account? <button className="text-primary underline" onClick={() => setMode("signin")}>Sign in</button></>
                 )}
               </p>
 
-              <Link
-                to="/admin/login"
-                className="text-xs text-muted-foreground flex justify-center gap-1"
-              >
+              <Link to="/admin/login" className="text-xs text-muted-foreground flex justify-center gap-1">
                 <Shield className="w-3 h-3" /> Admin Login
               </Link>
             </motion.form>
