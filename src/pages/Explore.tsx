@@ -59,8 +59,8 @@ const Explore = () => {
       const { data, error } = await (supabase as any)
         .from("restaurants")
         .select("*")
-        .eq("status", "approved") 
-        .eq("is_deleted", false); 
+        .eq("is_approved", true) 
+        .eq("is_active", true); 
 
       if (error) throw error;
 
