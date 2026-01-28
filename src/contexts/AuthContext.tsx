@@ -13,8 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
    ROLE DEFINITIONS
 ======================= */
 
-export type UserRole = "customer" | "restaurant" | "admin" | "super_admin" | "event_organiser" ; 
-type DbRole = "customer" | "restaurant" | "admin" | "event_organiser" ;
+export type UserRole = "customer" | "restaurant" | "admin" | "super_admin" | "event_organiser"; 
+type DbRole = "customer" | "restaurant" | "admin" | "event_organiser";
 
 /* =======================
    CONTEXT SHAPE
@@ -72,8 +72,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   ======================= */
 
   const bootstrapUser = useCallback(async (session: Session) => {
-    
-
     const user = session.user;
     const userId = user.id;
     const meta = user.user_metadata || {};
@@ -113,7 +111,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const effectiveRole =
       roleRow?.role ?? (signupRole ? toDbRole(signupRole) : "customer");
 
-    /* RESTAURANT */
+    /* RESTAURANT BOOTSTRAP */
+    // Note: event_organiser row is NOT created here. 
+    // It is created manually in EventOrganiserOnboarding.tsx.
     if (effectiveRole === "restaurant") {
       const { data: restaurantRow } = await supabase
         .from("restaurants")
@@ -144,16 +144,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   ======================= */
 
   const loadUserData = useCallback(async () => {
-    
-
     setLoading(true);
 
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
-      
 
       if (!session) {
         setUser(null);
@@ -177,17 +173,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
       ]);
 
-     
-
       const userRole = (roleRow?.role as UserRole) ?? "customer";
       setProfile(profileRow ?? null);
       setRole(userRole);
 
-      /* RESTAURANT + ONBOARDING CHECK */
+      /* BUSINESS ENTITY + ONBOARDING CHECK */
       let restaurantRow = null;
       let onboarding = false;
 
-      if (userRole === "restaurant") {
+      // Both Restaurant and Event Organiser roles look for a row in the 'restaurants' table.
+      if (userRole === "restaurant" || userRole === "event_organiser") {
         const { data } = await supabase
           .from("restaurants")
           .select("*")
@@ -196,23 +191,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         restaurantRow = data;
 
-       
-        if (restaurantRow) {
+        if (!restaurantRow) {
+          // If no row exists, we MUST onboard.
+          onboarding = true;
+        } else if (userRole === "restaurant") {
+          // Additional verification for Dining restaurants (checking payment details).
           const bank = clean(restaurantRow.bank_account_number);
           const upi = clean(restaurantRow.upi_id);
           const holder = clean(restaurantRow.bank_account_holder);
 
-          const hasBank = bank.length > 0;
-          const hasUpi = upi.length > 0;
-          const hasHolder = holder.length > 0;
-
-          if ((!hasBank && !hasUpi) || !hasHolder) {
+          if ((!bank && !upi) || !holder) {
             onboarding = true;
           }
         }
+        // Event organisers are considered "onboarded" as soon as their restaurant row is created.
       }
-
-      
 
       setRestaurant(restaurantRow);
       setNeedsRestaurantOnboarding(onboarding);
@@ -294,18 +287,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setSession(session); // Keep session logic consistent with original
-    setUser(null);
     setSession(null);
     setRole(null);
     setProfile(null);
     setRestaurant(null);
     setNeedsRestaurantOnboarding(false);
   };
-
-  /* =======================
-      PROVIDER
-  ======================= */
 
   return (
     <AuthContext.Provider
