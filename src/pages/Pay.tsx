@@ -246,7 +246,7 @@ export default function Pay() {
               // We pass this data so the Backend Webhook knows what to apply
               couponCode: appliedCoupon?.code, 
               offerId: activeOffer?.id, // Optional: Pass offer ID if backend tracks it
-              frontendRef: transactionId
+              frontendRef: transactionId,
               // 🔹 ADD THESE (EVENT SUPPORT)
               type: paymentType,          // "event"
               eventId: eventId || null,
