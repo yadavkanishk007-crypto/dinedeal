@@ -133,14 +133,13 @@ export default function EventDetail() {
       // Decrement remaining seats
       const { error: updateError } = await supabase
         .from('events')
-        .update({ remaining_seats: supabase.rpc("gratest",{
-                   a: supabase.literal("remaining_seats -"+seats),
-                   b: 0 })
-        })
-        .eq('id', event.id);
+        .update({ remaining_seats: event.remaining_seats - seats })
+        .eq('id', event.id)
         .gte('remaining_seats', seats);
 
-      if (updateError) { throw new Error("Seats No Longer Available");
+      if (updateError) { 
+        throw new Error("Seats No Longer Available");
+      }
 
       toast({
         title: "Booking confirmed!",
@@ -194,8 +193,7 @@ export default function EventDetail() {
             src={event.cover_image}
             alt={event.title}
             className="w-full h-full object-cover"
-          />
-        ) : (
+          ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Calendar className="w-16 h-16 text-muted-foreground/50" />
           </div>
