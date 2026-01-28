@@ -13,7 +13,8 @@ import {
   ChevronRight,
   TrendingUp,
   Shield,
-  Receipt
+  Receipt,
+  Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +62,7 @@ const Profile = () => {
 
   const menuItems = [
     { icon: Receipt, label: "Transaction History", value: `${stats.totalTransactions} payments`, path: "/transactions" },
+    { icon: Calendar, label: "My Bookings", value: "Reservations & Events", path: "/my-reservations" },
     { icon: Heart, label: "Favorite Restaurants", value: `${stats.favoriteRestaurants} saved`, path: "/favorites" },
     { icon: CreditCard, label: "Payment Methods", value: "UPI linked", path: "/payments" },
     { icon: Headphones, label: "Customer Support", value: "Get help", path: "/support" },
