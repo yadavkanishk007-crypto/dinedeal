@@ -384,7 +384,7 @@ export default function Pay() {
             <p className="text-xs text-muted-foreground">
               {restaurant.cuisine} 
               {/* ✅ Fix: Only show discount if offer exists */}
-              {activeoffer && ( <span className="text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded ml-1">
+              {activeOffer && ( <span className="text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded ml-1">
                   • {activeOffer.discount_percent}% Off
               </span>
              )}                  
