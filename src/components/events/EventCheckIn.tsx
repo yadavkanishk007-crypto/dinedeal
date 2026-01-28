@@ -1,11 +1,19 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import { motion, AnimatePresence } from "framer-motion";
-import { QrCode, CheckCircle, XCircle, Users, Camera, StopCircle } from "lucide-react";
+import {
+  QrCode,
+  Camera,
+  StopCircle,
+  CheckCircle,
+  XCircle,
+  Users,
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Html5Qrcode } from "html5-qrcode";
 
 interface CheckInResult {
   success: boolean;
@@ -14,270 +22,283 @@ interface CheckInResult {
   eventTitle?: string;
 }
 
-interface EventCheckInProps {
+interface Props {
   restaurantId: string;
 }
 
-export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
+const SCANNER_ID = "checkin-qr-reader";
+
+export default function EventCheckIn({ restaurantId }: Props) {
   const { toast } = useToast();
-  const [isScanning, setIsScanning] = useState(false);
-  const [manualCode, setManualCode] = useState("");
-  const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<CheckInResult | null>(null);
-  
-  // Persistence ref to keep the library instance alive across renders
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const isMounted = useRef(false);
 
-  // Initialize scanner instance and inject professional square UI styles on mount
+  const [scannerActive, setScannerActive] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [manualCode, setManualCode] = useState("");
+  const [result, setResult] = useState<CheckInResult | null>(null);
+
+  /* -------------------------------------------------------
+     Create scanner ONCE (StrictMode safe)
+  -------------------------------------------------------- */
   useEffect(() => {
-    scannerRef.current = new Html5Qrcode("checkin-qr-reader");
+    if (scannerRef.current) return;
 
-    const style = document.createElement('style');
-    style.innerHTML = `
-      #checkin-qr-reader video {
-        object-fit: cover !important;
-        border-radius: 12px;
-      }
-      #checkin-qr-reader {
-        border: none !important;
-        position: relative;
-      }
-    `;
-    document.head.appendChild(style);
-    
+    scannerRef.current = new Html5Qrcode(SCANNER_ID);
+    isMounted.current = true;
+
     return () => {
-      // Safe cleanup during component unmount
-      stopScanner();
-      if (document.head.contains(style)) {
-        document.head.removeChild(style);
-      }
+      isMounted.current = false;
+      scannerRef.current?.stop().catch(() => {});
+      scannerRef.current = null;
     };
   }, []);
 
+  /* -------------------------------------------------------
+     Start scanner (Android + iOS safe)
+  -------------------------------------------------------- */
   const startScanner = async () => {
+    if (!scannerRef.current || scannerActive) return;
+
     try {
-      if (!scannerRef.current) return;
-
-      // PRODUCTION GUARD: Check state using numeric values to bypass TS build errors
-      // 1 = IDLE/NOT_STARTED. If state is higher, the camera is busy
-      const state = scannerRef.current.getState();
-      if (state > 1) {
-        console.warn("Scanner is already active or starting.");
-        return;
-      }
-
-      setIsScanning(true);
       setResult(null);
+      setScannerActive(true);
 
       await scannerRef.current.start(
         { facingMode: "environment" },
         {
-          fps: 15, // Higher FPS for responsive scanning
-          qrbox: { width: 250, height: 250 }, // Strict square area
-          aspectRatio: 1.0, // Force 1:1 camera aspect
+          fps: 12,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1,
         },
         (decodedText) => {
+          stopScanner();
           handleCheckIn(decodedText);
-          stopScanner(); // Release camera hardware immediately on success
-        },
-        () => {} // Mute frame errors for performance
+        }
       );
-    } catch (error: any) {
-      console.error("Scanner Error:", error);
+    } catch (err) {
+      setScannerActive(false);
       toast({
         title: "Camera Error",
-        description: "Could not access camera. Ensure you are on HTTPS and have granted permissions.",
+        description:
+          "Camera access failed. Use HTTPS and allow permissions.",
         variant: "destructive",
       });
-      setIsScanning(false);
     }
   };
 
+  /* -------------------------------------------------------
+     Stop scanner (NO clear() — critical)
+  -------------------------------------------------------- */
   const stopScanner = async () => {
-    if (scannerRef.current) {
-      try {
-        // Only stop if the scanner is currently in state 2 (SCANNING)
-        if (scannerRef.current.getState() === 2) {
-          await scannerRef.current.stop();
-        }
-      } catch (e) {
-        console.warn("Scanner stop suppressed:", e);
+    if (!scannerRef.current || !scannerActive) return;
+
+    try {
+      await scannerRef.current.stop();
+    } catch (_) {}
+    finally {
+      if (isMounted.current) {
+        setScannerActive(false);
       }
     }
-    setIsScanning(false);
   };
 
+  /* -------------------------------------------------------
+     Check-in logic (atomic + safe)
+  -------------------------------------------------------- */
   const handleCheckIn = async (qrHash: string) => {
     if (processing) return;
     setProcessing(true);
 
     try {
-      const { data: booking, error: fetchError } = await supabase
-        .from('event_bookings')
-        .select(`
-          *,
-          events ( id, title, created_by_id )
-        `)
-        .eq('qr_code_hash', qrHash)
+      const { data, error } = await supabase
+        .from("event_bookings")
+        .select("*, events(id,title,created_by_id)")
+        .eq("qr_code_hash", qrHash)
         .single();
 
-      if (fetchError || !booking) {
-        setResult({ success: false, message: "Booking not found." });
-        playSound(false);
+      if (error || !data) {
+        fail("Booking not found");
         return;
       }
 
-      // Security Check: Ensure booking belongs to this restaurant's event
-      if (booking.events?.created_by_id !== restaurantId) {
-        setResult({ success: false, message: "Invalid venue." });
-        playSound(false);
+      if (data.events?.created_by_id !== restaurantId) {
+        fail("Invalid venue");
         return;
       }
 
-      if (booking.checked_in_at) {
-        setResult({ 
-          success: false, 
-          message: "Already checked in.",
-          eventTitle: booking.events?.title,
-          seatsCount: booking.seats_booked 
-        });
-        playSound(false);
+      if (data.checked_in_at) {
+        fail("Already checked in", data);
         return;
       }
 
-      // Atomic update to prevent double check-ins
       const { error: updateError } = await supabase
-        .from('event_bookings')
+        .from("event_bookings")
         .update({
-          booking_status: 'attended',
+          booking_status: "attended",
           checked_in_at: new Date().toISOString(),
         })
-        .eq('id', booking.id)
-        .is('checked_in_at', null);
+        .eq("id", data.id)
+        .is("checked_in_at", null);
 
       if (updateError) throw updateError;
 
-      setResult({
-        success: true,
-        message: "Check-in successful!",
-        seatsCount: booking.seats_booked,
-        eventTitle: booking.events?.title,
-      });
-      playSound(true);
-
-    } catch (error: any) {
-      setResult({ success: false, message: "Database error. Try again." });
-      playSound(false);
+      success("Check-in successful!", data);
+    } catch {
+      fail("Database error");
     } finally {
       setProcessing(false);
     }
   };
 
-  const playSound = (success: boolean) => {
+  /* -------------------------------------------------------
+     Helpers
+  -------------------------------------------------------- */
+  const success = (msg: string, data: any) => {
+    beep(true);
+    setResult({
+      success: true,
+      message: msg,
+      seatsCount: data.seats_booked,
+      eventTitle: data.events?.title,
+    });
+  };
+
+  const fail = (msg: string, data?: any) => {
+    beep(false);
+    setResult({
+      success: false,
+      message: msg,
+      seatsCount: data?.seats_booked,
+      eventTitle: data?.events?.title,
+    });
+  };
+
+  const beep = (ok: boolean) => {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      oscillator.frequency.setValueAtTime(success ? 800 : 300, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.3);
-    } catch (e) { /* Browser audio restrictions apply */ }
+      const ctx = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.frequency.value = ok ? 800 : 300;
+      gain.gain.value = 0.1;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.25);
+    } catch {}
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (manualCode.trim()) {
-      handleCheckIn(manualCode.trim());
-      setManualCode("");
-    }
+  const scanNext = () => {
+    setResult(null);
+    setTimeout(startScanner, 0);
   };
 
+  /* -------------------------------------------------------
+     UI
+  -------------------------------------------------------- */
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-xl font-bold mb-2">Event Check-In</h2>
-        <p className="text-muted-foreground text-sm">Scan QR codes to verify attendees</p>
+        <h2 className="text-xl font-bold">Event Check-In</h2>
+        <p className="text-muted-foreground text-sm">
+          Scan QR codes to verify attendees
+        </p>
       </div>
 
+      {/* Scanner container NEVER unmounts */}
       <div className="max-w-sm mx-auto relative">
         <div
-          ref={containerRef}
-          id="checkin-qr-reader"
-          className="aspect-square rounded-xl overflow-hidden bg-muted border-2 border-dashed border-border flex items-center justify-center relative z-0"
-        >
-          {!isScanning && !result && (
-            <div className="text-center p-4">
-              <QrCode className="w-12 h-12 text-muted-foreground mx-auto mb-2 opacity-20" />
-              <p className="text-xs text-muted-foreground">Camera Preview Area</p>
-            </div>
-          )}
-        </div>
+          id={SCANNER_ID}
+          className={`aspect-square rounded-xl bg-muted border overflow-hidden transition-opacity
+            ${scannerActive ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        />
 
-        {/* Professional Square Frame Overlay */}
-        {isScanning && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-            <div className="w-[250px] h-[250px] border-2 border-primary rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]" />
+        {!scannerActive && !result && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <QrCode className="w-12 h-12 text-muted-foreground opacity-20" />
           </div>
         )}
 
-        <div className="flex gap-3 mt-4">
-          {!isScanning ? (
-            <Button onClick={startScanner} className="flex-1" variant="gradient">
+        <div className="mt-4 flex gap-3">
+          {!scannerActive ? (
+            <Button className="flex-1" onClick={startScanner}>
               <Camera className="w-4 h-4 mr-2" /> Start Scanner
             </Button>
           ) : (
-            <Button onClick={stopScanner} variant="destructive" className="flex-1">
-              <StopCircle className="w-4 h-4 mr-2" /> Stop Scanner
+            <Button
+              className="flex-1"
+              variant="destructive"
+              onClick={stopScanner}
+            >
+              <StopCircle className="w-4 h-4 mr-2" /> Stop
             </Button>
           )}
         </div>
       </div>
 
-      <div className="max-w-sm mx-auto">
-        <form onSubmit={handleManualSubmit} className="flex gap-2">
-          <Input
-            placeholder="Manual Booking Code"
-            value={manualCode}
-            onChange={(e) => setManualCode(e.target.value)}
-            className="bg-background"
-          />
-          <Button type="submit" disabled={processing || !manualCode.trim()}>Check In</Button>
-        </form>
-      </div>
+      {/* Manual check-in */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (manualCode.trim()) handleCheckIn(manualCode.trim());
+          setManualCode("");
+        }}
+        className="max-w-sm mx-auto flex gap-2"
+      >
+        <Input
+          value={manualCode}
+          onChange={(e) => setManualCode(e.target.value)}
+          placeholder="Manual booking code"
+        />
+        <Button type="submit" disabled={processing}>
+          Check
+        </Button>
+      </form>
 
-      <AnimatePresence mode="wait">
+      {/* Result */}
+      <AnimatePresence>
         {result && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-            className={`max-w-sm mx-auto p-6 rounded-xl text-center border ${
-              result.success ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"
-            }`}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className={`max-w-sm mx-auto p-6 rounded-xl text-center border
+              ${
+                result.success
+                  ? "bg-green-500/10 border-green-500/30"
+                  : "bg-red-500/10 border-red-500/30"
+              }`}
           >
-            {result.success ? <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" /> : <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />}
-            <p className={`text-lg font-bold ${result.success ? "text-green-500" : "text-red-500"}`}>{result.message}</p>
-            {result.eventTitle && <p className="text-muted-foreground mt-1 font-medium">{result.eventTitle}</p>}
+            {result.success ? (
+              <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-4" />
+            ) : (
+              <XCircle className="w-14 h-14 text-red-500 mx-auto mb-4" />
+            )}
+
+            <p className="text-lg font-bold">{result.message}</p>
+            {result.eventTitle && (
+              <p className="text-muted-foreground">{result.eventTitle}</p>
+            )}
+
             {result.seatsCount && (
-              <div className="flex items-center justify-center gap-2 mt-2 text-muted-foreground text-sm">
-                <Users className="w-4 h-4" /> <span>{result.seatsCount} seats</span>
+              <div className="flex justify-center gap-2 text-sm mt-2">
+                <Users className="w-4 h-4" /> {result.seatsCount} seats
               </div>
             )}
-            <Button variant="outline" className="mt-6 w-full" onClick={() => { setResult(null); startScanner(); }}>Scan Next</Button>
+
+            <Button className="w-full mt-4" onClick={scanNext}>
+              Scan Next
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {processing && (
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            Validating...
-          </div>
-        </div>
-      )}
     </div>
   );
 }
