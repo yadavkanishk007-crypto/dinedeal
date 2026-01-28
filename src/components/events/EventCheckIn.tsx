@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { QrCode, CheckCircle, XCircle, Users, Camera, StopCircle, Ticket } from "lucide-react";
+import { QrCode, CheckCircle, XCircle, Users, Camera, StopCircle, Ticket, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge"; // Fixed: Added missing import
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Html5Qrcode } from "html5-qrcode";
@@ -16,6 +16,14 @@ interface CheckInResult {
   tierName?: string;
 }
 
+interface HistoryItem {
+  id: string;
+  eventTitle: string;
+  tierName: string;
+  seatsCount: number;
+  timestamp: string;
+}
+
 interface EventCheckInProps {
   restaurantId: string;
 }
@@ -26,6 +34,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const [manualCode, setManualCode] = useState("");
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<CheckInResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
@@ -66,7 +75,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
     setResult(null);
 
     try {
-      // Fixed: Explicitly casting 'as any' to bypass the outdated local TypeScript types
+      // Explicitly fetching seats_booked and ticket_tier_name
       const { data: booking, error: fetchError } = await supabase
         .from('event_bookings')
         .select(`
@@ -75,28 +84,18 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
           booking_status,
           checked_in_at,
           ticket_tier_name,
-          event_id,
-          events (
-            id,
-            title,
-            created_by_id
-          )
+          events ( title, created_by_id )
         `)
         .eq('qr_code_hash', qrHash)
         .maybeSingle() as any;
 
-      if (fetchError || !booking) {
-        throw new Error("Invalid QR code or booking not found.");
-      }
-
-      if (booking.events?.created_by_id !== restaurantId) {
-        throw new Error("This ticket is for a different venue.");
-      }
+      if (fetchError || !booking) throw new Error("Invalid QR code.");
+      if (booking.events?.created_by_id !== restaurantId) throw new Error("Wrong venue.");
 
       if (booking.checked_in_at) {
         setResult({
           success: false,
-          message: `Already checked in at ${new Date(booking.checked_in_at).toLocaleTimeString()}`,
+          message: "Already Checked In",
           seatsCount: booking.seats_booked,
           eventTitle: booking.events?.title,
           tierName: booking.ticket_tier_name
@@ -113,17 +112,28 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         })
         .eq('id', booking.id);
 
-      if (updateError) throw new Error("Database update failed.");
+      if (updateError) throw new Error("Update failed.");
 
-      setResult({
+      const successResult = {
         success: true,
         message: "Check-in successful!",
         seatsCount: booking.seats_booked,
         eventTitle: booking.events?.title,
         tierName: booking.ticket_tier_name || "Standard Pass"
-      });
-      playSound(true);
+      };
 
+      setResult(successResult);
+      
+      // Add to history (keep last 5)
+      setHistory(prev => [{
+        id: booking.id,
+        eventTitle: booking.events?.title,
+        tierName: successResult.tierName,
+        seatsCount: booking.seats_booked,
+        timestamp: new Date().toLocaleTimeString()
+      }, ...prev].slice(0, 5));
+
+      playSound(true);
     } catch (error: any) {
       setResult({ success: false, message: error.message });
       playSound(false);
@@ -143,78 +153,74 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
       osc.start();
       osc.stop(audioCtx.currentTime + 0.2);
-    } catch (e) { console.error("Audio failed", e); }
-  };
-
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (manualCode.trim()) {
-      handleCheckIn(manualCode.trim());
-      setManualCode("");
-    }
+    } catch (e) { console.error(e); }
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-6 p-4">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold">Event Entrance</h2>
-        <p className="text-muted-foreground text-sm">Scan QR to verify attendee</p>
-      </div>
+    <div className="max-w-md mx-auto space-y-6 pb-20">
+      <div id="checkin-qr-reader" className="aspect-square rounded-2xl overflow-hidden bg-black border-4 border-transparent shadow-xl" />
 
-      <div id="checkin-qr-reader" className={`aspect-square rounded-2xl overflow-hidden bg-black border-4 ${isScanning ? 'border-primary' : 'border-transparent'} shadow-xl`} />
+      {!isScanning && !result && (
+        <Button onClick={startScanner} className="w-full h-14 text-lg" variant="gradient">
+          <Camera className="mr-2 h-5 w-5" /> Start Scanner
+        </Button>
+      )}
 
-      <div className="flex gap-2">
-        {!isScanning ? (
-          <Button onClick={startScanner} className="flex-1 h-12" variant="gradient">
-            <Camera className="mr-2 w-4 h-4" /> Start Scanner
-          </Button>
+      <AnimatePresence>
+        {result && (
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className={`p-6 rounded-2xl border-2 shadow-lg ${result.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+            {result.success ? <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" /> : <XCircle className="w-12 h-12 text-red-600 mx-auto mb-2" />}
+            <h3 className={`text-xl font-bold mb-4 ${result.success ? "text-green-700" : "text-red-700"}`}>{result.message}</h3>
+            
+            <div className="bg-white/60 p-4 rounded-xl space-y-3 text-left">
+              <p className="font-bold text-gray-800 border-b pb-2">{result.eventTitle}</p>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-600 flex items-center gap-1"><Ticket className="h-4 w-4"/> Pass:</span>
+                <Badge className="bg-primary uppercase font-bold">{result.tierName}</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-600 flex items-center gap-1"><Users className="h-4 w-4"/> Seats:</span>
+                <span className="text-lg font-black text-gray-900">{result.seatsCount} Person(s)</span>
+              </div>
+            </div>
+
+            <Button className="mt-6 w-full h-12" onClick={() => { setResult(null); startScanner(); }}>Scan Next</Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* HISTORY TAB */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-muted-foreground px-1">
+          <History className="h-4 w-4" />
+          <h4 className="text-sm font-bold uppercase tracking-wider">Recent Check-ins</h4>
+        </div>
+        {history.length === 0 ? (
+          <div className="text-center py-6 border-2 border-dashed rounded-2xl text-muted-foreground text-xs">No scans in this session</div>
         ) : (
-          <Button onClick={stopScanner} variant="destructive" className="flex-1 h-12">
-            <StopCircle className="mr-2 w-4 h-4" /> Stop Scanner
-          </Button>
+          <div className="space-y-2">
+            {history.map((item) => (
+              <div key={item.id} className="flex items-center justify-between p-3 bg-card border rounded-xl shadow-sm">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-gray-500">{item.timestamp}</span>
+                  <span className="font-bold text-sm truncate max-w-[150px]">{item.eventTitle}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] h-5">{item.tierName}</Badge>
+                  <div className="bg-secondary px-2 py-1 rounded text-xs font-bold">x{item.seatsCount}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
       <div className="pt-4 border-t">
-        <form onSubmit={handleManualSubmit} className="flex gap-2">
-          <Input
-            placeholder="Manual QR Code Hash"
-            value={manualCode}
-            onChange={(e) => setManualCode(e.target.value)}
-          />
-          <Button type="submit" variant="secondary" disabled={processing}>Verify</Button>
+        <form onSubmit={(e) => { e.preventDefault(); handleCheckIn(manualCode); setManualCode(""); }} className="flex gap-2">
+          <Input placeholder="Enter hash manually" value={manualCode} onChange={(e) => setManualCode(e.target.value)} />
+          <Button type="submit" variant="secondary">Verify</Button>
         </form>
       </div>
-
-      <AnimatePresence>
-        {result && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={`p-6 rounded-2xl border-2 text-center shadow-lg ${result.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}
-          >
-            {result.success ? <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-2" /> : <XCircle className="w-16 h-16 text-red-600 mx-auto mb-2" />}
-            
-            <h3 className={`text-xl font-bold ${result.success ? "text-green-700" : "text-red-700"}`}>{result.message}</h3>
-            
-            <div className="mt-4 p-4 bg-white/50 rounded-lg space-y-2 text-left">
-              <p className="font-bold text-gray-800">{result.eventTitle}</p>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center text-sm font-medium text-gray-600"><Ticket className="w-4 h-4 mr-1"/> Pass:</span>
-                <Badge variant="outline" className="border-primary text-primary font-bold uppercase">{result.tierName}</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center text-sm font-medium text-gray-600"><Users className="w-4 h-4 mr-1"/> Seats:</span>
-                <span className="font-bold">{result.seatsCount}</span>
-              </div>
-            </div>
-
-            <Button variant="outline" className="mt-6 w-full" onClick={() => { setResult(null); startScanner(); }}>
-              Scan Next
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
