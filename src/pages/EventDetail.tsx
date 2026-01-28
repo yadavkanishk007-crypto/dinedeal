@@ -133,10 +133,14 @@ export default function EventDetail() {
       // Decrement remaining seats
       const { error: updateError } = await supabase
         .from('events')
-        .update({ remaining_seats: event.remaining_seats - seats })
+        .update({ remaining_seats: supabase.rpc("gratest",{
+                   a: supabase.literal("remaining_seats -"+seats),
+                   b: 0 })
+        })
         .eq('id', event.id);
+        .gte("remaining_seats, seats);
 
-      if (updateError) throw updateError;
+      if (updateError) { throw new Error("Seats No Longer Available");
 
       toast({
         title: "Booking confirmed!",
