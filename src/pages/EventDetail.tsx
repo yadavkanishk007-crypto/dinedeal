@@ -193,7 +193,7 @@ export default function EventDetail() {
             src={event.cover_image}
             alt={event.title}
             className="w-full h-full object-cover"
-          ) : (
+          /> : (
           <div className="w-full h-full flex items-center justify-center">
             <Calendar className="w-16 h-16 text-muted-foreground/50" />
           </div>
