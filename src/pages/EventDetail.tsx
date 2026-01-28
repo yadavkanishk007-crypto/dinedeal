@@ -138,7 +138,7 @@ export default function EventDetail() {
                    b: 0 })
         })
         .eq('id', event.id);
-        .gte("remaining_seats, seats);
+        .gte('remaining_seats', seats);
 
       if (updateError) { throw new Error("Seats No Longer Available");
 
