@@ -27,9 +27,29 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Inject square scanning CSS
   useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      #checkin-qr-reader video {
+        object-fit: cover !important;
+        border-radius: 12px;
+      }
+      #checkin-qr-reader {
+        border: none !important;
+        position: relative;
+      }
+      #checkin-qr-reader__scan_region {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    `;
+    document.head.appendChild(style);
+    
     return () => {
       stopScanner();
+      document.head.removeChild(style);
     };
   }, []);
 
@@ -43,8 +63,9 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       await scannerRef.current.start(
         { facingMode: "environment" },
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
+          fps: 15, // Faster detection
+          qrbox: { width: 250, height: 250 }, // Square Scan Area
+          aspectRatio: 1.0, // Force Square View
         },
         (decodedText) => {
           handleCheckIn(decodedText);
@@ -65,10 +86,11 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const stopScanner = async () => {
     if (scannerRef.current) {
       try {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
       } catch (e) {
-        // Ignore cleanup errors
+        console.warn("Scanner stop error:", e);
       }
       scannerRef.current = null;
     }
@@ -81,7 +103,6 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
     setResult(null);
 
     try {
-      // Get the booking by QR hash
       const { data: booking, error: fetchError } = await supabase
         .from('event_bookings')
         .select(`
@@ -104,7 +125,6 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         return;
       }
 
-      // Verify this booking belongs to an event owned by this restaurant
       if (booking.events?.created_by_id !== restaurantId) {
         setResult({
           success: false,
@@ -114,7 +134,6 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         return;
       }
 
-      // Check if already checked in
       if (booking.checked_in_at) {
         setResult({
           success: false,
@@ -126,7 +145,6 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         return;
       }
 
-      // Check if booking is cancelled
       if (booking.booking_status === 'cancelled') {
         setResult({
           success: false,
@@ -136,7 +154,6 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         return;
       }
 
-      // Perform check-in (atomic update)
       const { error: updateError } = await supabase
         .from('event_bookings')
         .update({
@@ -144,7 +161,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
           checked_in_at: new Date().toISOString(),
         })
         .eq('id', booking.id)
-        .eq('checked_in_at', null); // Ensure still not checked in (atomic)
+        .is('checked_in_at', null);
 
       if (updateError) {
         setResult({
@@ -215,17 +232,31 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         </p>
       </div>
 
-      {/* Scanner */}
-      <div className="max-w-sm mx-auto">
+      {/* Scanner Container */}
+      <div className="max-w-sm mx-auto relative">
         <div
           ref={containerRef}
           id="checkin-qr-reader"
-          className="aspect-square rounded-xl overflow-hidden bg-muted"
-        />
+          className="aspect-square rounded-xl overflow-hidden bg-muted border-2 border-dashed border-border flex items-center justify-center"
+        >
+          {!isScanning && !result && (
+            <div className="text-center p-4">
+              <QrCode className="w-12 h-12 text-muted-foreground mx-auto mb-2 opacity-20" />
+              <p className="text-xs text-muted-foreground">Camera Preview</p>
+            </div>
+          )}
+        </div>
+
+        {/* Scan Frame Overlay (Visible only when scanning) */}
+        {isScanning && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="w-[250px] h-[250px] border-2 border-primary rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]" />
+          </div>
+        )}
 
         <div className="flex gap-3 mt-4">
           {!isScanning ? (
-            <Button onClick={startScanner} className="flex-1">
+            <Button onClick={startScanner} className="flex-1" variant="gradient">
               <Camera className="w-4 h-4 mr-2" />
               Start Scanner
             </Button>
@@ -245,9 +276,10 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         </p>
         <form onSubmit={handleManualSubmit} className="flex gap-2">
           <Input
-            placeholder="Enter booking code"
+            placeholder="Booking ID (e.g. evt_...)"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
+            className="bg-background"
           />
           <Button type="submit" disabled={processing || !manualCode.trim()}>
             Check In
@@ -277,7 +309,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
               {result.message}
             </p>
             {result.eventTitle && (
-              <p className="text-muted-foreground mt-2">{result.eventTitle}</p>
+              <p className="text-muted-foreground mt-2 font-medium">{result.eventTitle}</p>
             )}
             {result.seatsCount && (
               <div className="flex items-center justify-center gap-2 mt-3 text-muted-foreground">
@@ -286,9 +318,12 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
               </div>
             )}
             <Button
-              variant="ghost"
-              className="mt-4"
-              onClick={() => setResult(null)}
+              variant="outline"
+              className="mt-6 w-full"
+              onClick={() => {
+                setResult(null);
+                startScanner();
+              }}
             >
               Scan Next
             </Button>
@@ -296,12 +331,11 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         )}
       </AnimatePresence>
 
-      {/* Processing Indicator */}
       {processing && (
         <div className="text-center">
           <div className="inline-flex items-center gap-2 text-muted-foreground">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            Verifying...
+            Verifying Booking...
           </div>
         </div>
       )}
