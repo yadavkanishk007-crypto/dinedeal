@@ -40,7 +40,7 @@ export default function EventCheckIn({ restaurantId }: Props) {
   const [result, setResult] = useState<CheckInResult | null>(null);
 
   /* -------------------------------------------------------
-     Create scanner ONCE (StrictMode safe)
+     Create scanner ONCE (React 18 StrictMode safe)
   -------------------------------------------------------- */
   useEffect(() => {
     if (scannerRef.current) return;
@@ -75,6 +75,10 @@ export default function EventCheckIn({ restaurantId }: Props) {
         (decodedText) => {
           stopScanner();
           handleCheckIn(decodedText);
+        },
+        () => {
+          // REQUIRED by html5-qrcode typings
+          // Intentionally ignored to avoid noisy logs
         }
       );
     } catch (err) {
@@ -96,8 +100,9 @@ export default function EventCheckIn({ restaurantId }: Props) {
 
     try {
       await scannerRef.current.stop();
-    } catch (_) {}
-    finally {
+    } catch (_) {
+      // ignore
+    } finally {
       if (isMounted.current) {
         setScannerActive(false);
       }
@@ -177,8 +182,10 @@ export default function EventCheckIn({ restaurantId }: Props) {
 
   const beep = (ok: boolean) => {
     try {
-      const ctx = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
+      const ctx =
+        new (window.AudioContext ||
+          (window as any).webkitAudioContext)();
+
       if (ctx.state === "suspended") ctx.resume();
 
       const osc = ctx.createOscillator();
@@ -192,7 +199,9 @@ export default function EventCheckIn({ restaurantId }: Props) {
 
       osc.start();
       osc.stop(ctx.currentTime + 0.25);
-    } catch {}
+    } catch {
+      // audio restrictions – ignore
+    }
   };
 
   const scanNext = () => {
@@ -283,8 +292,11 @@ export default function EventCheckIn({ restaurantId }: Props) {
             )}
 
             <p className="text-lg font-bold">{result.message}</p>
+
             {result.eventTitle && (
-              <p className="text-muted-foreground">{result.eventTitle}</p>
+              <p className="text-muted-foreground">
+                {result.eventTitle}
+              </p>
             )}
 
             {result.seatsCount && (
