@@ -97,6 +97,7 @@ export default function EventDetail() {
   };
 
   const handleBooking = async () => {
+    // 1. Guard Clauses & Hardening
     if (!user) {
       toast({ title: "Please sign in to book", description: "Redirecting to login..." });
       navigate('/auth');
@@ -104,6 +105,9 @@ export default function EventDetail() {
     }
 
     if (!event) return;
+
+    // Hardening: Prevent double submission if booking is already in progress
+    if (booking) return;
 
     if (seats > event.remaining_seats) {
       toast({ title: "Not enough seats available", variant: "destructive" });
@@ -116,44 +120,135 @@ export default function EventDetail() {
       const totalAmount = event.is_paid ? event.ticket_price * seats : 0;
       const qrHash = generateQRHash();
 
-      // Create booking
-      const { error: bookingError } = await supabase
-        .from('event_bookings')
-        .insert([{
-          event_id: event.id,
-          user_id: user.id,
-          seats_booked: seats,
-          amount_paid: totalAmount,
-          qr_code_hash: qrHash,
-          booking_status: 'confirmed',
-        }]);
+      // Helper function to finalize booking in Supabase
+      const finalizeBooking = async () => {
+        const { error: bookingError } = await supabase
+          .from('event_bookings')
+          .insert([{
+            event_id: event.id,
+            user_id: user.id,
+            seats_booked: seats,
+            amount_paid: totalAmount,
+            qr_code_hash: qrHash,
+            booking_status: 'confirmed',
+          }]);
 
-      if (bookingError) throw bookingError;
+        if (bookingError) throw bookingError;
 
-      // Decrement remaining seats
-      const { error: updateError } = await supabase
-        .from('events')
-        .update({ remaining_seats: event.remaining_seats - seats })
-        .eq('id', event.id)
-        .gte('remaining_seats', seats);
+        const { error: updateError } = await supabase
+          .from('events')
+          .update({ remaining_seats: event.remaining_seats - seats })
+          .eq('id', event.id);
 
-      if (updateError) { 
-        throw new Error("Seats No Longer Available");
+        if (updateError) throw updateError;
+
+        toast({
+          title: "Booking confirmed!",
+          description: `${seats} ticket(s) booked for ${event.title}`,
+        });
+
+        navigate('/reservations');
+      };
+
+      // 2. Logic Split: Paid vs Free
+      if (event.is_paid && totalAmount > 0) {
+        // --- PAID FLOW (Razorpay) ---
+        
+        // 1️⃣ Create Razorpay order via Backend
+        const res = await fetch(
+          "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: totalAmount,
+              type: "event",
+              eventId: event.id,
+              seats,
+              userId: user.id,
+              qrHash, 
+            }),
+          }
+        );
+
+        const data = await res.json();
+        if (!data?.order?.id) throw new Error("Order creation failed");
+
+        // 2️⃣ Open Razorpay
+        const options = {
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+          amount: data.order.amount,
+          currency: "INR",
+          name: event.title,
+          description: "Event Booking",
+          order_id: data.order.id,
+
+          handler: async (response: any) => {
+            try {
+              // 1️⃣ Verify payment on backend
+              const verifyRes = await fetch(
+                "https://dinedeal-backend-076n.onrender.com/api/payments/verify",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                  }),
+                }
+              );
+
+              const verifyData = await verifyRes.json();
+              if (!verifyData.success) {
+                throw new Error("Payment verification failed");
+              }
+
+              // 2️⃣ Now safely create booking
+              await finalizeBooking();
+
+            } catch (err) {
+              console.error("Payment verification error:", err);
+              toast({
+                title: "Payment verification failed",
+                description: "If money was deducted, it will be refunded. Please contact support.",
+                variant: "destructive",
+              });
+              setBooking(false);
+            }
+          },
+
+          modal: {
+            ondismiss: () => {
+              toast({ title: "Payment cancelled" });
+              setBooking(false); // Reset button state
+            },
+          },
+
+          prefill: {
+            email: user.email ?? "",
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+        
+        // Note: We return here to keep 'booking' true while the modal is open.
+        return; 
+
+      } else {
+        // --- FREE FLOW (Direct Insert) ---
+        await finalizeBooking();
+        setBooking(false);
       }
 
-      toast({
-        title: "Booking confirmed!",
-        description: `${seats} ticket(s) booked for ${event.title}`,
-      });
-
-      navigate('/reservations');
     } catch (error: any) {
+      console.error("Booking error:", error);
       toast({
         title: "Booking failed",
-        description: error.message,
+        description: error.message || "Something went wrong",
         variant: "destructive",
       });
-    } finally {
       setBooking(false);
     }
   };
@@ -193,7 +288,8 @@ export default function EventDetail() {
             src={event.cover_image}
             alt={event.title}
             className="w-full h-full object-cover"
-          /> ) : (
+          />
+        ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Calendar className="w-16 h-16 text-muted-foreground/50" />
           </div>
@@ -275,7 +371,7 @@ export default function EventDetail() {
                     variant="outline"
                     size="icon"
                     onClick={() => setSeats(Math.max(1, seats - 1))}
-                    disabled={seats <= 1}
+                    disabled={seats <= 1 || booking}
                   >
                     <Minus className="w-4 h-4" />
                   </Button>
@@ -284,7 +380,7 @@ export default function EventDetail() {
                     variant="outline"
                     size="icon"
                     onClick={() => setSeats(Math.min(event.remaining_seats, seats + 1))}
-                    disabled={seats >= event.remaining_seats}
+                    disabled={seats >= event.remaining_seats || booking}
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
@@ -299,7 +395,7 @@ export default function EventDetail() {
                 disabled={booking}
               >
                 <Ticket className="w-4 h-4 mr-2" />
-                {booking ? "Booking..." : event.is_paid 
+                {booking ? "Processing..." : event.is_paid 
                   ? `Book Now • ₹${totalPrice}` 
                   : "Book Free Tickets"
                 }
