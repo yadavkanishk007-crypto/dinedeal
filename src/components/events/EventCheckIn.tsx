@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeScannerState } from "html5-qrcode";
 
 interface CheckInResult {
   success: boolean;
@@ -24,11 +24,16 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const [manualCode, setManualCode] = useState("");
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<CheckInResult | null>(null);
+  
+  // Use a ref to persist the scanner instance and avoid re-initialization crashes
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Inject square scanning CSS
+  // Initialize scanner instance and inject styles on mount
   useEffect(() => {
+    // Persistent instance creation
+    scannerRef.current = new Html5Qrcode("checkin-qr-reader");
+
     const style = document.createElement('style');
     style.innerHTML = `
       #checkin-qr-reader video {
@@ -39,44 +44,51 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         border: none !important;
         position: relative;
       }
-      #checkin-qr-reader__scan_region {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
     `;
     document.head.appendChild(style);
     
     return () => {
-      stopScanner();
+      // Safe cleanup on unmount
+      if (scannerRef.current?.isScanning) {
+        scannerRef.current.stop().then(() => {
+          scannerRef.current?.clear();
+        }).catch(err => console.warn("Cleanup error:", err));
+      }
       document.head.removeChild(style);
     };
   }, []);
 
   const startScanner = async () => {
     try {
-      if (!containerRef.current) return;
+      if (!scannerRef.current) return;
 
-      scannerRef.current = new Html5Qrcode("checkin-qr-reader");
+      // GUARD: Check state to prevent crashes from double-starting
+      const state = scannerRef.current.getState();
+      if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.STARTING) {
+        return;
+      }
+
       setIsScanning(true);
+      setResult(null);
 
       await scannerRef.current.start(
         { facingMode: "environment" },
         {
-          fps: 15, // Faster detection
-          qrbox: { width: 250, height: 250 }, // Square Scan Area
-          aspectRatio: 1.0, // Force Square View
+          fps: 15,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
         },
         (decodedText) => {
           handleCheckIn(decodedText);
-          stopScanner();
+          stopScanner(); // Stop immediately on success
         },
-        () => {}
+        () => {} // Mute frame-by-frame errors for performance
       );
     } catch (error: any) {
+      console.error("Scanner Error:", error);
       toast({
         title: "Camera Error",
-        description: error.message || "Could not access camera",
+        description: "Could not access camera. Please check permissions.",
         variant: "destructive",
       });
       setIsScanning(false);
@@ -86,13 +98,14 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const stopScanner = async () => {
     if (scannerRef.current) {
       try {
-        if (scannerRef.current.isScanning) {
+        const state = scannerRef.current.getState();
+        // Only stop if it's actually running to avoid internal library crashes
+        if (state === Html5QrcodeScannerState.SCANNING) {
           await scannerRef.current.stop();
         }
       } catch (e) {
-        console.warn("Scanner stop error:", e);
+        console.warn("Scanner stop warning:", e);
       }
-      scannerRef.current = null;
     }
     setIsScanning(false);
   };
@@ -100,55 +113,35 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const handleCheckIn = async (qrHash: string) => {
     if (processing) return;
     setProcessing(true);
-    setResult(null);
 
     try {
       const { data: booking, error: fetchError } = await supabase
         .from('event_bookings')
         .select(`
           *,
-          events (
-            id,
-            title,
-            created_by_id
-          )
+          events ( id, title, created_by_id )
         `)
         .eq('qr_code_hash', qrHash)
         .single();
 
       if (fetchError || !booking) {
-        setResult({
-          success: false,
-          message: "Invalid QR code. Booking not found.",
-        });
+        setResult({ success: false, message: "Booking not found." });
         playSound(false);
         return;
       }
 
       if (booking.events?.created_by_id !== restaurantId) {
-        setResult({
-          success: false,
-          message: "This booking is for a different venue.",
-        });
+        setResult({ success: false, message: "Wrong venue." });
         playSound(false);
         return;
       }
 
       if (booking.checked_in_at) {
-        setResult({
-          success: false,
-          message: `Already checked in at ${new Date(booking.checked_in_at).toLocaleTimeString()}`,
-          seatsCount: booking.seats_booked,
+        setResult({ 
+          success: false, 
+          message: "Already checked in.",
           eventTitle: booking.events?.title,
-        });
-        playSound(false);
-        return;
-      }
-
-      if (booking.booking_status === 'cancelled') {
-        setResult({
-          success: false,
-          message: "This booking has been cancelled.",
+          seatsCount: booking.seats_booked 
         });
         playSound(false);
         return;
@@ -163,14 +156,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         .eq('id', booking.id)
         .is('checked_in_at', null);
 
-      if (updateError) {
-        setResult({
-          success: false,
-          message: "Failed to check in. Please try again.",
-        });
-        playSound(false);
-        return;
-      }
+      if (updateError) throw updateError;
 
       setResult({
         success: true,
@@ -181,10 +167,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       playSound(true);
 
     } catch (error: any) {
-      setResult({
-        success: false,
-        message: error.message || "An error occurred",
-      });
+      setResult({ success: false, message: "System error. Try again." });
       playSound(false);
     } finally {
       setProcessing(false);
@@ -192,27 +175,17 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   };
 
   const playSound = (success: boolean) => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    if (success) {
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
-    } else {
-      oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(200, audioContext.currentTime + 0.1);
-    }
-
-    oscillator.type = "sine";
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.frequency.setValueAtTime(success ? 800 : 300, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (e) { /* Audio context might be blocked by browser */ }
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -227,29 +200,26 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-bold mb-2">Event Check-In</h2>
-        <p className="text-muted-foreground text-sm">
-          Scan attendee QR codes to check them in
-        </p>
+        <p className="text-muted-foreground text-sm">Scan QR codes to check-in attendees</p>
       </div>
 
-      {/* Scanner Container */}
       <div className="max-w-sm mx-auto relative">
         <div
           ref={containerRef}
           id="checkin-qr-reader"
-          className="aspect-square rounded-xl overflow-hidden bg-muted border-2 border-dashed border-border flex items-center justify-center"
+          className="aspect-square rounded-xl overflow-hidden bg-muted border-2 border-dashed border-border flex items-center justify-center relative z-0"
         >
           {!isScanning && !result && (
             <div className="text-center p-4">
               <QrCode className="w-12 h-12 text-muted-foreground mx-auto mb-2 opacity-20" />
-              <p className="text-xs text-muted-foreground">Camera Preview</p>
+              <p className="text-xs text-muted-foreground">Ready to scan</p>
             </div>
           )}
         </div>
 
-        {/* Scan Frame Overlay (Visible only when scanning) */}
+        {/* Square Scan Overlay */}
         {isScanning && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
             <div className="w-[250px] h-[250px] border-2 border-primary rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]" />
           </div>
         )}
@@ -257,88 +227,48 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         <div className="flex gap-3 mt-4">
           {!isScanning ? (
             <Button onClick={startScanner} className="flex-1" variant="gradient">
-              <Camera className="w-4 h-4 mr-2" />
-              Start Scanner
+              <Camera className="w-4 h-4 mr-2" /> Start Scanner
             </Button>
           ) : (
             <Button onClick={stopScanner} variant="destructive" className="flex-1">
-              <StopCircle className="w-4 h-4 mr-2" />
-              Stop Scanner
+              <StopCircle className="w-4 h-4 mr-2" /> Stop Scanner
             </Button>
           )}
         </div>
       </div>
 
-      {/* Manual Entry */}
       <div className="max-w-sm mx-auto">
-        <p className="text-sm text-muted-foreground text-center mb-3">
-          Or enter booking code manually
-        </p>
         <form onSubmit={handleManualSubmit} className="flex gap-2">
           <Input
-            placeholder="Booking ID (e.g. evt_...)"
+            placeholder="Manual Booking ID"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
             className="bg-background"
           />
-          <Button type="submit" disabled={processing || !manualCode.trim()}>
-            Check In
-          </Button>
+          <Button type="submit" disabled={processing || !manualCode.trim()}>Check In</Button>
         </form>
       </div>
 
-      {/* Result Display */}
       <AnimatePresence mode="wait">
         {result && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className={`max-w-sm mx-auto p-6 rounded-xl text-center ${
-              result.success
-                ? "bg-green-500/10 border border-green-500/30"
-                : "bg-red-500/10 border border-red-500/30"
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+            className={`max-w-sm mx-auto p-6 rounded-xl text-center border ${
+              result.success ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"
             }`}
           >
-            {result.success ? (
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            ) : (
-              <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            )}
-            <p className={`text-lg font-bold ${result.success ? "text-green-500" : "text-red-500"}`}>
-              {result.message}
-            </p>
-            {result.eventTitle && (
-              <p className="text-muted-foreground mt-2 font-medium">{result.eventTitle}</p>
-            )}
+            {result.success ? <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" /> : <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />}
+            <p className={`text-lg font-bold ${result.success ? "text-green-500" : "text-red-500"}`}>{result.message}</p>
+            {result.eventTitle && <p className="text-muted-foreground mt-1">{result.eventTitle}</p>}
             {result.seatsCount && (
-              <div className="flex items-center justify-center gap-2 mt-3 text-muted-foreground">
-                <Users className="w-4 h-4" />
-                <span>{result.seatsCount} {result.seatsCount === 1 ? 'seat' : 'seats'}</span>
+              <div className="flex items-center justify-center gap-2 mt-2 text-muted-foreground text-sm">
+                <Users className="w-4 h-4" /> <span>{result.seatsCount} seats</span>
               </div>
             )}
-            <Button
-              variant="outline"
-              className="mt-6 w-full"
-              onClick={() => {
-                setResult(null);
-                startScanner();
-              }}
-            >
-              Scan Next
-            </Button>
+            <Button variant="outline" className="mt-6 w-full" onClick={() => { setResult(null); startScanner(); }}>Scan Next</Button>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {processing && (
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            Verifying Booking...
-          </div>
-        </div>
-      )}
     </div>
   );
 }
