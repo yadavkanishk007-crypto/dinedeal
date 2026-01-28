@@ -215,7 +215,9 @@ const RestaurantDetail = () => {
                 </div>
                 <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-success/10">
                   <Star className="w-4 h-4 text-success fill-success" />
-                  <span className="font-semibold text-success">{displayRestaurant.rating || 4.5}</span>
+                  <span className="font-semibold text-success">
+                    {restaurant.rating && restaurant.rating > 0 ? restaurant.rating.toFixed(1) : "New"}
+                  </span>
                 </div>
               </div>
 
