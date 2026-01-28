@@ -7,8 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Receipt, Users, Clock, CheckCircle2, AlertCircle } from "lucide-react";
-import { format } from "date-fns";
+import { Loader2, Receipt, Users, Clock, CheckCircle2, AlertCircle, Tag } from "lucide-react";
+import { format, subHours } from "date-fns";
+
+/* =========================
+   TYPES
+========================= */
 
 interface DineInSession {
   id: string;
@@ -35,10 +39,15 @@ interface PostBillToCustomerProps {
   restaurantId: string;
 }
 
+/* =========================
+   COMPONENT
+========================= */
+
 const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   const [sessions, setSessions] = useState<DineInSession[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [activeOffer, setActiveOffer] = useState<ActiveOffer | null>(null);
+  const [availableOffers, setAvailableOffers] = useState<ActiveOffer[]>([]);
+  const [selectedOfferId, setSelectedOfferId] = useState<string>("auto");
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   
@@ -49,7 +58,6 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   useEffect(() => {
     fetchData();
     
-    // Subscribe to session updates
     const channel = supabase
       .channel(`restaurant-sessions-${restaurantId}`)
       .on(
@@ -60,9 +68,7 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
           table: 'dinein_sessions',
           filter: `restaurant_id=eq.${restaurantId}`
         },
-        () => {
-          fetchSessions();
-        }
+        () => fetchData()
       )
       .subscribe();
 
@@ -72,87 +78,74 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   }, [restaurantId]);
 
   const fetchData = async () => {
-    await Promise.all([fetchSessions(), fetchActiveOffer()]);
+    // 1. Mark sessions older than 3 hours as expired in DB first
+    const threeHoursAgo = subHours(new Date(), 3).toISOString();
+    await supabase
+      .from('dinein_sessions')
+      .update({ status: 'expired' })
+      .eq('restaurant_id', restaurantId)
+      .eq('status', 'open')
+      .lt('created_at', threeHoursAgo);
+
+    // 2. Fetch fresh data
+    await Promise.all([fetchSessions(threeHoursAgo), fetchAvailableOffers()]);
     setLoading(false);
   };
 
-  const fetchSessions = async () => {
-    // 1. Fetch dine-in sessions (NO JOIN)
+  const fetchSessions = async (expiryThreshold: string) => {
     const { data: sessionsData, error: sessionsError } = await supabase
       .from('dinein_sessions')
       .select('id, status, created_at, customer_id')
       .eq('restaurant_id', restaurantId)
       .in('status', ['open', 'bill_posted'])
+      .gt('created_at', expiryThreshold) // Only active within 3 hours
       .order('created_at', { ascending: false });
 
-    if (sessionsError) {
-      console.error('Error fetching sessions:', sessionsError);
-      return;
-    }
-
+    if (sessionsError) return;
     setSessions(sessionsData as DineInSession[]);
 
-    // 2. Fetch profiles separately (KEY PART)
     if (sessionsData && sessionsData.length > 0) {
-      const customerIds = Array.from(
-        new Set(sessionsData.map(s => s.customer_id))
-      );
-
-      const { data: profilesData, error: profilesError } = await supabase
+      const customerIds = Array.from(new Set(sessionsData.map(s => s.customer_id)));
+      const { data: profilesData } = await supabase
         .from('profiles')
         .select('user_id, full_name, phone')
         .in('user_id', customerIds);
-
-      if (profilesError) {
-        console.error('Error fetching profiles:', profilesError);
-        return;
-      }
-
-      setProfiles(profilesData as UserProfile[]);
-    } else {
-      setProfiles([]);
+      
+      if (profilesData) setProfiles(profilesData as UserProfile[]);
     }
   };
 
-  const fetchActiveOffer = async () => {
-    const { data, error } = await supabase
+  const fetchAvailableOffers = async () => {
+    const now = new Date().toISOString();
+    const { data } = await supabase
       .from('offers')
       .select('id, title, discount_percent, max_discount, min_order_amount')
       .eq('restaurant_id', restaurantId)
       .eq('is_active', true)
-      .gte('valid_until', new Date().toISOString())
-      .lte('valid_from', new Date().toISOString())
-      .order('discount_percent', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .lte('valid_from', now)
+      .gte('valid_until', now)
+      .order('discount_percent', { ascending: false });
 
-    if (!error && data) {
-      setActiveOffer(data);
-    }
+    if (data) setAvailableOffers(data);
   };
 
-  const getCustomerName = (customerId: string) => {
-    const profile = profiles.find(p => p.user_id === customerId);
-    return profile?.full_name || profile?.phone || 'Guest';
+  const getEffectiveOffer = () => {
+    if (selectedOfferId === "none") return null;
+    if (selectedOfferId === "auto") return availableOffers[0] || null; // Highest discount
+    return availableOffers.find(o => o.id === selectedOfferId) || null;
   };
 
-  const calculateDiscount = (amount: number): { discountAmount: number; finalAmount: number } => {
-    if (!activeOffer) {
-      return { discountAmount: 0, finalAmount: amount };
+  const calculateDiscount = (amount: number) => {
+    const offer = getEffectiveOffer();
+    if (!offer || (offer.min_order_amount && amount < offer.min_order_amount)) {
+      return { discountAmount: 0, finalAmount: amount, offer: null };
     }
 
-    if (activeOffer.min_order_amount && amount < activeOffer.min_order_amount) {
-      return { discountAmount: 0, finalAmount: amount };
-    }
-
-    const discountAmount = Math.min(
-      (amount * activeOffer.discount_percent) / 100,
-      activeOffer.max_discount
-    );
-
+    const discountAmount = Math.min((amount * offer.discount_percent) / 100, offer.max_discount);
     return {
       discountAmount: Math.round(discountAmount * 100) / 100,
-      finalAmount: Math.round((amount - discountAmount) * 100) / 100
+      finalAmount: Math.round((amount - discountAmount) * 100) / 100,
+      offer
     };
   };
 
@@ -170,16 +163,12 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
 
     setPosting(true);
     try {
-      const { discountAmount, finalAmount } = calculateDiscount(amount);
-
-      // Create posted bill
+      const { discountAmount, finalAmount, offer } = calculateDiscount(amount);
       const selectedSessionObj = sessions.find(s => s.id === selectedSession);
-      if (!selectedSessionObj) {
-        toast.error("Session not found");
-        setPosting(false);
-        return;
-      }
+      
+      if (!selectedSessionObj) throw new Error("Session not found");
 
+      // 1. Create the Transaction
       const { error: billError } = await supabase
         .from('transactions')
         .insert({
@@ -190,13 +179,13 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
           pos_bill_no: posBillNo || null,
           discount_amount: discountAmount,
           final_amount: finalAmount,
-          offer_id: activeOffer?.id || null,
+          offer_id: offer?.id || null,
           payment_status: 'pending'
         });
 
       if (billError) throw billError;
 
-      // Update session status
+      // 2. Update Session Status
       const { error: sessionError } = await supabase
         .from('dinein_sessions')
         .update({ status: 'bill_posted' })
@@ -205,75 +194,47 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
       if (sessionError) throw sessionError;
 
       toast.success("Bill posted successfully!");
-      
-      // Reset form
       setSelectedSession("");
       setBillAmount("");
       setPosBillNo("");
-      
-      // Refresh sessions
-      fetchSessions();
+      setSelectedOfferId("auto");
+      fetchData();
     } catch (error: any) {
-      console.error('Error posting bill:', error);
-      toast.error("Failed to post bill");
+      toast.error(error.message || "Failed to post bill");
     } finally {
       setPosting(false);
     }
   };
 
-  const previewDiscount = billAmount ? calculateDiscount(parseFloat(billAmount) || 0) : null;
+  const getCustomerName = (customerId: string) => {
+    const profile = profiles.find(p => p.user_id === customerId);
+    return profile?.full_name || profile?.phone || 'Guest';
+  };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const preview = billAmount ? calculateDiscount(parseFloat(billAmount) || 0) : null;
+
+  if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
 
   return (
     <div className="space-y-6">
-      {/* Active Sessions */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Active Dine-In Sessions
-          </CardTitle>
-          <CardDescription>
-            Customers currently dining at your restaurant
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Active Sessions (Last 3h)</CardTitle>
+          <CardDescription>Sessions expire automatically after 3 hours of inactivity.</CardDescription>
         </CardHeader>
         <CardContent>
           {sessions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No active dine-in sessions</p>
-              <p className="text-sm mt-1">Customers will appear here when they scan your QR code</p>
-            </div>
+            <div className="text-center py-8 text-muted-foreground"><Clock className="mx-auto mb-2 opacity-50" /><p>No active sessions found.</p></div>
           ) : (
             <div className="space-y-3">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`p-4 rounded-lg border ${
-                    selectedSession === session.id ? 'border-primary bg-primary/5' : 'border-border'
-                  } cursor-pointer transition-colors`}
-                  onClick={() => setSelectedSession(session.id)}
-                >
-                  <div className="flex items-center justify-between">
+              {sessions.map((s) => (
+                <div key={s.id} onClick={() => setSelectedSession(s.id)} className={`p-4 rounded-lg border cursor-pointer ${selectedSession === s.id ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                  <div className="flex justify-between items-center">
                     <div>
-                      <div className="font-medium">
-                        {getCustomerName(session.customer_id)}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Started {format(new Date(session.created_at), 'h:mm a')}
-                      </p>
+                      <div className="font-medium">{getCustomerName(s.customer_id)}</div>
+                      <p className="text-xs text-muted-foreground">Started {format(new Date(s.created_at), 'h:mm a')}</p>
                     </div>
-                    <Badge variant="secondary">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {session.status === 'bill_posted' ? 'Bill Posted' : 'Active'}
-                    </Badge>
+                    <Badge variant={s.status === 'bill_posted' ? 'secondary' : 'outline'}>{s.status === 'bill_posted' ? 'Bill Sent' : 'Dining'}</Badge>
                   </div>
                 </div>
               ))}
@@ -282,121 +243,52 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
         </CardContent>
       </Card>
 
-      {/* Post Bill Form */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Post Bill to Customer
-          </CardTitle>
-          <CardDescription>
-            Enter the bill amount from your POS. DineDeal will apply discounts automatically.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Post Bill</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Select Customer Session</Label>
-            <Select value={selectedSession} onValueChange={setSelectedSession}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a customer session" />
-              </SelectTrigger>
+            <Label>Bill Amount (₹)</Label>
+            <Input type="number" value={billAmount} onChange={(e) => setBillAmount(e.target.value)} placeholder="0.00" />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2"><Tag className="h-4 w-4" /> Apply Offer</Label>
+            <Select value={selectedOfferId} onValueChange={setSelectedOfferId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {sessions.map((session) => (
-                  <SelectItem key={session.id} value={session.id}>
-                    {getCustomerName(session.customer_id)} - {format(new Date(session.created_at), 'h:mm a')}
-                  </SelectItem>
+                <SelectItem value="auto">Best Available (Auto)</SelectItem>
+                {availableOffers.map(o => (
+                  <SelectItem key={o.id} value={o.id}>{o.title} ({o.discount_percent}%)</SelectItem>
                 ))}
+                <SelectItem value="none">No Discount</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="billAmount">Bill Amount (₹) *</Label>
-            <Input
-              id="billAmount"
-              type="number"
-              placeholder="Enter bill amount from POS"
-              value={billAmount}
-              onChange={(e) => setBillAmount(e.target.value)}
-            />
+            <Label>POS Bill No (Optional)</Label>
+            <Input value={posBillNo} onChange={(e) => setPosBillNo(e.target.value)} placeholder="INV-..." />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="posBillNo">POS Bill Number (Optional)</Label>
-            <Input
-              id="posBillNo"
-              type="text"
-              placeholder="e.g., INV-001234"
-              value={posBillNo}
-              onChange={(e) => setPosBillNo(e.target.value)}
-            />
-          </div>
-
-          {/* Active Offer Display */}
-          {activeOffer && (
-            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="flex items-center gap-2 text-green-500">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="font-medium">Active Offer: {activeOffer.title}</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                {activeOffer.discount_percent}% off up to ₹{activeOffer.max_discount}
-                {activeOffer.min_order_amount && activeOffer.min_order_amount > 0 && (
-                  <> (min order ₹{activeOffer.min_order_amount})</>
-                )}
-              </p>
-            </div>
-          )}
-
-          {!activeOffer && (
-            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-              <div className="flex items-center gap-2 text-yellow-500">
-                <AlertCircle className="h-4 w-4" />
-                <span className="font-medium">No Active Offer</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Customer will pay full amount. Create an offer to attract more customers.
-              </p>
-            </div>
-          )}
-
-          {/* Preview */}
-          {previewDiscount && parseFloat(billAmount) > 0 && (
+          {preview && parseFloat(billAmount) > 0 && (
             <div className="p-4 rounded-lg bg-muted space-y-2">
-              <p className="text-sm font-medium">Customer Will See:</p>
-              <div className="flex justify-between text-sm">
-                <span>Bill Amount</span>
-                <span>₹{parseFloat(billAmount).toLocaleString('en-IN')}</span>
-              </div>
-              {previewDiscount.discountAmount > 0 && (
+              <div className="flex justify-between text-sm"><span>Original Bill</span><span>₹{billAmount}</span></div>
+              {preview.discountAmount > 0 && (
                 <div className="flex justify-between text-sm text-green-500">
-                  <span>DineDeal Discount</span>
-                  <span>-₹{previewDiscount.discountAmount.toLocaleString('en-IN')}</span>
+                  <span>Discount ({preview.offer?.title})</span>
+                  <span>-₹{preview.discountAmount}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold pt-2 border-t">
-                <span>Final Amount</span>
-                <span className="text-primary">₹{previewDiscount.finalAmount.toLocaleString('en-IN')}</span>
-              </div>
+              <div className="flex justify-between font-bold pt-2 border-t"><span>Customer Pays</span><span className="text-primary">₹{preview.finalAmount}</span></div>
             </div>
           )}
 
-          <Button
-            onClick={handlePostBill}
-            disabled={!selectedSession || !billAmount || posting}
-            className="w-full"
-          >
-            {posting ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Receipt className="h-4 w-4 mr-2" />
-            )}
+          <Button className="w-full" onClick={handlePostBill} disabled={posting || !selectedSession || !billAmount}>
+            {posting ? <Loader2 className="animate-spin mr-2" /> : <Receipt className="mr-2" />}
             Post Bill to Customer
           </Button>
-
-          <p className="text-xs text-center text-muted-foreground">
-            GST billing is handled by your POS. DineDeal only processes the payment.
-          </p>
         </CardContent>
       </Card>
     </div>
