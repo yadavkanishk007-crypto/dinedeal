@@ -63,7 +63,6 @@ export default function EventDetail() {
   useEffect(() => {
     if (id) fetchEvent();
     
-    // Cleanup Razorpay on unmount if it's open
     return () => {
       const rzpContainer = document.getElementsByClassName('razorpay-container')[0];
       if (rzpContainer) {
@@ -87,16 +86,38 @@ export default function EventDetail() {
         return;
       }
 
-      // Safe casting with default empty array for tiers
-      const formattedData = {
-        ...data,
-        ticket_tiers: data.ticket_tiers || []
-      } as unknown as Event;
+      // DEBUG: Casting to any to handle the ticket_tiers property check
+      const rawData = data as any;
+      
+      // Safety check: parse ticket_tiers if it comes back as a string, 
+      // or default to empty array
+      let tiers: TicketTier[] = [];
+      if (Array.isArray(rawData.ticket_tiers)) {
+        tiers = rawData.ticket_tiers;
+      } else if (typeof rawData.ticket_tiers === 'string') {
+        try {
+          tiers = JSON.parse(rawData.ticket_tiers);
+        } catch {
+          tiers = [];
+        }
+      }
+
+      const formattedData: Event = {
+        ...rawData,
+        ticket_tiers: tiers
+      };
 
       setEvent(formattedData);
 
       if (formattedData.ticket_tiers.length > 0) {
         setSelectedTier(formattedData.ticket_tiers[0]);
+      } else {
+        // Fallback for events with no tiers defined
+        setSelectedTier({
+          name: "General Admission",
+          price: Number(formattedData.ticket_price) || 0,
+          capacity: formattedData.total_seats
+        });
       }
     } catch (err) {
       console.error("Fetch Error:", err);
@@ -147,7 +168,6 @@ export default function EventDetail() {
       const qrHash = generateQRHash();
 
       const finalize = async () => {
-        // 1. Create the booking record
         const { error: bookingError } = await supabase.from('event_bookings').insert([{
           event_id: event.id,
           user_id: user.id,
@@ -160,7 +180,6 @@ export default function EventDetail() {
 
         if (bookingError) throw bookingError;
         
-        // 2. Decrement the event seats
         const { error: updateError } = await supabase.from('events')
           .update({ remaining_seats: event.remaining_seats - seats })
           .eq('id', event.id);
@@ -211,7 +230,7 @@ export default function EventDetail() {
           },
           modal: { ondismiss: () => setBooking(false) },
           prefill: { email: user.email || "", contact: "" },
-          theme: { color: "#7C3AED" } // Matches primary purple
+          theme: { color: "#7C3AED" }
         };
 
         const rzp = new (window as any).Razorpay(options);
@@ -284,7 +303,7 @@ export default function EventDetail() {
           </div>
         </section>
 
-        {event.ticket_tiers.length > 0 && (
+        {event.ticket_tiers && event.ticket_tiers.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold flex items-center gap-2"><Ticket className="h-5 w-5 text-primary" /> Tickets</h2>
@@ -329,7 +348,6 @@ export default function EventDetail() {
         )}
       </main>
 
-      {/* FIXED ACTION FOOTER */}
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 p-4 pb-10 backdrop-blur-lg shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
         <div className="container max-w-lg mx-auto flex flex-col gap-5">
           {!isSoldOut && (
