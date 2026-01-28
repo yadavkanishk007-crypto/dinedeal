@@ -117,7 +117,7 @@ export default function Pay() {
             .eq("restaurant_id", restaurantId)
             .eq("is_active", true)
             .lte("valid_from", now)
-            .gte("valid_until", now)
+            .or(`valid_until.gte.${now},valid_until.is.null`)
             .order("discount_percent", { ascending: false })
             .limit(1)
             .maybeSingle(),
@@ -384,7 +384,10 @@ export default function Pay() {
             <p className="text-xs text-muted-foreground">
               {restaurant.cuisine} 
               {/* ✅ Fix: Only show discount if offer exists */}
-              {activeOffer ? ` • ${activeOffer.discount_percent}% Off` : ""}
+              {activeoffer && ( <span className="text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded ml-1">
+                  • {activeOffer.discount_percent}% Off
+              </span>
+             )}                  
             </p>
           </div>
         </div>
