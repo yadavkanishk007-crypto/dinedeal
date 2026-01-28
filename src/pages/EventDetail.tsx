@@ -18,12 +18,11 @@ import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 
 /* =========================
    TYPES
 ========================= */
-
 interface TicketTier {
   name: string;
   price: number;
@@ -46,12 +45,8 @@ interface Event {
   total_seats: number;
   booking_deadline: string;
   status: string;
-  ticket_tiers: TicketTier[] | null; 
+  ticket_tiers: TicketTier[]; 
 }
-
-/* =========================
-   COMPONENT
-========================= */
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -67,6 +62,14 @@ export default function EventDetail() {
 
   useEffect(() => {
     if (id) fetchEvent();
+    
+    // Cleanup Razorpay on unmount if it's open
+    return () => {
+      const rzpContainer = document.getElementsByClassName('razorpay-container')[0];
+      if (rzpContainer) {
+        (rzpContainer as HTMLElement).style.display = 'none';
+      }
+    };
   }, [id]);
 
   const fetchEvent = async () => {
@@ -84,16 +87,20 @@ export default function EventDetail() {
         return;
       }
 
-      const eventData = data as Event;
-      setEvent(eventData);
+      // Safe casting with default empty array for tiers
+      const formattedData = {
+        ...data,
+        ticket_tiers: data.ticket_tiers || []
+      } as unknown as Event;
 
-      // Auto-select the first tier if available
-      if (eventData.ticket_tiers && eventData.ticket_tiers.length > 0) {
-        setSelectedTier(eventData.ticket_tiers[0]);
+      setEvent(formattedData);
+
+      if (formattedData.ticket_tiers.length > 0) {
+        setSelectedTier(formattedData.ticket_tiers[0]);
       }
     } catch (err) {
       console.error("Fetch Error:", err);
-      toast({ title: "Error loading event", variant: "destructive" });
+      toast({ title: "Connection error", description: "Failed to load event details.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -101,208 +108,211 @@ export default function EventDetail() {
 
   const handleShare = async () => {
     try {
-      await navigator.share({
-        title: event?.title,
-        text: event?.description,
-        url: window.location.href,
-      });
+      if (navigator.share) {
+        await navigator.share({
+          title: event?.title || 'Check out this event!',
+          text: event?.description?.substring(0, 100),
+          url: window.location.href,
+        });
+      } else {
+        throw new Error();
+      }
     } catch {
       navigator.clipboard.writeText(window.location.href);
       toast({ title: "Link copied to clipboard" });
     }
   };
 
-  const generateQRHash = () => {
-    return `EVT-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-  };
+  const generateQRHash = () => `EVT-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
   const handleBooking = async () => {
-    if (!user) {
-      toast({ title: "Please sign in to book" });
-      navigate('/auth');
-      return;
+    if (!user) { 
+      toast({ title: "Login Required", description: "Please sign in to book tickets." });
+      navigate('/auth'); 
+      return; 
     }
-
+    
     if (!event || !selectedTier || booking) return;
 
-    // Safety check for seats
     if (seats > event.remaining_seats) {
-      toast({ title: "Not enough seats available", variant: "destructive" });
+      toast({ title: "Limited Availability", description: "The requested number of seats is no longer available.", variant: "destructive" });
       return;
     }
 
     setBooking(true);
 
     try {
-      const isActuallyPaid = event.is_paid && selectedTier.price > 0;
-      const totalAmount = isActuallyPaid ? selectedTier.price * seats : 0;
+      const isPaidFlow = event.is_paid && selectedTier.price > 0;
+      const totalAmount = isPaidFlow ? selectedTier.price * seats : 0;
       const qrHash = generateQRHash();
 
-      // Step to save to Database (Common for Free & Paid)
-      const finalizeBooking = async () => {
-        const { error: bookingError } = await supabase
-          .from('event_bookings')
-          .insert([{
-            event_id: event.id,
-            user_id: user.id,
-            seats_booked: seats,
-            amount_paid: totalAmount,
-            qr_code_hash: qrHash,
-            booking_status: 'confirmed',
-            ticket_tier_name: selectedTier.name
-          }]);
+      const finalize = async () => {
+        // 1. Create the booking record
+        const { error: bookingError } = await supabase.from('event_bookings').insert([{
+          event_id: event.id,
+          user_id: user.id,
+          seats_booked: seats,
+          amount_paid: totalAmount,
+          qr_code_hash: qrHash,
+          booking_status: 'confirmed',
+          ticket_tier_name: selectedTier.name
+        }]);
 
         if (bookingError) throw bookingError;
-
-        // Atomic update of remaining seats
-        const { error: updateError } = await supabase
-          .from('events')
+        
+        // 2. Decrement the event seats
+        const { error: updateError } = await supabase.from('events')
           .update({ remaining_seats: event.remaining_seats - seats })
           .eq('id', event.id);
 
         if (updateError) throw updateError;
 
-        toast({ 
-          title: "Success!", 
-          description: isActuallyPaid ? "Payment successful. Tickets booked." : "Free tickets reserved!" 
-        });
+        toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
         navigate('/reservations');
       };
 
-      if (isActuallyPaid) {
-        // --- RAZORPAY FLOW ---
+      if (isPaidFlow) {
         const res = await fetch("https://dinedeal-backend-076n.onrender.com/api/payments/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: totalAmount,
-            type: "event",
-            eventId: event.id,
-            seats,
-            userId: user.id,
-            qrHash,
-            tierName: selectedTier.name
+          body: JSON.stringify({ 
+            amount: totalAmount, 
+            type: "event", 
+            eventId: event.id, 
+            userId: user.id, 
+            tierName: selectedTier.name 
           }),
         });
 
-        const data = await res.json();
-        if (!data?.order?.id) throw new Error("Order creation failed");
-
+        if (!res.ok) throw new Error("Could not initialize payment gateway.");
+        
+        const orderData = await res.json();
+        
         const options = {
           key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-          amount: data.order.amount,
+          amount: orderData.order.amount,
           currency: "INR",
-          name: event.title,
-          description: `${selectedTier.name} Booking`,
-          order_id: data.order.id,
+          name: "DineDeal Events",
+          description: event.title,
+          order_id: orderData.order.id,
           handler: async (response: any) => {
-            const verifyRes = await fetch("https://dinedeal-backend-076n.onrender.com/api/payments/verify", {
+            const v = await fetch("https://dinedeal-backend-076n.onrender.com/api/payments/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(response),
             });
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              await finalizeBooking();
+            const vData = await v.json();
+            if (vData.success) {
+              await finalize();
             } else {
-              toast({ title: "Payment failed", variant: "destructive" });
+              toast({ title: "Payment Verification Failed", variant: "destructive" });
               setBooking(false);
             }
           },
           modal: { ondismiss: () => setBooking(false) },
-          prefill: { email: user.email ?? "" },
+          prefill: { email: user.email || "", contact: "" },
+          theme: { color: "#7C3AED" } // Matches primary purple
         };
 
         const rzp = new (window as any).Razorpay(options);
         rzp.open();
       } else {
-        // --- FREE FLOW ---
-        await finalizeBooking();
+        await finalize();
       }
-    } catch (error: any) {
-      console.error("Booking Error:", error);
-      toast({ title: "Booking failed", description: error.message, variant: "destructive" });
+    } catch (e: any) {
+      console.error("Booking Logic Error:", e);
+      toast({ title: "Booking Failed", description: e.message || "An unexpected error occurred.", variant: "destructive" });
       setBooking(false);
     }
   };
 
   if (loading || !event) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <p className="text-sm text-muted-foreground animate-pulse">Fetching event details...</p>
       </div>
     );
   }
 
   const isSoldOut = event.remaining_seats <= 0;
-  const currentPrice = selectedTier ? selectedTier.price * seats : 0;
+  const eventDateObj = new Date(event.event_date);
+  const displayDate = isValid(eventDateObj) ? format(eventDateObj, "PPP") : "Date TBA";
 
   return (
-    <div className="min-h-screen bg-background pb-40">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b p-4 flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="hover:bg-accent p-2 rounded-full transition-colors">
-          <ArrowLeft className="w-5 h-5" />
+    <div className="min-h-screen bg-background pb-44">
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b bg-background/95 p-4 backdrop-blur-md">
+        <button onClick={() => navigate(-1)} className="rounded-full p-2 hover:bg-accent">
+          <ArrowLeft className="h-6 w-6" />
         </button>
         <Logo />
-        <button onClick={handleShare} className="hover:bg-accent p-2 rounded-full transition-colors">
-          <Share2 className="w-5 h-5" />
+        <button onClick={handleShare} className="rounded-full p-2 hover:bg-accent">
+          <Share2 className="h-5 w-5" />
         </button>
       </header>
 
-      <div className="relative aspect-video w-full max-w-4xl mx-auto overflow-hidden">
-        <img src={event.cover_image || "/placeholder.svg"} alt={event.title} className="w-full h-full object-cover" />
-        <div className="absolute bottom-4 left-4">
-          <Badge className="text-lg px-4 py-2 bg-primary shadow-lg border-none">
-            {selectedTier?.price === 0 ? "FREE" : `₹${selectedTier?.price ?? event.ticket_price}`}
-          </Badge>
-        </div>
+      <div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
+        <img 
+          src={event.cover_image || "/placeholder.svg"} 
+          className="h-full w-full object-cover transition-transform hover:scale-105 duration-700" 
+          alt={event.title} 
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <Badge className="absolute bottom-4 left-4 text-lg font-bold bg-primary border-none px-4 py-1.5 shadow-xl">
+          {selectedTier?.price === 0 ? "FREE" : `₹${selectedTier?.price ?? event.ticket_price}`}
+        </Badge>
       </div>
 
-      <main className="container max-w-2xl py-6 space-y-8">
-        <section>
-          <h1 className="text-2xl font-bold mb-4 leading-tight">{event.title}</h1>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-muted-foreground bg-accent/30 p-4 rounded-xl">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-4 h-4 text-primary" /> 
-              {format(new Date(event.event_date), "PPP")}
+      <main className="container max-w-3xl space-y-8 py-8 px-4">
+        <section className="space-y-4">
+          <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">{event.title}</h1>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-start gap-3 bg-accent/40 p-3 rounded-xl">
+              <Calendar className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold">When</p>
+                <p className="text-sm text-muted-foreground">{displayDate}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <MapPin className="w-4 h-4 text-primary" /> 
-              {event.venue_name}, {event.city}
-            </div>
-            <div className="flex items-center gap-3">
-              <Users className="w-4 h-4 text-primary" /> 
-              {event.remaining_seats > 0 ? `${event.remaining_seats} seats left` : "Waitlist Full"}
+            <div className="flex items-start gap-3 bg-accent/40 p-3 rounded-xl">
+              <MapPin className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold">Where</p>
+                <p className="text-sm text-muted-foreground truncate">{event.venue_name}, {event.city}</p>
+              </div>
             </div>
           </div>
         </section>
 
-        {event.ticket_tiers && event.ticket_tiers.length > 0 && (
+        {event.ticket_tiers.length > 0 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <Ticket className="w-5 h-5" /> Select Ticket Type
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2"><Ticket className="h-5 w-5 text-primary" /> Tickets</h2>
+              <span className="text-xs text-muted-foreground bg-accent px-2 py-1 rounded-full">{event.remaining_seats} available</span>
+            </div>
             <div className="grid gap-3">
               {event.ticket_tiers.map((tier) => (
                 <button 
                   key={tier.name}
                   disabled={booking}
                   onClick={() => setSelectedTier(tier)}
-                  className={`w-full text-left p-4 rounded-xl border-2 transition-all flex justify-between items-center ${
-                    selectedTier?.name === tier.name ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/50"
-                  } ${booking ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`flex items-center justify-between rounded-2xl border-2 p-5 transition-all active:scale-[0.98] ${
+                    selectedTier?.name === tier.name 
+                    ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md" 
+                    : "border-border hover:border-primary/40 bg-card"
+                  }`}
                 >
-                  <div>
-                    <p className="font-bold">{tier.name}</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="text-left">
+                    <p className="font-bold text-lg">{tier.name}</p>
+                    <p className="text-sm font-medium text-primary">
                       {tier.price === 0 ? "Complimentary" : `₹${tier.price}`}
                     </p>
                   </div>
-                  {selectedTier?.name === tier.name && (
-                    <div className="bg-primary rounded-full p-1 shadow-md">
-                      <Check className="w-4 h-4 text-white" />
-                    </div>
-                  )}
+                  <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    selectedTier?.name === tier.name ? "bg-primary border-primary" : "border-muted"
+                  }`}>
+                    {selectedTier?.name === tier.name && <Check className="h-4 w-4 text-white" />}
+                  </div>
                 </button>
               ))}
             </div>
@@ -311,62 +321,66 @@ export default function EventDetail() {
 
         {event.description && (
           <section className="space-y-3">
-            <h2 className="font-bold text-lg">About this event</h2>
-            <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-              {event.description}
-            </p>
+            <h2 className="text-xl font-bold">About this event</h2>
+            <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
+              <p className="whitespace-pre-wrap">{event.description}</p>
+            </div>
           </section>
         )}
       </main>
 
-      {/* FOOTER ACTION BAR */}
-      <div className="fixed bottom-16 left-0 right-0 bg-background/95 backdrop-blur-md border-t p-4 z-50">
-        <div className="container max-w-md mx-auto space-y-4">
+      {/* FIXED ACTION FOOTER */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 p-4 pb-10 backdrop-blur-lg shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
+        <div className="container max-w-lg mx-auto flex flex-col gap-5">
           {!isSoldOut && (
-            <div className="flex items-center justify-between px-2">
-              <span className="text-sm font-semibold">Quantity</span>
-              <div className="flex items-center gap-4 bg-accent/50 rounded-lg p-1">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <p className="text-sm font-bold">Select Quantity</p>
+                <p className="text-xs text-muted-foreground">Max {Math.min(10, event.remaining_seats)} per booking</p>
+              </div>
+              <div className="flex items-center gap-4 bg-secondary p-1 rounded-xl">
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8"
-                  onClick={() => setSeats(s => Math.max(1, s - 1))} 
+                  className="h-9 w-9 rounded-lg"
+                  onClick={() => setSeats(s => Math.max(1, s - 1))}
                   disabled={booking || seats <= 1}
                 >
-                  <Minus className="w-4 h-4" />
+                  <Minus className="h-4 w-4" />
                 </Button>
-                <span className="font-bold text-lg min-w-[20px] text-center">{seats}</span>
+                <span className="font-extrabold text-xl w-6 text-center">{seats}</span>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8"
-                  onClick={() => setSeats(s => Math.min(event.remaining_seats, s + 1))} 
-                  disabled={booking || seats >= event.remaining_seats}
+                  className="h-9 w-9 rounded-lg"
+                  onClick={() => setSeats(s => Math.min(event.remaining_seats, s + 1))}
+                  disabled={booking || seats >= event.remaining_seats || seats >= 10}
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           )}
           
           <Button 
-            className="w-full py-7 text-lg font-bold shadow-xl" 
+            className="w-full h-14 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg" 
             onClick={handleBooking} 
             disabled={booking || isSoldOut || !selectedTier}
           >
             {isSoldOut ? (
-              "Sold Out"
+              "Event Sold Out"
             ) : booking ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Processing...
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Verifying...
               </div>
             ) : (
-              `Book Now • ${currentPrice === 0 ? "FREE" : `₹${currentPrice}`}`
+              `Reserve Seats • ${selectedTier?.price === 0 ? "FREE" : `₹${(selectedTier?.price || 0) * seats}`}`
             )}
           </Button>
         </div>
       </div>
+      
       <BottomNav />
     </div>
   );
