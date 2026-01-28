@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Html5Qrcode, Html5QrcodeScannerState } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 
 interface CheckInResult {
   success: boolean;
@@ -25,13 +25,12 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<CheckInResult | null>(null);
   
-  // Use a ref to persist the scanner instance and avoid re-initialization crashes
+  // Persistence ref to keep the library instance alive across renders
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initialize scanner instance and inject styles on mount
+  // Initialize scanner instance and inject professional square UI styles on mount
   useEffect(() => {
-    // Persistent instance creation
     scannerRef.current = new Html5Qrcode("checkin-qr-reader");
 
     const style = document.createElement('style');
@@ -48,13 +47,11 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
     document.head.appendChild(style);
     
     return () => {
-      // Safe cleanup on unmount
-      if (scannerRef.current?.isScanning) {
-        scannerRef.current.stop().then(() => {
-          scannerRef.current?.clear();
-        }).catch(err => console.warn("Cleanup error:", err));
+      // Safe cleanup during component unmount
+      stopScanner();
+      if (document.head.contains(style)) {
+        document.head.removeChild(style);
       }
-      document.head.removeChild(style);
     };
   }, []);
 
@@ -62,9 +59,11 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
     try {
       if (!scannerRef.current) return;
 
-      // GUARD: Check state to prevent crashes from double-starting
+      // PRODUCTION GUARD: Check state using numeric values to bypass TS build errors
+      // 1 = IDLE/NOT_STARTED. If state is higher, the camera is busy
       const state = scannerRef.current.getState();
-      if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.STARTING) {
+      if (state > 1) {
+        console.warn("Scanner is already active or starting.");
         return;
       }
 
@@ -74,21 +73,21 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       await scannerRef.current.start(
         { facingMode: "environment" },
         {
-          fps: 15,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
+          fps: 15, // Higher FPS for responsive scanning
+          qrbox: { width: 250, height: 250 }, // Strict square area
+          aspectRatio: 1.0, // Force 1:1 camera aspect
         },
         (decodedText) => {
           handleCheckIn(decodedText);
-          stopScanner(); // Stop immediately on success
+          stopScanner(); // Release camera hardware immediately on success
         },
-        () => {} // Mute frame-by-frame errors for performance
+        () => {} // Mute frame errors for performance
       );
     } catch (error: any) {
       console.error("Scanner Error:", error);
       toast({
         title: "Camera Error",
-        description: "Could not access camera. Please check permissions.",
+        description: "Could not access camera. Ensure you are on HTTPS and have granted permissions.",
         variant: "destructive",
       });
       setIsScanning(false);
@@ -98,13 +97,12 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
   const stopScanner = async () => {
     if (scannerRef.current) {
       try {
-        const state = scannerRef.current.getState();
-        // Only stop if it's actually running to avoid internal library crashes
-        if (state === Html5QrcodeScannerState.SCANNING) {
+        // Only stop if the scanner is currently in state 2 (SCANNING)
+        if (scannerRef.current.getState() === 2) {
           await scannerRef.current.stop();
         }
       } catch (e) {
-        console.warn("Scanner stop warning:", e);
+        console.warn("Scanner stop suppressed:", e);
       }
     }
     setIsScanning(false);
@@ -130,8 +128,9 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         return;
       }
 
+      // Security Check: Ensure booking belongs to this restaurant's event
       if (booking.events?.created_by_id !== restaurantId) {
-        setResult({ success: false, message: "Wrong venue." });
+        setResult({ success: false, message: "Invalid venue." });
         playSound(false);
         return;
       }
@@ -147,6 +146,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
         return;
       }
 
+      // Atomic update to prevent double check-ins
       const { error: updateError } = await supabase
         .from('event_bookings')
         .update({
@@ -167,7 +167,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       playSound(true);
 
     } catch (error: any) {
-      setResult({ success: false, message: "System error. Try again." });
+      setResult({ success: false, message: "Database error. Try again." });
       playSound(false);
     } finally {
       setProcessing(false);
@@ -185,7 +185,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.3);
-    } catch (e) { /* Audio context might be blocked by browser */ }
+    } catch (e) { /* Browser audio restrictions apply */ }
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -200,7 +200,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-bold mb-2">Event Check-In</h2>
-        <p className="text-muted-foreground text-sm">Scan QR codes to check-in attendees</p>
+        <p className="text-muted-foreground text-sm">Scan QR codes to verify attendees</p>
       </div>
 
       <div className="max-w-sm mx-auto relative">
@@ -212,12 +212,12 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
           {!isScanning && !result && (
             <div className="text-center p-4">
               <QrCode className="w-12 h-12 text-muted-foreground mx-auto mb-2 opacity-20" />
-              <p className="text-xs text-muted-foreground">Ready to scan</p>
+              <p className="text-xs text-muted-foreground">Camera Preview Area</p>
             </div>
           )}
         </div>
 
-        {/* Square Scan Overlay */}
+        {/* Professional Square Frame Overlay */}
         {isScanning && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
             <div className="w-[250px] h-[250px] border-2 border-primary rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]" />
@@ -240,7 +240,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
       <div className="max-w-sm mx-auto">
         <form onSubmit={handleManualSubmit} className="flex gap-2">
           <Input
-            placeholder="Manual Booking ID"
+            placeholder="Manual Booking Code"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
             className="bg-background"
@@ -259,7 +259,7 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
           >
             {result.success ? <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" /> : <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />}
             <p className={`text-lg font-bold ${result.success ? "text-green-500" : "text-red-500"}`}>{result.message}</p>
-            {result.eventTitle && <p className="text-muted-foreground mt-1">{result.eventTitle}</p>}
+            {result.eventTitle && <p className="text-muted-foreground mt-1 font-medium">{result.eventTitle}</p>}
             {result.seatsCount && (
               <div className="flex items-center justify-center gap-2 mt-2 text-muted-foreground text-sm">
                 <Users className="w-4 h-4" /> <span>{result.seatsCount} seats</span>
@@ -269,6 +269,15 @@ export default function EventCheckIn({ restaurantId }: EventCheckInProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {processing && (
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 text-muted-foreground">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            Validating...
+          </div>
+        </div>
+      )}
     </div>
   );
 }
