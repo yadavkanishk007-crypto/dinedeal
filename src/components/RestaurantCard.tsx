@@ -35,7 +35,7 @@ const RestaurantCard = ({
           <div className="relative">
             <div className="aspect-[16/10] overflow-hidden">
               <img
-                src={imageUrl}
+                src={imageUrl || "/placeholder.svg"} // Fallback for missing images
                 alt={name}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
@@ -84,7 +84,8 @@ const RestaurantCard = ({
               <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-success/10">
                 <Star className="w-3.5 h-3.5 text-success fill-success" />
                 <span className="text-sm font-semibold text-success">
-                  {rating}
+                  {/* UPDATED: Displays "New" if rating is 0 or null, matching RestaurantDetail */}
+                  {rating && rating > 0 ? rating.toFixed(1) : "New"}
                 </span>
               </div>
             </div>
