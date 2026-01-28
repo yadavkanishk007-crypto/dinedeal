@@ -31,40 +31,55 @@ const SCANNER_ID = "checkin-qr-reader";
 export default function EventCheckIn({ restaurantId }: Props) {
   const { toast } = useToast();
 
+  /** ----------------------------------------------------
+   *  Refs (NO React re-render dependency)
+   *  -------------------------------------------------- */
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isMounted = useRef(false);
+  const isMountedRef = useRef(false);
+  const startingRef = useRef(false);
 
+  /** ----------------------------------------------------
+   *  State
+   *  -------------------------------------------------- */
   const [scannerActive, setScannerActive] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [result, setResult] = useState<CheckInResult | null>(null);
 
-  /* -------------------------------------------------------
-     Create scanner ONCE (React 18 StrictMode safe)
-  -------------------------------------------------------- */
+  /** ----------------------------------------------------
+   *  Create scanner ONCE (React 18 StrictMode safe)
+   *  -------------------------------------------------- */
   useEffect(() => {
     if (scannerRef.current) return;
 
     scannerRef.current = new Html5Qrcode(SCANNER_ID);
-    isMounted.current = true;
+    isMountedRef.current = true;
 
     return () => {
-      isMounted.current = false;
+      isMountedRef.current = false;
+      startingRef.current = false;
+
       scannerRef.current?.stop().catch(() => {});
       scannerRef.current = null;
     };
   }, []);
 
-  /* -------------------------------------------------------
-     Start scanner (Android + iOS safe)
-  -------------------------------------------------------- */
+  /** ----------------------------------------------------
+   *  Start scanner (mobile-safe)
+   *  -------------------------------------------------- */
   const startScanner = async () => {
-    if (!scannerRef.current || scannerActive) return;
+    if (
+      !scannerRef.current ||
+      scannerActive ||
+      startingRef.current
+    ) {
+      return;
+    }
+
+    startingRef.current = true;
+    setResult(null);
 
     try {
-      setResult(null);
-      setScannerActive(true);
-
       await scannerRef.current.start(
         { facingMode: "environment" },
         {
@@ -77,41 +92,46 @@ export default function EventCheckIn({ restaurantId }: Props) {
           handleCheckIn(decodedText);
         },
         () => {
-          // REQUIRED by html5-qrcode typings
-          // Intentionally ignored to avoid noisy logs
+          // Required by typings – intentionally ignored
         }
       );
+
+      // ✅ ONLY mark active AFTER camera really starts
+      if (isMountedRef.current) {
+        setScannerActive(true);
+      }
     } catch (err) {
-      setScannerActive(false);
       toast({
         title: "Camera Error",
         description:
-          "Camera access failed. Use HTTPS and allow permissions.",
+          "Unable to start camera. Ensure HTTPS and allow camera permission.",
         variant: "destructive",
       });
+    } finally {
+      startingRef.current = false;
     }
   };
 
-  /* -------------------------------------------------------
-     Stop scanner (NO clear() — critical)
-  -------------------------------------------------------- */
+  /** ----------------------------------------------------
+   *  Stop scanner (NO clear(), NO crashes)
+   *  -------------------------------------------------- */
   const stopScanner = async () => {
     if (!scannerRef.current || !scannerActive) return;
 
     try {
       await scannerRef.current.stop();
-    } catch (_) {
-      // ignore
+    } catch {
+      // Happens if camera already stopped – safe to ignore
     } finally {
-      if (isMounted.current) {
+      if (isMountedRef.current) {
         setScannerActive(false);
       }
     }
   };
 
-  /* -------------------------------------------------------
-     Check-in logic (atomic + safe)
-  -------------------------------------------------------- */
+  /** ----------------------------------------------------
+   *  Check-in logic (atomic & safe)
+   *  -------------------------------------------------- */
   const handleCheckIn = async (qrHash: string) => {
     if (processing) return;
     setProcessing(true);
@@ -157,9 +177,9 @@ export default function EventCheckIn({ restaurantId }: Props) {
     }
   };
 
-  /* -------------------------------------------------------
-     Helpers
-  -------------------------------------------------------- */
+  /** ----------------------------------------------------
+   *  Helpers
+   *  -------------------------------------------------- */
   const success = (msg: string, data: any) => {
     beep(true);
     setResult({
@@ -192,7 +212,7 @@ export default function EventCheckIn({ restaurantId }: Props) {
       const gain = ctx.createGain();
 
       osc.frequency.value = ok ? 800 : 300;
-      gain.gain.value = 0.1;
+      gain.gain.value = 0.08;
 
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -200,7 +220,7 @@ export default function EventCheckIn({ restaurantId }: Props) {
       osc.start();
       osc.stop(ctx.currentTime + 0.25);
     } catch {
-      // audio restrictions – ignore
+      // iOS audio restrictions – ignore
     }
   };
 
@@ -209,9 +229,9 @@ export default function EventCheckIn({ restaurantId }: Props) {
     setTimeout(startScanner, 0);
   };
 
-  /* -------------------------------------------------------
-     UI
-  -------------------------------------------------------- */
+  /** ----------------------------------------------------
+   *  UI
+   *  -------------------------------------------------- */
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -256,8 +276,10 @@ export default function EventCheckIn({ restaurantId }: Props) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (manualCode.trim()) handleCheckIn(manualCode.trim());
-          setManualCode("");
+          if (manualCode.trim()) {
+            handleCheckIn(manualCode.trim());
+            setManualCode("");
+          }
         }}
         className="max-w-sm mx-auto flex gap-2"
       >
