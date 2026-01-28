@@ -55,6 +55,11 @@ export default function Pay() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
+  // 🔹 Event booking context (optional)
+  const paymentType = searchParams.get("type"); // "event" | null
+  const eventId = searchParams.get("event");
+  const seats = Number(searchParams.get("seats") || 1);
+
 
   // --- State ---
   const restaurantId = searchParams.get("restaurant");
@@ -242,6 +247,11 @@ export default function Pay() {
               couponCode: appliedCoupon?.code, 
               offerId: activeOffer?.id, // Optional: Pass offer ID if backend tracks it
               frontendRef: transactionId
+              // 🔹 ADD THESE (EVENT SUPPORT)
+              type: paymentType,          // "event"
+              eventId: eventId || null,
+              seats,
+              userId: user?.id ?? null
             }
           }),
         }
