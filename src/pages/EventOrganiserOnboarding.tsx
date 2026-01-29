@@ -28,7 +28,7 @@ interface FormData {
 
 const EventOrganiserOnboarding = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user, signOut, refresh } = useAuth(); // Added refresh here
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<FormData>({
@@ -71,6 +71,7 @@ const EventOrganiserOnboarding = () => {
 
     setLoading(true);
     try {
+      // Create event organiser entry in restaurants table
       const { error } = await supabase
         .from("restaurants")
         .insert({
@@ -86,21 +87,29 @@ const EventOrganiserOnboarding = () => {
           is_approved: false,
           is_event_organiser: true,
           organiser_type: "event_group",
-          // New Payment Fields
+          // Payment Fields
           upi_id: formData.upiId,
           bank_account_number: formData.bankAccountNumber,
           bank_ifsc: formData.bankIfsc,
           bank_account_holder: formData.bankAccountHolder,
+          // Social Fields
+          instagram: formData.instagram,
+          twitter: formData.twitter,
+          website: formData.website,
         });
 
       if (error) throw error;
+
+      // CRITICAL: Refresh AuthContext to update needsRestaurantOnboarding state
+      await refresh();
 
       toast({
         title: "Welcome aboard! 🎉",
         description: "Your organiser profile is pending approval. We'll notify you soon.",
       });
 
-      navigate("/restaurant-dashboard");
+      // Redirect to dashboard
+      navigate("/restaurant-dashboard", { replace: true });
     } catch (error: any) {
       toast({
         title: "Error",
@@ -141,7 +150,6 @@ const EventOrganiserOnboarding = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Info */}
             <div className="space-y-4">
               <h3 className="font-semibold text-foreground">Basic Information</h3>
               <Input placeholder="Group/Brand Name *" value={formData.groupName} onChange={(e) => setFormData({ ...formData, groupName: e.target.value })} required className="bg-secondary border-transparent" />
@@ -149,33 +157,21 @@ const EventOrganiserOnboarding = () => {
               <Input placeholder="City *" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} required className="bg-secondary border-transparent" />
             </div>
 
-            {/* Payout Details - NEW SECTION */}
             <div className="space-y-4 p-5 rounded-2xl bg-primary/5 border border-primary/10">
               <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <Wallet className="w-4 h-4 text-primary" />
                 Payout Details
               </h3>
-              <p className="text-xs text-muted-foreground">This is where you will receive your ticket earnings. Account holder name is mandatory.</p>
+              <p className="text-xs text-muted-foreground">This is where you will receive your ticket earnings.</p>
               
               <div className="relative">
                 <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Account Holder Name *" 
-                  value={formData.bankAccountHolder} 
-                  onChange={(e) => setFormData({ ...formData, bankAccountHolder: e.target.value })} 
-                  required 
-                  className="pl-10 bg-secondary border-transparent" 
-                />
+                <Input placeholder="Account Holder Name *" value={formData.bankAccountHolder} onChange={(e) => setFormData({ ...formData, bankAccountHolder: e.target.value })} required className="pl-10 bg-secondary border-transparent" />
               </div>
 
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">UPI</span>
-                <Input 
-                  placeholder="UPI ID (e.g. name@upi)" 
-                  value={formData.upiId} 
-                  onChange={(e) => setFormData({ ...formData, upiId: e.target.value })} 
-                  className="pl-12 bg-secondary border-transparent" 
-                />
+                <Input placeholder="UPI ID (e.g. name@upi)" value={formData.upiId} onChange={(e) => setFormData({ ...formData, upiId: e.target.value })} className="pl-12 bg-secondary border-transparent" />
               </div>
 
               <div className="relative flex items-center py-2">
@@ -187,30 +183,18 @@ const EventOrganiserOnboarding = () => {
               <div className="space-y-3">
                 <div className="relative">
                   <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Bank Account Number" 
-                    value={formData.bankAccountNumber} 
-                    onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })} 
-                    className="pl-10 bg-secondary border-transparent" 
-                  />
+                  <Input placeholder="Bank Account Number" value={formData.bankAccountNumber} onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })} className="pl-10 bg-secondary border-transparent" />
                 </div>
-                <Input 
-                  placeholder="IFSC Code" 
-                  value={formData.bankIfsc} 
-                  onChange={(e) => setFormData({ ...formData, bankIfsc: e.target.value })} 
-                  className="bg-secondary border-transparent" 
-                />
+                <Input placeholder="IFSC Code" value={formData.bankIfsc} onChange={(e) => setFormData({ ...formData, bankIfsc: e.target.value })} className="bg-secondary border-transparent" />
               </div>
             </div>
 
-            {/* Contact Details */}
             <div className="space-y-4">
               <h3 className="font-semibold text-foreground">Contact Details</h3>
               <Input type="email" placeholder="Contact Email *" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required className="bg-secondary border-transparent" />
               <Input type="tel" placeholder="Contact Phone *" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required className="bg-secondary border-transparent" />
             </div>
 
-            {/* Social Links */}
             <div className="space-y-4">
               <h3 className="font-semibold text-foreground flex items-center gap-2"><Link2 className="w-4 h-4" />Social Links (Optional)</h3>
               <div className="relative">
@@ -220,6 +204,10 @@ const EventOrganiserOnboarding = () => {
               <div className="relative">
                 <Twitter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Twitter/X handle" value={formData.twitter} onChange={(e) => setFormData({ ...formData, twitter: e.target.value })} className="pl-10 bg-secondary border-transparent" />
+              </div>
+              <div className="relative">
+                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Website URL" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} className="pl-10 bg-secondary border-transparent" />
               </div>
             </div>
 
