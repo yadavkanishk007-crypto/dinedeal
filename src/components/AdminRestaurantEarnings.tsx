@@ -100,9 +100,10 @@ const AdminRestaurantEarnings = () => {
         }
         
         const existing = earningsMap.get(restId)!;
-        existing.gross_revenue += Number(tx.final_amount || 0);
-        existing.platform_commission += Number(tx.platform_commission || 0);
-        existing.net_payable += Number(tx.restaurant_earning || 0);
+        // FIX: Ensure decimal precision using parseFloat and explicit string fallback
+        existing.gross_revenue += parseFloat(tx.final_amount || "0");
+        existing.platform_commission += parseFloat(tx.platform_commission || "0");
+        existing.net_payable += parseFloat(tx.restaurant_earning || "0");
         existing.orders_count += 1;
       });
 
