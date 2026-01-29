@@ -100,10 +100,15 @@ const AdminRestaurantEarnings = () => {
         }
         
         const existing = earningsMap.get(restId)!;
-        // FIX: Ensure decimal precision using parseFloat and explicit string fallback
-        existing.gross_revenue += parseFloat(tx.final_amount || "0");
-        existing.platform_commission += parseFloat(tx.platform_commission || "0");
-        existing.net_payable += parseFloat(tx.restaurant_earning || "0");
+        
+        // PATCH: Ensure decimal precision using parseFloat and explicit string conversion
+        const gross = parseFloat(String(tx.final_amount || "0"));
+        const comm = parseFloat(String(tx.platform_commission || "0"));
+        const net = parseFloat(String(tx.restaurant_earning || "0"));
+
+        existing.gross_revenue += gross;
+        existing.platform_commission += comm;
+        existing.net_payable += net;
         existing.orders_count += 1;
       });
 
@@ -121,7 +126,7 @@ const AdminRestaurantEarnings = () => {
 
       setEarnings(earningsArray);
 
-      // Calculate totals
+      // PATCH: Explicitly derive totals from the processed high-precision array
       const grossRevenue = earningsArray.reduce((sum, e) => sum + e.gross_revenue, 0);
       const platformCommission = earningsArray.reduce((sum, e) => sum + e.platform_commission, 0);
       const netPayable = earningsArray.reduce((sum, e) => sum + e.net_payable, 0);
@@ -173,7 +178,6 @@ const AdminRestaurantEarnings = () => {
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
@@ -232,7 +236,6 @@ const AdminRestaurantEarnings = () => {
         </Card>
       </div>
 
-      {/* Filters & Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
