@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
@@ -80,6 +82,30 @@ export type Database = {
           created_at?: string
           id?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admins: {
+        Row: {
+          city: string | null
+          created_at: string | null
+          email: string | null
+          role: string | null
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string | null
+          email?: string | null
+          role?: string | null
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          created_at?: string | null
+          email?: string | null
+          role?: string | null
           user_id?: string
         }
         Relationships: []
@@ -188,29 +214,35 @@ export type Database = {
       dinein_sessions: {
         Row: {
           created_at: string
-          customer_id: string
+          customer_id: string | null
           expires_at: string
           id: string
           restaurant_id: string
+          session_code: string
           status: string
+          table_number: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
-          customer_id: string
+          customer_id?: string | null
           expires_at?: string
           id?: string
           restaurant_id: string
+          session_code?: string
           status?: string
+          table_number?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
-          customer_id?: string
+          customer_id?: string | null
           expires_at?: string
           id?: string
           restaurant_id?: string
+          session_code?: string
           status?: string
+          table_number?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -223,7 +255,64 @@ export type Database = {
           },
         ]
       }
-       events: {
+      event_bookings: {
+        Row: {
+          amount_paid: number | null
+          booking_status: Database["public"]["Enums"]["booking_status"] | null
+          checked_in_at: string | null
+          created_at: string | null
+          event_id: string
+          id: string
+          qr_code_hash: string
+          seats_booked: number
+          ticket_tier_name: string | null
+          transaction_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_paid?: number | null
+          booking_status?: Database["public"]["Enums"]["booking_status"] | null
+          checked_in_at?: string | null
+          created_at?: string | null
+          event_id: string
+          id?: string
+          qr_code_hash: string
+          seats_booked?: number
+          ticket_tier_name?: string | null
+          transaction_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_paid?: number | null
+          booking_status?: Database["public"]["Enums"]["booking_status"] | null
+          checked_in_at?: string | null
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          qr_code_hash?: string
+          seats_booked?: number
+          ticket_tier_name?: string | null
+          transaction_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_bookings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_bookings_transaction_fk"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
         Row: {
           booking_deadline: string | null
           city: string
@@ -239,6 +328,7 @@ export type Database = {
           start_time: string
           status: Database["public"]["Enums"]["event_status"] | null
           ticket_price: number | null
+          ticket_tiers: Json | null
           title: string
           total_seats: number
           updated_at: string | null
@@ -259,6 +349,7 @@ export type Database = {
           start_time: string
           status?: Database["public"]["Enums"]["event_status"] | null
           ticket_price?: number | null
+          ticket_tiers?: Json | null
           title: string
           total_seats?: number
           updated_at?: string | null
@@ -279,6 +370,7 @@ export type Database = {
           start_time?: string
           status?: Database["public"]["Enums"]["event_status"] | null
           ticket_price?: number | null
+          ticket_tiers?: Json | null
           title?: string
           total_seats?: number
           updated_at?: string | null
@@ -294,51 +386,44 @@ export type Database = {
           },
         ]
       }
-      event_bookings: {
+      invoices: {
         Row: {
+          created_at: string | null
           id: string
-          event_id: string
-          user_id: string
-          seats_booked: number
-          amount_paid: number
-          qr_code_hash: string | null
-          booking_status: Database["public"]["Enums"]["booking_status"]
-          checked_in_at: string | null
-          created_at: string
+          invoice_date: string
+          invoice_number: string
+          invoice_type: string
+          pdf_url: string
+          settlement_id: string | null
         }
         Insert: {
+          created_at?: string | null
           id?: string
-          event_id: string
-          user_id: string
-          seats_booked: number
-          amount_paid: number
-          qr_code_hash: string | null
-          booking_status: Database["public"]["Enums"]["booking_status"]
-          checked_in_at?: string | null
-          created_at?: string
+          invoice_date: string
+          invoice_number: string
+          invoice_type: string
+          pdf_url: string
+          settlement_id?: string | null
         }
         Update: {
+          created_at?: string | null
           id?: string
-          event_id?: string
-          user_id?: string
-          seats_booked?: number
-          amount_paid?: number
-          qr_code_hash?: string | null
-          booking_status?: Database["public"]["Enums"]["booking_status"]
-          checked_in_at?: string | null
-          created_at?: string
+          invoice_date?: string
+          invoice_number?: string
+          invoice_type?: string
+          pdf_url?: string
+          settlement_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "event_bookings_event_id_fkey"
-            columns: ["event_id"]
+            foreignKeyName: "invoices_settlement_id_fkey"
+            columns: ["settlement_id"]
             isOneToOne: false
-            referencedRelation: "events"
+            referencedRelation: "settlements"
             referencedColumns: ["id"]
-          }
+          },
         ]
-      },
-      
+      }
       menu_items: {
         Row: {
           category: string | null
@@ -472,41 +557,9 @@ export type Database = {
           },
         ]
       }
-      otp_verifications: {
-        Row: {
-          created_at: string
-          expires_at: string
-          id: string
-          is_verified: boolean | null
-          otp_code: string
-          otp_type: string
-          phone: string | null
-          user_email: string | null
-        }
-        Insert: {
-          created_at?: string
-          expires_at: string
-          id?: string
-          is_verified?: boolean | null
-          otp_code: string
-          otp_type: string
-          phone?: string | null
-          user_email?: string | null
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          id?: string
-          is_verified?: boolean | null
-          otp_code?: string
-          otp_type?: string
-          phone?: string | null
-          user_email?: string | null
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
+          agreed_to_terms: boolean | null
           avatar_url: string | null
           created_at: string
           full_name: string | null
@@ -516,6 +569,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agreed_to_terms?: boolean | null
           avatar_url?: string | null
           created_at?: string
           full_name?: string | null
@@ -525,6 +579,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agreed_to_terms?: boolean | null
           avatar_url?: string | null
           created_at?: string
           full_name?: string | null
@@ -609,6 +664,41 @@ export type Database = {
             columns: ["transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      razorpay_orders: {
+        Row: {
+          amount: number
+          created_at: string | null
+          id: string
+          order_id: string
+          restaurant_id: string | null
+          status: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          id?: string
+          order_id: string
+          restaurant_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          id?: string
+          order_id?: string
+          restaurant_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "razorpay_orders_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
         ]
@@ -713,7 +803,10 @@ export type Database = {
           bank_account_holder: string | null
           bank_account_number: string | null
           bank_ifsc: string | null
+          bank_verified: boolean | null
           city: string
+          commission_type: string | null
+          commission_value: number | null
           created_at: string
           cuisine: string
           description: string | null
@@ -722,15 +815,19 @@ export type Database = {
           image_url: string | null
           is_active: boolean | null
           is_approved: boolean | null
+          is_auto_eligible: boolean | null
           is_event_organiser: boolean | null
           latitude: number | null
           longitude: number | null
+          min_payout_threshold: number | null
           name: string
           open_hours: string | null
           organiser_type: string | null
           owner_id: string
           phone: string | null
           rating: number | null
+          settlement_cycle: string | null
+          tier: string | null
           updated_at: string
           upi_id: string | null
         }
@@ -739,7 +836,10 @@ export type Database = {
           bank_account_holder?: string | null
           bank_account_number?: string | null
           bank_ifsc?: string | null
+          bank_verified?: boolean | null
           city?: string
+          commission_type?: string | null
+          commission_value?: number | null
           created_at?: string
           cuisine: string
           description?: string | null
@@ -748,15 +848,19 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean | null
           is_approved?: boolean | null
+          is_auto_eligible?: boolean | null
           is_event_organiser?: boolean | null
           latitude?: number | null
           longitude?: number | null
+          min_payout_threshold?: number | null
           name: string
           open_hours?: string | null
-            organiser_type?: string | null
+          organiser_type?: string | null
           owner_id: string
           phone?: string | null
           rating?: number | null
+          settlement_cycle?: string | null
+          tier?: string | null
           updated_at?: string
           upi_id?: string | null
         }
@@ -765,7 +869,10 @@ export type Database = {
           bank_account_holder?: string | null
           bank_account_number?: string | null
           bank_ifsc?: string | null
+          bank_verified?: boolean | null
           city?: string
+          commission_type?: string | null
+          commission_value?: number | null
           created_at?: string
           cuisine?: string
           description?: string | null
@@ -774,15 +881,19 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean | null
           is_approved?: boolean | null
+          is_auto_eligible?: boolean | null
           is_event_organiser?: boolean | null
           latitude?: number | null
           longitude?: number | null
+          min_payout_threshold?: number | null
           name?: string
           open_hours?: string | null
           organiser_type?: string | null
           owner_id?: string
           phone?: string | null
           rating?: number | null
+          settlement_cycle?: string | null
+          tier?: string | null
           updated_at?: string
           upi_id?: string | null
         }
@@ -795,7 +906,7 @@ export type Database = {
           points: number
           total_earned: number
           total_redeemed: number
-          updated_at: string
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -804,7 +915,7 @@ export type Database = {
           points?: number
           total_earned?: number
           total_redeemed?: number
-          updated_at?: string
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -813,7 +924,7 @@ export type Database = {
           points?: number
           total_earned?: number
           total_redeemed?: number
-          updated_at?: string
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -822,51 +933,78 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          failure_reason: string | null
+          from_date: string | null
           gross_amount: number
           id: string
+          net_amount: number | null
           net_payable: number
           notes: string | null
           payout_date: string | null
+          payout_id: string | null
+          payout_method: string | null
           payout_reference: string | null
+          payout_status: string | null
           period_end: string
           period_start: string
           platform_commission: number
           restaurant_id: string
+          settlement_cycle: string | null
+          settlement_number: string | null
           status: string
+          to_date: string | null
           total_orders: number
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          failure_reason?: string | null
+          from_date?: string | null
           gross_amount?: number
           id?: string
+          net_amount?: number | null
           net_payable?: number
           notes?: string | null
           payout_date?: string | null
+          payout_id?: string | null
+          payout_method?: string | null
           payout_reference?: string | null
+          payout_status?: string | null
           period_end: string
           period_start: string
           platform_commission?: number
           restaurant_id: string
+          settlement_cycle?: string | null
+          settlement_number?: string | null
           status?: string
+          to_date?: string | null
           total_orders?: number
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          failure_reason?: string | null
+          from_date?: string | null
           gross_amount?: number
           id?: string
+          net_amount?: number | null
           net_payable?: number
           notes?: string | null
           payout_date?: string | null
+          payout_id?: string | null
+          payout_method?: string | null
           payout_reference?: string | null
+          payout_status?: string | null
           period_end?: string
           period_start?: string
           platform_commission?: number
           restaurant_id?: string
+          settlement_cycle?: string | null
+          settlement_number?: string | null
           status?: string
+          to_date?: string | null
           total_orders?: number
           updated_at?: string
         }
@@ -950,75 +1088,91 @@ export type Database = {
       }
       transactions: {
         Row: {
-          id: string
           bill_amount: number
-          created_at: string
+          created_at: string | null
+          dinein_session_id: string | null
           discount_amount: number
           final_amount: number
+          id: string
           is_settled: boolean | null
           offer_id: string | null
           payment_method: string | null
           payment_reference: string | null
-          payment_status: 'pending' | 'completed' | 'failed' | string | null
+          payment_status: string | null
           platform_commission: number | null
-          restaurant_earning: number | null
-          restaurant_id: string
-          rewards_earned: number | null
-          settlement_id: string | null
-          user_id: string
-          dinein_session_id: string | null
+          platform_commission_percent: number | null
           pos_bill_no: string | null
+          razorpay_order_id: string | null
+          restaurant_earning: number | null
+          restaurant_id: string | null
+          rewards_earned: number | null
+          settled_at: string | null
+          settlement_id: string | null
+          user_id: string | null
         }
         Insert: {
-          id?: string
           bill_amount: number
-          created_at?: string
+          created_at?: string | null
+          dinein_session_id?: string | null
           discount_amount?: number
           final_amount: number
+          id?: string
           is_settled?: boolean | null
           offer_id?: string | null
           payment_method?: string | null
           payment_reference?: string | null
-          payment_status?: 'pending' | 'completed' | 'failed' | string | null
+          payment_status?: string | null
           platform_commission?: number | null
-          restaurant_earning?: number | null
-          restaurant_id: string
-          rewards_earned?: number | null
-          settlement_id?: string | null
-          user_id: string
-          dinein_session_id?: string | null
+          platform_commission_percent?: number | null
           pos_bill_no?: string | null
+          razorpay_order_id?: string | null
+          restaurant_earning?: number | null
+          restaurant_id?: string | null
+          rewards_earned?: number | null
+          settled_at?: string | null
+          settlement_id?: string | null
+          user_id?: string | null
         }
         Update: {
-          id?: string
           bill_amount?: number
-          created_at?: string
+          created_at?: string | null
+          dinein_session_id?: string | null
           discount_amount?: number
           final_amount?: number
+          id?: string
           is_settled?: boolean | null
           offer_id?: string | null
           payment_method?: string | null
           payment_reference?: string | null
-          payment_status?: 'pending' | 'completed' | 'failed' | string | null
+          payment_status?: string | null
           platform_commission?: number | null
-          restaurant_earning?: number | null
-          restaurant_id?: string
-          rewards_earned?: number | null
-          settlement_id?: string | null
-          user_id?: string
-          dinein_session_id?: string | null
+          platform_commission_percent?: number | null
           pos_bill_no?: string | null
+          razorpay_order_id?: string | null
+          restaurant_earning?: number | null
+          restaurant_id?: string | null
+          rewards_earned?: number | null
+          settled_at?: string | null
+          settlement_id?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "transactions_offer_id_fkey"
+            foreignKeyName: "transactions_dinein_session_id_fkey"
+            columns: ["dinein_session_id"]
+            isOneToOne: false
+            referencedRelation: "dinein_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_offer_fk"
             columns: ["offer_id"]
             isOneToOne: false
             referencedRelation: "offers"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "transactions_restaurant_id_fkey"
+            foreignKeyName: "transactions_restaurant_fk"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
@@ -1031,33 +1185,26 @@ export type Database = {
             referencedRelation: "settlements"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_dinein_session_id_fkey"
-            columns: ["dinein_session_id"]
-            isOneToOne: false
-            referencedRelation: "dinein_sessions"
-            referencedColumns: ["id"]
-          },
         ]
       }
       user_roles: {
         Row: {
-          created_at: string
+          created_at: string | null
           id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
+          role: string | null
+          user_id: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id: string
+          role?: string | null
+          user_id?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
+          role?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1077,6 +1224,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
       app_role: "customer" | "restaurant" | "admin" | "event_organiser"
@@ -1219,6 +1367,3 @@ export const Constants = {
     },
   },
 } as const
-
-// --- ADDED ENTITY EXPORT ---
-export type Transaction = Tables<'transactions'>
