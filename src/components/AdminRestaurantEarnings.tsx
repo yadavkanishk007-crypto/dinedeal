@@ -1,140 +1,174 @@
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { 
-  Store, 
-  TrendingUp, 
-  DollarSign,
-  Download,
-  Filter,
-  Search
+  Wallet, 
+  Plus, 
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Search,
+  CreditCard,
+  Banknote,
+  Info,
+  CalendarDays
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuditLog } from "@/hooks/useAuditLog";
 
-interface RestaurantEarning {
+interface Settlement {
+  id: string;
   restaurant_id: string;
-  restaurant_name: string;
-  gross_revenue: number;
+  restaurant_name?: string;
+  is_event?: boolean;
+  period_start: string;
+  period_end: string;
+  total_orders: number;
+  gross_amount: number;
   platform_commission: number;
   net_payable: number;
-  orders_count: number;
+  status: string;
+  payout_reference: string | null;
+  payout_method: 'manual' | 'razorpay' | null;
+  payout_date: string | null;
+  created_at: string;
 }
 
-const AdminRestaurantEarnings = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [earnings, setEarnings] = useState<RestaurantEarning[]>([]);
-  const [restaurants, setRestaurants] = useState<{ id: string; name: string }[]>([]);
-  const [selectedRestaurant, setSelectedRestaurant] = useState<string>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+interface Entity {
+  id: string;
+  name: string;
+  is_event_organiser: boolean;
+  organiser_type: 'restaurant' | 'event_group';
+}
 
-  // Summary stats
-  const [totals, setTotals] = useState({
-    grossRevenue: 0,
-    platformCommission: 0,
-    netPayable: 0,
-    totalOrders: 0,
-  });
+interface PendingSettlement {
+  restaurant_id: string;
+  entity_name: string;
+  organiser_type: 'restaurant' | 'event_group';
+  orders_count: number;
+  gross_amount: number;
+  platform_commission: number;
+  net_payable: number;
+  min_date: string;
+  max_date: string;
+}
+
+const AdminSettlements = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [pendingSettlements, setPendingSettlements] = useState<PendingSettlement[]>([]);
+  
+  const [selectedEntity, setSelectedEntity] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createEntityId, setCreateEntityId] = useState("");
+  const [createDateFrom, setCreateDateFrom] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
+  const [createDateTo, setCreateDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
+  
+  const [commissionRate, setCommissionRate] = useState<string>("10");
+  const [payoutMethod, setPayoutMethod] = useState<"manual" | "razorpay">("manual");
+  
+  const [isCreating, setIsCreating] = useState(false);
+  
+  const { toast } = useToast();
+  const { logAction } = useAuditLog();
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Fetch all restaurants for filter dropdown
+      // 1. Fetch all approved restaurants/event groups from one table
       const { data: restData } = await supabase
         .from("restaurants")
-        .select("id, name")
+        .select("id, name, is_event_organiser, organiser_type")
+        .eq("is_approved", true)
         .order("name");
       
-      setRestaurants(restData || []);
+      setEntities(restData || []);
 
-      // Build transaction query
+      // 2. Fetch settlements
       let query = supabase
+        .from("settlements")
+        .select(`
+          *,
+          restaurants!inner(name, is_event_organiser)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (selectedEntity !== "all") {
+        query = query.eq("restaurant_id", selectedEntity);
+      }
+      if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
+      }
+
+      const { data: settlementsData, error } = await query;
+      if (error) throw error;
+
+      const mappedSettlements = settlementsData?.map((s: any) => ({
+        ...s,
+        restaurant_name: s.restaurants?.name || "Unknown",
+        is_event: s.restaurants?.is_event_organiser
+      })) || [];
+
+      setSettlements(searchQuery 
+        ? mappedSettlements.filter(s => s.restaurant_name?.toLowerCase().includes(searchQuery.toLowerCase()))
+        : mappedSettlements
+      );
+
+      // 3. Fetch pending transactions (Now including Event Group logic)
+      const { data: pendingTxData } = await supabase
         .from("transactions")
         .select(`
-          id,
+          restaurant_id,
           final_amount,
           platform_commission,
           restaurant_earning,
-          restaurant_id,
           created_at,
-          restaurants!inner(name)
+          restaurants!inner(name, organiser_type)
         `)
-        .eq("payment_status", "completed");
+        .eq("payment_status", "completed")
+        .is("settlement_id", null);
 
-      if (selectedRestaurant !== "all") {
-        query = query.eq("restaurant_id", selectedRestaurant);
-      }
-      if (dateFrom) {
-        query = query.gte("created_at", new Date(dateFrom).toISOString());
-      }
-      if (dateTo) {
-        query = query.lte("created_at", new Date(dateTo + "T23:59:59").toISOString());
-      }
-
-      const { data: txData, error } = await query;
-
-      if (error) throw error;
-
-      // Aggregate by restaurant
-      const earningsMap = new Map<string, RestaurantEarning>();
-      
-      txData?.forEach((tx: any) => {
-        const restId = tx.restaurant_id;
-        const restName = tx.restaurants?.name || "Unknown";
-        
-        if (!earningsMap.has(restId)) {
-          earningsMap.set(restId, {
-            restaurant_id: restId,
-            restaurant_name: restName,
-            gross_revenue: 0,
+      const pendingMap = new Map<string, PendingSettlement>();
+      pendingTxData?.forEach((tx: any) => {
+        const id = tx.restaurant_id;
+        if (!pendingMap.has(id)) {
+          pendingMap.set(id, {
+            restaurant_id: id,
+            entity_name: tx.restaurants?.name || "Unknown",
+            organiser_type: tx.restaurants?.organiser_type || "restaurant",
+            orders_count: 0,
+            gross_amount: 0,
             platform_commission: 0,
             net_payable: 0,
-            orders_count: 0,
+            min_date: tx.created_at,
+            max_date: tx.created_at,
           });
         }
-        
-        const existing = earningsMap.get(restId)!;
-        
-        // PATCH: Ensure decimal precision using parseFloat and explicit string conversion
-        const gross = parseFloat(String(tx.final_amount || "0"));
-        const comm = parseFloat(String(tx.platform_commission || "0"));
-        const net = parseFloat(String(tx.restaurant_earning || "0"));
-
-        existing.gross_revenue += gross;
-        existing.platform_commission += comm;
-        existing.net_payable += net;
+        const existing = pendingMap.get(id)!;
         existing.orders_count += 1;
+        existing.gross_amount += Number(tx.final_amount || 0);
+        existing.platform_commission += Number(tx.platform_commission || 0);
+        existing.net_payable += Number(tx.restaurant_earning || 0);
+        if (tx.created_at < existing.min_date) existing.min_date = tx.created_at;
+        if (tx.created_at > existing.max_date) existing.max_date = tx.created_at;
       });
 
-      let earningsArray = Array.from(earningsMap.values());
-      
-      // Apply search filter
-      if (searchQuery) {
-        earningsArray = earningsArray.filter(e => 
-          e.restaurant_name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-      }
-
-      // Sort by gross revenue descending
-      earningsArray.sort((a, b) => b.gross_revenue - a.gross_revenue);
-
-      setEarnings(earningsArray);
-
-      // PATCH: Explicitly derive totals from the processed high-precision array
-      const grossRevenue = earningsArray.reduce((sum, e) => sum + e.gross_revenue, 0);
-      const platformCommission = earningsArray.reduce((sum, e) => sum + e.platform_commission, 0);
-      const netPayable = earningsArray.reduce((sum, e) => sum + e.net_payable, 0);
-      const totalOrders = earningsArray.reduce((sum, e) => sum + e.orders_count, 0);
-
-      setTotals({ grossRevenue, platformCommission, netPayable, totalOrders });
+      setPendingSettlements(Array.from(pendingMap.values()));
     } catch (error) {
-      console.error("Error fetching earnings:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -142,194 +176,231 @@ const AdminRestaurantEarnings = () => {
 
   useEffect(() => {
     fetchData();
-  }, [selectedRestaurant, dateFrom, dateTo, searchQuery]);
+  }, [selectedEntity, statusFilter, searchQuery]);
 
-  const exportCSV = () => {
-    const headers = ["Restaurant Name", "Gross Revenue", "Platform Commission", "Net Payable", "Orders Count"];
-    const rows = earnings.map(e => [
-      e.restaurant_name,
-      e.gross_revenue.toFixed(2),
-      e.platform_commission.toFixed(2),
-      e.net_payable.toFixed(2),
-      e.orders_count.toString()
-    ]);
-    
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `restaurant-earnings-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    a.click();
+  // Handle auto-commission: 0% for event_group, calculated/10% for restaurant
+  useEffect(() => {
+    if (createEntityId) {
+      const entity = entities.find(e => e.id === createEntityId);
+      if (entity?.organiser_type === 'event_group') {
+        setCommissionRate("0");
+      } else {
+        const pending = pendingSettlements.find(p => p.restaurant_id === createEntityId);
+        if (pending && pending.gross_amount > 0) {
+          setCommissionRate(((pending.platform_commission / pending.gross_amount) * 100).toFixed(2));
+        } else {
+          setCommissionRate("10");
+        }
+      }
+    }
+  }, [createEntityId, pendingSettlements, entities]);
+
+  const createSettlement = async () => {
+    if (!createEntityId) return;
+    const commRate = parseFloat(commissionRate);
+
+    setIsCreating(true);
+    try {
+      const { data: txData, error: txError } = await supabase
+        .from("transactions")
+        .select("id, final_amount")
+        .eq("restaurant_id", createEntityId)
+        .eq("payment_status", "completed")
+        .is("settlement_id", null)
+        .gte("created_at", new Date(createDateFrom).toISOString())
+        .lte("created_at", new Date(createDateTo + "T23:59:59").toISOString());
+
+      if (txError || !txData?.length) throw new Error("No transactions found in this range");
+
+      const grossAmount = txData.reduce((sum, t) => sum + Number(t.final_amount), 0);
+      const platformCommission = grossAmount * (commRate / 100);
+      const netPayable = grossAmount - platformCommission;
+
+      const { data: settlement, error: settError } = await supabase
+        .from("settlements")
+        .insert({
+          restaurant_id: createEntityId,
+          period_start: new Date(createDateFrom).toISOString(),
+          period_end: new Date(createDateTo + "T23:59:59").toISOString(),
+          total_orders: txData.length,
+          gross_amount: grossAmount,
+          platform_commission: platformCommission,
+          net_payable: netPayable,
+          status: "pending",
+          payout_method: payoutMethod,
+        })
+        .select().single();
+
+      if (settError) throw settError;
+
+      await supabase.from("transactions").update({ settlement_id: settlement.id }).in("id", txData.map(t => t.id));
+
+      await logAction({
+        action: "create_settlement",
+        entity_type: "settlement",
+        entity_id: settlement.id,
+        details: { net_payable, commission_rate: commRate },
+      });
+
+      toast({ title: "Settlement Created", description: "Transactions locked. Awaiting payout." });
+      setIsCreateDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
-    );
-  }
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, JSX.Element> = {
+      completed: <Badge className="bg-green-500 text-white"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>,
+      processing: <Badge className="bg-blue-500 text-white"><Clock className="w-3 h-3 mr-1" />Processing</Badge>,
+      pending: <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pending</Badge>,
+      failed: <Badge variant="destructive"><AlertCircle className="w-3 h-3 mr-1" />Failed</Badge>,
+    };
+    return badges[status] || <Badge variant="outline">{status}</Badge>;
+  };
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Gross Revenue</p>
-                <p className="text-2xl font-bold mt-1">₹{totals.grossRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-green-500" />
-              </div>
+      {/* Pending Section */}
+      {pendingSettlements.length > 0 && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="w-5 h-5 text-yellow-500" />
+              Pending Settlement Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+              {pendingSettlements.slice(0, 6).map((ps) => (
+                <div key={ps.restaurant_id} className="p-3 rounded-lg border bg-background flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${ps.organiser_type === 'event_group' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                      {ps.organiser_type === 'event_group' ? <CalendarDays className="w-4 h-4 text-blue-600" /> : <Wallet className="w-4 h-4 text-green-600" />}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{ps.entity_name}</p>
+                      <p className="text-xs text-muted-foreground">{ps.orders_count} orders</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-green-600">₹{ps.net_payable.toFixed(2)}</p>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                        setCreateEntityId(ps.restaurant_id);
+                        setCreateDateFrom(format(new Date(ps.min_date), "yyyy-MM-dd"));
+                        setCreateDateTo(format(new Date(ps.max_date), "yyyy-MM-dd"));
+                        setIsCreateDialogOpen(true);
+                    }}>Settle</Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Platform Commission</p>
-                <p className="text-2xl font-bold mt-1">₹{totals.platformCommission.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="p-2 bg-purple-500/10 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-purple-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Net Payable</p>
-                <p className="text-2xl font-bold mt-1">₹{totals.netPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
-                <p className="text-2xl font-bold mt-1">{totals.totalOrders.toLocaleString()}</p>
-              </div>
-              <div className="p-2 bg-orange-500/10 rounded-lg">
-                <Store className="w-5 h-5 text-orange-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Main List */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Restaurant Earnings
+            <Wallet className="w-4 h-4" />
+            All Settlements
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="w-4 h-4 mr-2" />Create Settlement</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>New Settlement</DialogTitle></DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Entity</Label>
+                  <Select value={createEntityId} onValueChange={setCreateEntityId}>
+                    <SelectTrigger><SelectValue placeholder="Select restaurant or event" /></SelectTrigger>
+                    <SelectContent>
+                      {entities.map(e => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name} {e.organiser_type === 'event_group' ? '(Event)' : '(Rest)'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>From</Label><Input type="date" value={createDateFrom} onChange={(e) => setCreateDateFrom(e.target.value)} /></div>
+                  <div className="space-y-2"><Label>To</Label><Input type="date" value={createDateTo} onChange={(e) => setCreateDateTo(e.target.value)} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Commission (%)</Label>
+                    <Input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Method</Label>
+                    <Select value={payoutMethod} onValueChange={(v: any) => setPayoutMethod(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual Transfer</SelectItem>
+                        <SelectItem value="razorpay">Razorpay</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={createSettlement} disabled={isCreating}>{isCreating ? "Processing..." : "Initiate Settlement"}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search restaurant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={selectedRestaurant} onValueChange={setSelectedRestaurant}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All Restaurants" />
-              </SelectTrigger>
+          <div className="flex gap-4 mb-4">
+            <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="max-w-xs" />
+            <Select value={selectedEntity} onValueChange={setSelectedEntity}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="All Entities" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Restaurants</SelectItem>
-                {restaurants.map(r => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                ))}
+                <SelectItem value="all">All Entities</SelectItem>
+                {entities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">From:</span>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">To:</span>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-40"
-              />
-            </div>
           </div>
-
-          {earnings.length === 0 ? (
-            <div className="text-center py-12">
-              <Store className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No earnings data found</p>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Restaurant Name</TableHead>
-                    <TableHead className="text-right">Gross Revenue</TableHead>
-                    <TableHead className="text-right">Platform Commission</TableHead>
-                    <TableHead className="text-right">Net Payable</TableHead>
-                    <TableHead className="text-center">Orders</TableHead>
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Period</TableHead>
+                  <TableHead className="text-right">Net Payable</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {settlements.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">{s.restaurant_name}</TableCell>
+                    <TableCell>
+                      {s.is_event ? <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">Event</Badge> : <Badge variant="outline">Rest</Badge>}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {format(new Date(s.period_start), "dd MMM")} → {format(new Date(s.period_end), "dd MMM")}
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-green-600">₹{Number(s.net_payable).toLocaleString()}</TableCell>
+                    <TableCell>{getStatusBadge(s.status)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{format(new Date(s.created_at), "dd MMM yy")}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {earnings.map((earning) => (
-                    <TableRow key={earning.restaurant_id}>
-                      <TableCell className="font-medium">{earning.restaurant_name}</TableCell>
-                      <TableCell className="text-right">
-                        ₹{earning.gross_revenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right text-purple-600">
-                        ₹{earning.platform_commission.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right text-green-600 font-medium">
-                        ₹{earning.net_payable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-center">{earning.orders_count}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 };
 
-export default AdminRestaurantEarnings;
+export default AdminSettlements;
