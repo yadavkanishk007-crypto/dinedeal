@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { UserPlus, Shield, Eye, EyeOff, Loader2, Check, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  UserPlus,
+  Shield,
+  Eye,
+  EyeOff,
+  Loader2,
+  Check,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,9 +31,11 @@ interface AdminPermissions {
 const AdminCreator = () => {
   const { toast } = useToast();
   const { logAction } = useAuditLog();
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -32,6 +43,7 @@ const AdminCreator = () => {
     phone: "",
     city: "Jhansi",
   });
+
   const [permissions, setPermissions] = useState<AdminPermissions>({
     canViewRevenue: true,
     canManageRestaurants: true,
@@ -40,11 +52,14 @@ const AdminCreator = () => {
     canSendNotifications: true,
     canViewAudit: true,
   });
-  const [createdAdmins, setCreatedAdmins] = useState<{ email: string; created_at: string; permissions?: AdminPermissions }[]>([]);
+
+  const [createdAdmins, setCreatedAdmins] = useState<
+    { email: string; created_at: string; permissions?: AdminPermissions }[]
+  >([]);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.password.length < 8) {
       toast({
         title: "Weak Password",
@@ -56,38 +71,67 @@ const AdminCreator = () => {
 
     setLoading(true);
     try {
-      // Call edge function to create admin with permissions
-      const { data, error } = await supabase.functions.invoke("create-admin", {
-        body: {
+      // 1️⃣ Create auth user directly (NO EDGE FUNCTION)
+      const { data: authData, error: authError } =
+        await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
-          fullName: formData.fullName,
-          phone: formData.phone,
-          city: formData.city,
-          permissions,
-        },
+          options: {
+            data: {
+              full_name: formData.fullName,
+              phone: formData.phone,
+              city: formData.city,
+            },
+          },
+        });
+
+      if (authError) throw authError;
+
+      const userId = authData.user?.id;
+      if (!userId) throw new Error("User creation failed");
+
+      // 2️⃣ Insert admin record
+      const { error: adminError } = await supabase.from("admins").insert({
+        user_id: userId,
+        email: formData.email,
+        role: "admin",
+        city: formData.city,
       });
 
-      if (error) throw error;
+      if (adminError) throw adminError;
 
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+      // 3️⃣ Insert permissions
+      const { error: permError } = await supabase
+        .from("admin_permissions")
+        .insert({
+          admin_id: userId,
+          ...permissions,
+        });
+
+      if (permError) throw permError;
 
       toast({
         title: "Admin Created!",
         description: `Admin account for ${formData.email} has been created.`,
       });
 
-      // Log the action
+      // 4️⃣ Audit log (UNCHANGED)
       await logAction({
-        action: 'create',
-        entity_type: 'admin',
-        details: { email: formData.email, city: formData.city, permissions },
+        action: "create",
+        entity_type: "admin",
+        details: {
+          email: formData.email,
+          city: formData.city,
+          permissions,
+        },
       });
 
       setCreatedAdmins([
-        { email: formData.email, created_at: new Date().toISOString(), permissions },
+        {
+          email: formData.email,
+          created_at: new Date().toISOString(),
+          permissions,
+        },
         ...createdAdmins,
       ]);
 
@@ -98,8 +142,7 @@ const AdminCreator = () => {
         phone: "",
         city: "Jhansi",
       });
-      
-      // Reset permissions to defaults
+
       setPermissions({
         canViewRevenue: true,
         canManageRestaurants: true,
@@ -120,7 +163,8 @@ const AdminCreator = () => {
   };
 
   const generatePassword = () => {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+    const chars =
+      "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
     let password = "";
     for (let i = 0; i < 12; i++) {
       password += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -131,10 +175,7 @@ const AdminCreator = () => {
 
   return (
     <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -149,7 +190,9 @@ const AdminCreator = () => {
                   type="email"
                   placeholder="Email *"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
                   required
                 />
                 <div className="relative">
@@ -157,7 +200,9 @@ const AdminCreator = () => {
                     type={showPassword ? "text" : "password"}
                     placeholder="Password *"
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
                     className="pr-20"
                     required
                     minLength={8}
@@ -170,14 +215,23 @@ const AdminCreator = () => {
                       className="h-7 px-2 text-xs"
                       onClick={() => setShowPassword(!showPassword)}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={generatePassword}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={generatePassword}
+                >
                   Generate Strong Password
                 </Button>
               </div>
@@ -186,16 +240,22 @@ const AdminCreator = () => {
                 <Input
                   placeholder="Full Name"
                   value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, fullName: e.target.value })
+                  }
                 />
                 <Input
                   placeholder="Phone"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
                 />
                 <select
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, city: e.target.value })
+                  }
                   className="h-10 px-3 rounded-md border border-input bg-background text-sm"
                 >
                   <option value="Jhansi">Jhansi</option>
@@ -214,68 +274,97 @@ const AdminCreator = () => {
                   onClick={() => setShowPermissions(!showPermissions)}
                   className="w-full p-3 flex items-center justify-between bg-secondary/30 hover:bg-secondary/50 transition-colors"
                 >
-                  <span className="font-medium text-sm">Admin Permissions</span>
+                  <span className="font-medium text-sm">
+                    Admin Permissions
+                  </span>
                   {showPermissions ? (
                     <ChevronUp className="w-4 h-4" />
                   ) : (
                     <ChevronDown className="w-4 h-4" />
                   )}
                 </button>
-                
+
                 {showPermissions && (
                   <div className="p-4 space-y-4 bg-background">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="canViewRevenue" className="text-sm">View Revenue & Analytics</Label>
+                        <Label className="text-sm">
+                          View Revenue & Analytics
+                        </Label>
                         <Switch
-                          id="canViewRevenue"
                           checked={permissions.canViewRevenue}
-                          onCheckedChange={(checked) => setPermissions({ ...permissions, canViewRevenue: checked })}
+                          onCheckedChange={(checked) =>
+                            setPermissions({
+                              ...permissions,
+                              canViewRevenue: checked,
+                            })
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="canManageRestaurants" className="text-sm">Manage Restaurants</Label>
+                        <Label className="text-sm">Manage Restaurants</Label>
                         <Switch
-                          id="canManageRestaurants"
                           checked={permissions.canManageRestaurants}
-                          onCheckedChange={(checked) => setPermissions({ ...permissions, canManageRestaurants: checked })}
+                          onCheckedChange={(checked) =>
+                            setPermissions({
+                              ...permissions,
+                              canManageRestaurants: checked,
+                            })
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="canManageUsers" className="text-sm">Manage Users</Label>
+                        <Label className="text-sm">Manage Users</Label>
                         <Switch
-                          id="canManageUsers"
                           checked={permissions.canManageUsers}
-                          onCheckedChange={(checked) => setPermissions({ ...permissions, canManageUsers: checked })}
+                          onCheckedChange={(checked) =>
+                            setPermissions({
+                              ...permissions,
+                              canManageUsers: checked,
+                            })
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="canManageCoupons" className="text-sm">Manage Coupons</Label>
+                        <Label className="text-sm">Manage Coupons</Label>
                         <Switch
-                          id="canManageCoupons"
                           checked={permissions.canManageCoupons}
-                          onCheckedChange={(checked) => setPermissions({ ...permissions, canManageCoupons: checked })}
+                          onCheckedChange={(checked) =>
+                            setPermissions({
+                              ...permissions,
+                              canManageCoupons: checked,
+                            })
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="canSendNotifications" className="text-sm">Send Notifications</Label>
+                        <Label className="text-sm">Send Notifications</Label>
                         <Switch
-                          id="canSendNotifications"
                           checked={permissions.canSendNotifications}
-                          onCheckedChange={(checked) => setPermissions({ ...permissions, canSendNotifications: checked })}
+                          onCheckedChange={(checked) =>
+                            setPermissions({
+                              ...permissions,
+                              canSendNotifications: checked,
+                            })
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="canViewAudit" className="text-sm">View Audit Logs</Label>
+                        <Label className="text-sm">View Audit Logs</Label>
                         <Switch
-                          id="canViewAudit"
                           checked={permissions.canViewAudit}
-                          onCheckedChange={(checked) => setPermissions({ ...permissions, canViewAudit: checked })}
+                          onCheckedChange={(checked) =>
+                            setPermissions({
+                              ...permissions,
+                              canViewAudit: checked,
+                            })
+                          }
                         />
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      These permissions control what the new admin can access in the dashboard.
+                      These permissions control what the new admin can access in
+                      the dashboard.
                     </p>
                   </div>
                 )}
@@ -321,22 +410,34 @@ const AdminCreator = () => {
                   {admin.permissions && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {admin.permissions.canViewRevenue && (
-                        <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">Revenue</span>
+                        <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                          Revenue
+                        </span>
                       )}
                       {admin.permissions.canManageRestaurants && (
-                        <span className="text-xs px-2 py-0.5 bg-orange-500/10 text-orange-600 rounded-full">Restaurants</span>
+                        <span className="text-xs px-2 py-0.5 bg-orange-500/10 text-orange-600 rounded-full">
+                          Restaurants
+                        </span>
                       )}
                       {admin.permissions.canManageUsers && (
-                        <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-600 rounded-full">Users</span>
+                        <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-600 rounded-full">
+                          Users
+                        </span>
                       )}
                       {admin.permissions.canManageCoupons && (
-                        <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-600 rounded-full">Coupons</span>
+                        <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-600 rounded-full">
+                          Coupons
+                        </span>
                       )}
                       {admin.permissions.canSendNotifications && (
-                        <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded-full">Notifications</span>
+                        <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded-full">
+                          Notifications
+                        </span>
                       )}
                       {admin.permissions.canViewAudit && (
-                        <span className="text-xs px-2 py-0.5 bg-gray-500/10 text-gray-600 rounded-full">Audit</span>
+                        <span className="text-xs px-2 py-0.5 bg-gray-500/10 text-gray-600 rounded-full">
+                          Audit
+                        </span>
                       )}
                     </div>
                   )}
