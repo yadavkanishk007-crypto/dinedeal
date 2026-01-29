@@ -80,7 +80,7 @@ const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState<
     | "overview"
     | "analytics"
-    | "restaurants"
+    | "restaurant"
     | "users"
     | "admins"
     | "notifications"
@@ -222,7 +222,7 @@ const AdminPanel = () => {
           {[
             { id: "overview", label: "Overview" },
             { id: "analytics", label: "Analytics" },
-            { id: "restaurants", label: "Restaurants" },
+            { id: "restaurants", label: "Entities" },
             { id: "earnings", label: "Earnings", icon: PiggyBank },
             { id: "settlements", label: "Settlements", icon: Wallet },
             { id: "payouts", label: "Payouts", icon: CreditCard },
@@ -477,3 +477,4 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
