@@ -208,7 +208,7 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
       if (error) throw error;
       setRestaurant({ ...restaurant, is_approved: approve, is_active: approve ? restaurant.is_active : false });
       onApprovalChange?.();
-      toast({ title: approve ? "Approved" : "Rejected" });
+      toast({ title: approve ? "Profile Approved" : "Profile Rejected" });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
@@ -272,14 +272,45 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
       <Card>
         <CardContent className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Badge variant={restaurant.is_approved ? "default" : "secondary"}>{restaurant.is_approved ? "Approved" : "Pending Approval"}</Badge>
+            <Badge variant={restaurant.is_approved ? "default" : "secondary"}>
+                {restaurant.is_approved ? "Approved" : "Pending Approval"}
+            </Badge>
             <Badge variant="outline">{restaurant.is_event_organiser ? "Event Group" : "Dining"}</Badge>
           </div>
           <div className="flex gap-2">
             {!restaurant.is_approved ? (
-              <Button size="sm" onClick={() => handleApproval(true)} disabled={approving}><CheckCircle className="w-4 h-4 mr-2" />Approve</Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleApproval(false)} 
+                  disabled={approving} 
+                  className="gap-2 text-destructive border-destructive hover:bg-destructive/10"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Reject
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={() => handleApproval(true)} 
+                  disabled={approving} 
+                  className="gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Approve
+                </Button>
+              </>
             ) : (
-              <Button variant="outline" size="sm" onClick={() => handleApproval(false)} disabled={approving} className="text-destructive"><XCircle className="w-4 h-4 mr-2" />Revoke</Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleApproval(false)} 
+                disabled={approving} 
+                className="gap-2 text-destructive border-destructive hover:bg-destructive/10"
+              >
+                <XCircle className="w-4 h-4" />
+                Revoke Approval (Reject)
+              </Button>
             )}
           </div>
         </CardContent>
