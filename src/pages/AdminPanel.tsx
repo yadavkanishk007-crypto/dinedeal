@@ -20,11 +20,13 @@ import {
   PiggyBank,
   CreditCard,
   Headphones,
-  Sparkles
+  Sparkles,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -91,6 +93,10 @@ const AdminPanel = () => {
   >("overview");
   
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
+
+  /* --- SEARCH & FILTER STATE --- */
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
   const isAdmin = role === "admin" || role === "super_admin";
   const isSuperAdmin = role === "super_admin";
@@ -160,6 +166,19 @@ const AdminPanel = () => {
       fetchData();
     }
   }, [user, role, loading, isAdmin]);
+
+  /* --- FILTER LOGIC --- */
+  const filteredRestaurants = restaurants.filter((rest) => {
+    const matchesSearch = rest.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = 
+      filterStatus === "all" ? true :
+      filterStatus === "pending" ? !rest.is_approved :
+      filterStatus === "approved" ? rest.is_approved :
+      filterStatus === "rejected" ? (rest.is_approved === false && rest.is_active === false) : // Logic for rejection
+      true;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return (
@@ -309,30 +328,39 @@ const AdminPanel = () => {
               onApprovalChange={fetchData}
             />
           ) : (
-            <div className="space-y-4">
-              <div className="flex gap-2 flex-wrap">
-                <Badge variant="outline" className="cursor-pointer">
-                  All ({restaurants.length})
-                </Badge>
-                <Badge 
-                  variant="secondary" 
-                  className="cursor-pointer bg-yellow-500/10 text-yellow-700 border-yellow-500/30"
-                >
-                  Pending ({restaurants.filter(r => !r.is_approved).length})
-                </Badge>
-                <Badge 
-                  variant="secondary" 
-                  className="cursor-pointer bg-green-500/10 text-green-700 border-green-500/30"
-                >
-                  Approved ({restaurants.filter(r => r.is_approved).length})
-                </Badge>
+            <div className="space-y-6">
+              {/* --- SEARCH & CATEGORY FILTER BAR --- */}
+              <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-secondary/10 p-4 rounded-2xl border border-border">
+                <div className="relative w-full md:w-80">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search by name..." 
+                    className="pl-10" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                
+                <div className="flex gap-1 bg-background p-1 rounded-xl border">
+                  {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+                    <Button
+                      key={status}
+                      variant={filterStatus === status ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setFilterStatus(status)}
+                      className="capitalize h-8"
+                    >
+                      {status}
+                    </Button>
+                  ))}
+                </div>
               </div>
-              
+
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {restaurants.length === 0 ? (
-                  <p className="text-muted-foreground col-span-full">No businesses found.</p>
+                {filteredRestaurants.length === 0 ? (
+                  <p className="text-muted-foreground col-span-full py-12 text-center">No businesses match your search or filter.</p>
                 ) : (
-                  restaurants.map((rest) => (
+                  filteredRestaurants.map((rest) => (
                     <Card 
                       key={rest.id} 
                       className={cn(
