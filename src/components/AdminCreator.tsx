@@ -104,7 +104,7 @@ const AdminCreator = () => {
       const { error: permError } = await supabase
         .from("admin_permissions")
         .insert({
-          admin_id: userId,
+          user_id: userId,
           ...permissions,
         });
 
