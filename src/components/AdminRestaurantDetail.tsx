@@ -18,11 +18,18 @@ import {
   XCircle,
   AlertCircle,
   FileText,
+  Sparkles,
+  Link2,
+  Instagram,
+  Twitter,
+  Wallet,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
@@ -42,8 +49,16 @@ interface Restaurant {
   image_url: string | null;
   is_active: boolean;
   is_approved: boolean;
+  is_event_organiser?: boolean;
+  organiser_type?: string;
   rating: number | null;
   upi_id: string | null;
+  bank_account_number?: string | null;
+  bank_ifsc?: string | null;
+  bank_account_holder?: string | null;
+  instagram?: string | null;
+  twitter?: string | null;
+  website?: string | null;
   created_at: string;
   owner_id: string;
 }
@@ -112,13 +127,16 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
 
+  // Search States
+  const [menuSearch, setMenuSearch] = useState("");
+  const [txSearch, setTxSearch] = useState("");
+
   useEffect(() => {
     fetchAllData();
   }, [restaurantId]);
 
   const fetchAllData = async () => {
     try {
-      // Fetch restaurant details
       const { data: restaurantData, error: restError } = await supabase
         .from("restaurants")
         .select("*")
@@ -128,7 +146,6 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
       if (restError) throw restError;
       setRestaurant(restaurantData);
 
-      // Fetch offers
       const { data: offersData } = await supabase
         .from("offers")
         .select("*")
@@ -137,7 +154,6 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
 
       setOffers(offersData || []);
 
-      // Fetch transactions
       const { data: txData } = await supabase
         .from("transactions")
         .select("*")
@@ -146,7 +162,6 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
 
       setTransactions(txData || []);
 
-      // Calculate stats
       if (txData) {
         const completedTx = txData.filter(t => t.payment_status === "completed");
         const uniqueCustomers = new Set(completedTx.map(t => t.user_id)).size;
@@ -162,7 +177,6 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
         });
       }
 
-      // Fetch menu items
       const { data: menuData } = await supabase
         .from("menu_items")
         .select("*")
@@ -227,539 +241,201 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
 
   const exportToPDF = () => {
     if (!restaurant) return;
-
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Title
     doc.setFontSize(20);
     doc.setTextColor(41, 98, 255);
     doc.text(restaurant.name, pageWidth / 2, 20, { align: "center" });
-
-    // Subtitle
     doc.setFontSize(12);
     doc.setTextColor(100);
-    doc.text(`Restaurant Insights Report`, pageWidth / 2, 28, { align: "center" });
+    doc.text(`Business Insights Report`, pageWidth / 2, 28, { align: "center" });
     doc.text(`Generated on: ${new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}`, pageWidth / 2, 34, { align: "center" });
 
-    // Restaurant Info
     doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text("Restaurant Information", 14, 48);
+    doc.text("Business Information", 14, 48);
 
     autoTable(doc, {
       startY: 52,
       head: [["Field", "Value"]],
       body: [
         ["Name", restaurant.name],
-        ["Cuisine", restaurant.cuisine],
+        ["Type", restaurant.is_event_organiser ? "Event Organiser" : "Restaurant"],
+        ["Category", restaurant.cuisine],
         ["Address", `${restaurant.address}, ${restaurant.city}`],
         ["Phone", restaurant.phone || "N/A"],
         ["Email", restaurant.email || "N/A"],
-        ["Open Hours", restaurant.open_hours || "N/A"],
         ["Status", restaurant.is_approved ? (restaurant.is_active ? "Active" : "Inactive") : "Pending Approval"],
-        ["Rating", restaurant.rating?.toString() || "N/A"],
+        ["UPI ID", restaurant.upi_id || "N/A"],
       ],
       theme: "striped",
       headStyles: { fillColor: [41, 98, 255] },
       margin: { left: 14, right: 14 },
     });
 
-    // Stats
-    let yPos = (doc as any).lastAutoTable?.finalY + 12 || 120;
-    doc.setFontSize(14);
-    doc.text("Performance Metrics", 14, yPos);
-
-    autoTable(doc, {
-      startY: yPos + 4,
-      head: [["Metric", "Value"]],
-      body: [
-        ["Total Revenue", `₹${stats.totalRevenue.toLocaleString()}`],
-        ["Total Transactions", stats.totalTransactions.toString()],
-        ["Unique Customers", stats.totalCustomers.toString()],
-        ["Average Order Value", `₹${Math.round(stats.avgOrderValue)}`],
-        ["Total Discounts Given", `₹${stats.totalDiscounts.toLocaleString()}`],
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [41, 98, 255] },
-      margin: { left: 14, right: 14 },
-    });
-
-    // Offers
-    yPos = (doc as any).lastAutoTable?.finalY + 12 || yPos + 60;
-    if (yPos > 240) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    doc.setFontSize(14);
-    doc.text("Offers", 14, yPos);
-
-    if (offers.length > 0) {
-      autoTable(doc, {
-        startY: yPos + 4,
-        head: [["Title", "Discount", "Max Discount", "Status"]],
-        body: offers.map(o => [
-          o.title,
-          `${o.discount_percent}%`,
-          `₹${o.max_discount}`,
-          o.is_active ? "Active" : "Inactive",
-        ]),
-        theme: "striped",
-        headStyles: { fillColor: [41, 98, 255] },
-        margin: { left: 14, right: 14 },
-      });
-    } else {
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text("No offers configured", 14, yPos + 8);
-    }
-
-    // Menu Items
-    yPos = (doc as any).lastAutoTable?.finalY + 12 || yPos + 20;
-    if (yPos > 220) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    doc.setFontSize(14);
-    doc.setTextColor(0);
-    doc.text("Menu Items", 14, yPos);
-
-    if (menuItems.length > 0) {
-      autoTable(doc, {
-        startY: yPos + 4,
-        head: [["Name", "Category", "Price", "Type", "Available"]],
-        body: menuItems.map(m => [
-          m.name,
-          m.category || "Uncategorized",
-          `₹${m.price}`,
-          m.is_veg ? "Veg" : "Non-Veg",
-          m.is_available ? "Yes" : "No",
-        ]),
-        theme: "striped",
-        headStyles: { fillColor: [41, 98, 255] },
-        margin: { left: 14, right: 14 },
-      });
-    } else {
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text("No menu items configured", 14, yPos + 8);
-    }
-
-    // Recent Transactions
-    yPos = (doc as any).lastAutoTable?.finalY + 12 || yPos + 20;
-    if (yPos > 200) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    doc.setFontSize(14);
-    doc.setTextColor(0);
-    doc.text("Recent Transactions (Last 20)", 14, yPos);
-
-    const recentTx = transactions.slice(0, 20);
-    if (recentTx.length > 0) {
-      autoTable(doc, {
-        startY: yPos + 4,
-        head: [["Date", "Bill Amount", "Discount", "Final Amount", "Status"]],
-        body: recentTx.map(t => [
-          new Date(t.created_at).toLocaleDateString("en-IN"),
-          `₹${t.bill_amount}`,
-          `₹${t.discount_amount}`,
-          `₹${t.final_amount}`,
-          t.payment_status || "pending",
-        ]),
-        theme: "striped",
-        headStyles: { fillColor: [41, 98, 255] },
-        margin: { left: 14, right: 14 },
-      });
-    } else {
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text("No transactions yet", 14, yPos + 8);
-    }
-
-    // Footer
-    const pageCount = doc.internal.pages.length - 1;
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text(
-        `Page ${i} of ${pageCount} | ${restaurant.name} - Restaurant Report`,
-        pageWidth / 2,
-        doc.internal.pageSize.getHeight() - 10,
-        { align: "center" }
-      );
-    }
-
-    doc.save(`${restaurant.name.replace(/\s+/g, "-")}-report-${new Date().toISOString().split("T")[0]}.pdf`);
-    
-    toast({
-      title: "PDF Exported",
-      description: "Restaurant report has been downloaded.",
-    });
+    doc.save(`${restaurant.name.replace(/\s+/g, "-")}-report.pdf`);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
+  const filteredMenu = menuItems.filter(item => 
+    item.name.toLowerCase().includes(menuSearch.toLowerCase()) || 
+    item.category?.toLowerCase().includes(menuSearch.toLowerCase())
+  );
 
-  if (!restaurant) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Restaurant not found</p>
-        <Button variant="outline" onClick={onBack} className="mt-4">
-          Go Back
-        </Button>
-      </div>
-    );
-  }
+  const filteredTx = transactions.filter(tx => 
+    tx.final_amount.toString().includes(txSearch) || 
+    tx.payment_status?.toLowerCase().includes(txSearch.toLowerCase())
+  );
+
+  if (loading) return <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (!restaurant) return <div className="text-center py-12"><p className="text-muted-foreground">Business not found</p><Button variant="outline" onClick={onBack} className="mt-4">Go Back</Button></div>;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="space-y-6"
-    >
-      {/* Header */}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
+          <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
           <div>
-            <h1 className="text-2xl font-bold">{restaurant.name}</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+                {restaurant.name}
+                {restaurant.is_event_organiser && <Sparkles className="w-5 h-5 text-purple-500" />}
+            </h1>
             <p className="text-muted-foreground">{restaurant.cuisine} • {restaurant.city}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={exportToPDF} className="gap-2">
-            <Download className="w-4 h-4" />
-            Export PDF
-          </Button>
-        </div>
+        <Button variant="outline" onClick={exportToPDF} className="gap-2"><Download className="w-4 h-4" />Export PDF</Button>
       </div>
 
-      {/* Status & Approval */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Badge variant={restaurant.is_approved ? "default" : "secondary"}>
-                {restaurant.is_approved ? "Approved" : "Pending Approval"}
-              </Badge>
-              {restaurant.is_approved && (
-                <Badge variant={restaurant.is_active ? "default" : "outline"}>
-                  {restaurant.is_active ? "Active" : "Inactive"}
-                </Badge>
-              )}
-              {restaurant.rating && (
-                <div className="flex items-center gap-1 text-sm">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span>{restaurant.rating}</span>
-                </div>
-              )}
-            </div>
-            {!restaurant.is_approved && (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleApproval(false)}
-                  disabled={approving}
-                  className="gap-2 text-destructive hover:bg-destructive/10"
-                >
-                  <XCircle className="w-4 h-4" />
-                  Reject
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleApproval(true)}
-                  disabled={approving}
-                  className="gap-2"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Approve
-                </Button>
-              </div>
-            )}
-            {restaurant.is_approved && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleApproval(false)}
-                disabled={approving}
-                className="gap-2 text-destructive hover:bg-destructive/10"
-              >
-                <XCircle className="w-4 h-4" />
-                Revoke Approval
-              </Button>
+        <CardContent className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Badge variant={restaurant.is_approved ? "default" : "secondary"}>{restaurant.is_approved ? "Approved" : "Pending Approval"}</Badge>
+            {restaurant.is_approved && <Badge variant={restaurant.is_active ? "default" : "outline"}>{restaurant.is_active ? "Active" : "Inactive"}</Badge>}
+            <Badge variant="outline" className="uppercase">{restaurant.is_event_organiser ? "Event Group" : "Dining"}</Badge>
+          </div>
+          <div className="flex gap-2">
+            {!restaurant.is_approved ? (
+              <>
+                <Button variant="outline" size="sm" onClick={() => handleApproval(false)} disabled={approving} className="text-destructive"><XCircle className="w-4 h-4 mr-2" />Reject</Button>
+                <Button size="sm" onClick={() => handleApproval(true)} disabled={approving}><CheckCircle className="w-4 h-4 mr-2" />Approve</Button>
+              </>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => handleApproval(false)} disabled={approving} className="text-destructive"><XCircle className="w-4 h-4 mr-2" />Revoke Approval</Button>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Restaurant Info */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Store className="w-5 h-5" />
-            Restaurant Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardHeader><CardTitle className="text-lg flex items-center gap-2">{restaurant.is_event_organiser ? <Sparkles className="w-5 h-5 text-purple-500" /> : <Store className="w-5 h-5 text-orange-500" />}Business Information</CardTitle></CardHeader>
+        <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-start gap-3">
-              <MapPin className="w-4 h-4 mt-1 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Address</p>
-                <p className="font-medium">{restaurant.address}, {restaurant.city}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Phone className="w-4 h-4 mt-1 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Phone</p>
-                <p className="font-medium">{restaurant.phone || "Not provided"}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Mail className="w-4 h-4 mt-1 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="font-medium">{restaurant.email || "Not provided"}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Clock className="w-4 h-4 mt-1 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Open Hours</p>
-                <p className="font-medium">{restaurant.open_hours || "Not specified"}</p>
-              </div>
+            <div className="flex items-start gap-3"><MapPin className="w-4 h-4 mt-1 text-muted-foreground" /><div><p className="text-sm text-muted-foreground">Address</p><p className="font-medium">{restaurant.address}, {restaurant.city}</p></div></div>
+            <div className="flex items-start gap-3"><Phone className="w-4 h-4 mt-1 text-muted-foreground" /><div><p className="text-sm text-muted-foreground">Phone</p><p className="font-medium">{restaurant.phone || "N/A"}</p></div></div>
+            <div className="flex items-start gap-3"><Mail className="w-4 h-4 mt-1 text-muted-foreground" /><div><p className="text-sm text-muted-foreground">Email</p><p className="font-medium">{restaurant.email || "N/A"}</p></div></div>
+            <div className="flex items-start gap-3"><Clock className="w-4 h-4 mt-1 text-muted-foreground" /><div><p className="text-sm text-muted-foreground">Business Hours</p><p className="font-medium">{restaurant.open_hours || "N/A"}</p></div></div>
+          </div>
+
+          <Separator />
+          
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold flex items-center gap-2"><Wallet className="w-4 h-4 text-primary" />Payout & Settlement Info</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-secondary/20 p-4 rounded-xl">
+              <div><p className="text-xs text-muted-foreground">Account Holder</p><p className="font-medium">{restaurant.bank_account_holder || "N/A"}</p></div>
+              <div><p className="text-xs text-muted-foreground">UPI ID</p><p className="font-medium text-primary font-mono">{restaurant.upi_id || "N/A"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Account Number</p><p className="font-medium">{restaurant.bank_account_number || "N/A"}</p></div>
+              <div><p className="text-xs text-muted-foreground">IFSC Code</p><p className="font-medium uppercase">{restaurant.bank_ifsc || "N/A"}</p></div>
             </div>
           </div>
-          {restaurant.description && (
+
+          {restaurant.is_event_organiser && (
             <>
               <Separator />
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Description</p>
-                <p>{restaurant.description}</p>
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2"><Link2 className="w-4 h-4 text-primary" />Online Presence</h4>
+                <div className="flex flex-wrap gap-3">
+                  {restaurant.instagram && <Badge variant="secondary" className="gap-2"><Instagram className="w-3 h-3" /> @{restaurant.instagram}</Badge>}
+                  {restaurant.twitter && <Badge variant="secondary" className="gap-2"><Twitter className="w-3 h-3" /> @{restaurant.twitter}</Badge>}
+                  {restaurant.website && <Badge variant="outline" className="gap-2"><Link2 className="w-3 h-3" /> {restaurant.website}</Badge>}
+                </div>
               </div>
             </>
           )}
-          <Separator />
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Payment Info</p>
-            <p className="font-medium">UPI: {restaurant.upi_id || "Not configured"}</p>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Revenue</p>
-                <p className="text-xl font-bold">₹{stats.totalRevenue.toLocaleString()}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Receipt className="w-5 h-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Transactions</p>
-                <p className="text-xl font-bold">{stats.totalTransactions}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-500/10 rounded-lg">
-                <Users className="w-5 h-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Customers</p>
-                <p className="text-xl font-bold">{stats.totalCustomers}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/10 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Avg Order</p>
-                <p className="text-xl font-bold">₹{Math.round(stats.avgOrderValue)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-500/10 rounded-lg">
-                <Percent className="w-5 h-5 text-red-500" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Discounts</p>
-                <p className="text-xl font-bold">₹{stats.totalDiscounts.toLocaleString()}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard icon={<DollarSign className="text-green-500" />} label="Revenue" value={`₹${stats.totalRevenue.toLocaleString()}`} bgColor="bg-green-500/10" />
+        <StatCard icon={<Receipt className="text-blue-500" />} label="Transactions" value={stats.totalTransactions.toString()} bgColor="bg-blue-500/10" />
+        <StatCard icon={<Users className="text-purple-500" />} label="Customers" value={stats.totalCustomers.toString()} bgColor="bg-purple-500/10" />
+        <StatCard icon={<TrendingUp className="text-orange-500" />} label="Avg Order" value={`₹${Math.round(stats.avgOrderValue)}`} bgColor="bg-orange-500/10" />
+        <StatCard icon={<Percent className="text-red-500" />} label="Discounts" value={`₹${stats.totalDiscounts.toLocaleString()}`} bgColor="bg-red-500/10" />
       </div>
 
-      {/* Offers */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Percent className="w-5 h-5" />
-            Offers ({offers.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {offers.length > 0 ? (
-            <div className="space-y-3">
-              {offers.map((offer) => (
-                <div
-                  key={offer.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
-                >
-                  <div>
-                    <p className="font-medium">{offer.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {offer.discount_percent}% off, max ₹{offer.max_discount}
-                      {offer.min_order_amount ? ` • Min order ₹${offer.min_order_amount}` : ""}
-                    </p>
-                    {offer.terms && (
-                      <p className="text-xs text-muted-foreground mt-1">{offer.terms}</p>
-                    )}
-                  </div>
-                  <Badge variant={offer.is_active ? "default" : "secondary"}>
-                    {offer.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                </div>
-              ))}
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg flex items-center gap-2"><FileText className="w-5 h-5" />Menu Items</CardTitle>
+            <div className="relative w-64">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Search items..." className="pl-8 h-8" value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} />
             </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-4">No offers configured</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Menu Items */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Menu Items ({menuItems.length})
-          </CardTitle>
         </CardHeader>
         <CardContent>
-          {menuItems.length > 0 ? (
+          {filteredMenu.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {menuItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
-                >
+              {filteredMenu.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${item.is_veg ? "bg-green-500" : "bg-red-500"}`} />
-                    <div>
-                      <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">{item.category}</p>
-                    </div>
+                    <div><p className="font-medium text-sm">{item.name}</p><p className="text-xs text-muted-foreground">{item.category}</p></div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">₹{item.price}</p>
-                    {!item.is_available && (
-                      <span className="text-xs text-destructive">Unavailable</span>
-                    )}
-                  </div>
+                  <div className="text-right"><p className="font-medium">₹{item.price}</p>{!item.is_available && <span className="text-xs text-destructive">Unavailable</span>}</div>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-4">No menu items configured</p>
-          )}
+          ) : <p className="text-muted-foreground text-center py-4">No matching items found</p>}
         </CardContent>
       </Card>
 
-      {/* Recent Transactions */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Receipt className="w-5 h-5" />
-            Recent Transactions ({transactions.length})
-          </CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg flex items-center gap-2"><Receipt className="w-5 h-5" />Recent Transactions</CardTitle>
+            <div className="relative w-64">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Search amount or status..." className="pl-8 h-8" value={txSearch} onChange={(e) => setTxSearch(e.target.value)} />
+            </div>
         </CardHeader>
         <CardContent>
-          {transactions.length > 0 ? (
+          {filteredTx.length > 0 ? (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {transactions.slice(0, 20).map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
-                >
+              {filteredTx.slice(0, 20).map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                   <div>
                     <p className="font-medium">₹{tx.bill_amount}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(tx.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{new Date(tx.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                   <div className="text-right">
-                    <Badge
-                      variant={
-                        tx.payment_status === "completed"
-                          ? "default"
-                          : tx.payment_status === "failed"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {tx.payment_status || "pending"}
-                    </Badge>
-                    {tx.discount_amount > 0 && (
-                      <p className="text-sm text-green-500 mt-1">-₹{tx.discount_amount} discount</p>
-                    )}
+                    <Badge variant={tx.payment_status === "completed" ? "default" : "destructive"}>{tx.payment_status || "pending"}</Badge>
+                    {tx.discount_amount > 0 && <p className="text-sm text-green-500 mt-1">-₹{tx.discount_amount}</p>}
                   </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-4">No transactions yet</p>
-          )}
+          ) : <p className="text-muted-foreground text-center py-4">No matching transactions found</p>}
         </CardContent>
       </Card>
     </motion.div>
   );
 };
+
+const StatCard = ({ icon, label, value, bgColor }: any) => (
+  <Card>
+    <CardContent className="p-4">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${bgColor}`}>{icon}</div>
+        <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></div>
+      </div>
+    </CardContent>
+  </Card>
+);
 
 export default AdminRestaurantDetail;
