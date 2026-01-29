@@ -6,7 +6,8 @@ import {
   DollarSign,
   Download,
   Filter,
-  Search
+  Search,
+  CalendarDays
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,11 +15,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 
 interface RestaurantEarning {
   restaurant_id: string;
   restaurant_name: string;
+  organiser_type: 'restaurant' | 'event_group';
   gross_revenue: number;
   platform_commission: number;
   net_payable: number;
@@ -28,13 +31,12 @@ interface RestaurantEarning {
 const AdminRestaurantEarnings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [earnings, setEarnings] = useState<RestaurantEarning[]>([]);
-  const [restaurants, setRestaurants] = useState<{ id: string; name: string }[]>([]);
+  const [restaurants, setRestaurants] = useState<{ id: string; name: string; organiser_type: string }[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Summary stats
   const [totals, setTotals] = useState({
     grossRevenue: 0,
     platformCommission: 0,
@@ -45,53 +47,56 @@ const AdminRestaurantEarnings = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Fetch all restaurants for filter dropdown
+      // 1. Fetch all restaurants/entities for filters
       const { data: restData } = await supabase
         .from("restaurants")
-        .select("id, name")
+        .select("id, name, organiser_type")
         .order("name");
       
       setRestaurants(restData || []);
 
-      // Build transaction query
+      // 2. Query the Settlements table for completed payouts
       let query = supabase
-        .from("transactions")
+        .from("settlements")
         .select(`
           id,
-          final_amount,
-          platform_commission,
-          restaurant_earning,
           restaurant_id,
-          created_at,
-          restaurants!inner(name)
+          total_orders,
+          gross_amount,
+          platform_commission,
+          net_payable,
+          period_start,
+          period_end,
+          restaurants!inner(name, organiser_type)
         `)
-        .eq("payment_status", "completed");
+        .eq("status", "completed");
 
       if (selectedRestaurant !== "all") {
         query = query.eq("restaurant_id", selectedRestaurant);
       }
       if (dateFrom) {
-        query = query.gte("created_at", new Date(dateFrom).toISOString());
+        query = query.gte("period_start", new Date(dateFrom).toISOString());
       }
       if (dateTo) {
-        query = query.lte("created_at", new Date(dateTo + "T23:59:59").toISOString());
+        query = query.lte("period_end", new Date(dateTo + "T23:59:59").toISOString());
       }
 
-      const { data: txData, error } = await query;
-
+      const { data: settlementData, error } = await query;
       if (error) throw error;
 
-      // Aggregate by restaurant
+      // 3. Aggregate data by entity
       const earningsMap = new Map<string, RestaurantEarning>();
       
-      txData?.forEach((tx: any) => {
-        const restId = tx.restaurant_id;
-        const restName = tx.restaurants?.name || "Unknown";
+      settlementData?.forEach((settlement: any) => {
+        const restId = settlement.restaurant_id;
+        const restName = settlement.restaurants?.name || "Unknown";
+        const type = (settlement.restaurants?.organiser_type === 'event_group' ? 'event_group' : 'restaurant') as 'restaurant' | 'event_group';
         
         if (!earningsMap.has(restId)) {
           earningsMap.set(restId, {
             restaurant_id: restId,
             restaurant_name: restName,
+            organiser_type: type,
             gross_revenue: 0,
             platform_commission: 0,
             net_payable: 0,
@@ -101,32 +106,24 @@ const AdminRestaurantEarnings = () => {
         
         const existing = earningsMap.get(restId)!;
         
-        // PATCH: Ensure decimal precision using parseFloat and explicit string conversion
-        const gross = parseFloat(String(tx.final_amount || "0"));
-        const comm = parseFloat(String(tx.platform_commission || "0"));
-        const net = parseFloat(String(tx.restaurant_earning || "0"));
-
-        existing.gross_revenue += gross;
-        existing.platform_commission += comm;
-        existing.net_payable += net;
-        existing.orders_count += 1;
+        existing.gross_revenue += parseFloat(String(settlement.gross_amount || "0"));
+        existing.platform_commission += parseFloat(String(settlement.platform_commission || "0"));
+        existing.net_payable += parseFloat(String(settlement.net_payable || "0"));
+        existing.orders_count += settlement.total_orders || 0;
       });
 
       let earningsArray = Array.from(earningsMap.values());
       
-      // Apply search filter
       if (searchQuery) {
         earningsArray = earningsArray.filter(e => 
           e.restaurant_name.toLowerCase().includes(searchQuery.toLowerCase())
         );
       }
 
-      // Sort by gross revenue descending
       earningsArray.sort((a, b) => b.gross_revenue - a.gross_revenue);
-
       setEarnings(earningsArray);
 
-      // PATCH: Explicitly derive totals from the processed high-precision array
+      // 4. Calculate Summary Totals
       const grossRevenue = earningsArray.reduce((sum, e) => sum + e.gross_revenue, 0);
       const platformCommission = earningsArray.reduce((sum, e) => sum + e.platform_commission, 0);
       const netPayable = earningsArray.reduce((sum, e) => sum + e.net_payable, 0);
@@ -145,8 +142,9 @@ const AdminRestaurantEarnings = () => {
   }, [selectedRestaurant, dateFrom, dateTo, searchQuery]);
 
   const exportCSV = () => {
-    const headers = ["Restaurant Name", "Gross Revenue", "Platform Commission", "Net Payable", "Orders Count"];
+    const headers = ["Type", "Name", "Gross Revenue", "Platform Commission", "Net Payable", "Orders"];
     const rows = earnings.map(e => [
+      e.organiser_type,
       e.restaurant_name,
       e.gross_revenue.toFixed(2),
       e.platform_commission.toFixed(2),
@@ -159,177 +157,91 @@ const AdminRestaurantEarnings = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `restaurant-earnings-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `earnings-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-        <Skeleton className="h-96" />
-      </div>
-    );
-  }
+  if (isLoading) return <Skeleton className="h-96 w-full" />;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Gross Revenue</p>
-                <p className="text-2xl font-bold mt-1">₹{totals.grossRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-green-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Platform Commission</p>
-                <p className="text-2xl font-bold mt-1">₹{totals.platformCommission.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="p-2 bg-purple-500/10 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-purple-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Net Payable</p>
-                <p className="text-2xl font-bold mt-1">₹{totals.netPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
-                <p className="text-2xl font-bold mt-1">{totals.totalOrders.toLocaleString()}</p>
-              </div>
-              <div className="p-2 bg-orange-500/10 rounded-lg">
-                <Store className="w-5 h-5 text-orange-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard title="Gross Revenue" value={totals.grossRevenue} icon={<DollarSign className="text-green-500" />} color="bg-green-500/10" />
+        <StatCard title="Commission" value={totals.platformCommission} icon={<TrendingUp className="text-purple-500" />} color="bg-purple-500/10" />
+        <StatCard title="Net Payouts" value={totals.netPayable} icon={<DollarSign className="text-blue-500" />} color="bg-blue-500/10" />
+        <StatCard title="Total Orders" value={totals.totalOrders} icon={<Store className="text-orange-500" />} color="bg-orange-500/10" isCurrency={false} />
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            Restaurant Earnings
-          </CardTitle>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2"><Filter className="w-4 h-4" />Settled Earnings Report</CardTitle>
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-2" />Export</Button>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-4 mb-4">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search restaurant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
             </div>
             <Select value={selectedRestaurant} onValueChange={setSelectedRestaurant}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All Restaurants" />
-              </SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue placeholder="All Entities" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Restaurants</SelectItem>
+                <SelectItem value="all">All Entities</SelectItem>
                 {restaurants.map(r => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  <SelectItem key={r.id} value={r.id}>{r.name} ({r.organiser_type === 'event_group' ? 'Event' : 'Rest'})</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">From:</span>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">To:</span>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-40"
-              />
-            </div>
           </div>
 
-          {earnings.length === 0 ? (
-            <div className="text-center py-12">
-              <Store className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No earnings data found</p>
-            </div>
-          ) : (
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Restaurant Name</TableHead>
-                    <TableHead className="text-right">Gross Revenue</TableHead>
-                    <TableHead className="text-right">Platform Commission</TableHead>
-                    <TableHead className="text-right">Net Payable</TableHead>
-                    <TableHead className="text-center">Orders</TableHead>
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Entity Name</TableHead>
+                  <TableHead className="text-right">Gross</TableHead>
+                  <TableHead className="text-right">Commission</TableHead>
+                  <TableHead className="text-right">Net Payable</TableHead>
+                  <TableHead className="text-center">Orders</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {earnings.map((e) => (
+                  <TableRow key={e.restaurant_id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {e.organiser_type === 'event_group' ? <CalendarDays className="w-3 h-3 text-blue-500" /> : <Store className="w-3 h-3 text-green-500" />}
+                        <span className="font-medium">{e.restaurant_name}</span>
+                        {e.organiser_type === 'event_group' && <Badge variant="secondary" className="text-[10px] h-4">Event</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">₹{e.gross_revenue.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-purple-600">₹{e.platform_commission.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-green-600 font-medium">₹{e.net_payable.toLocaleString()}</TableCell>
+                    <TableCell className="text-center">{e.orders_count}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {earnings.map((earning) => (
-                    <TableRow key={earning.restaurant_id}>
-                      <TableCell className="font-medium">{earning.restaurant_name}</TableCell>
-                      <TableCell className="text-right">
-                        ₹{earning.gross_revenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right text-purple-600">
-                        ₹{earning.platform_commission.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right text-green-600 font-medium">
-                        ₹{earning.net_payable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-center">{earning.orders_count}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 };
+
+const StatCard = ({ title, value, icon, color, isCurrency = true }: any) => (
+  <Card>
+    <CardContent className="p-4 flex justify-between items-start">
+      <div>
+        <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        <p className="text-2xl font-bold mt-1">
+          {isCurrency ? `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : value.toLocaleString()}
+        </p>
+      </div>
+      <div className={`p-2 rounded-lg ${color}`}>{icon}</div>
+    </CardContent>
+  </Card>
+);
 
 export default AdminRestaurantEarnings;
