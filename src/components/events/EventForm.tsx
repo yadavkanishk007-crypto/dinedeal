@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
+import type { Json } from "@/integrations/supabase/types";
 
 interface TicketTier {
   name: string;
@@ -99,7 +100,7 @@ export default function EventForm({
         city: formData.city,
         venue_name: formData.venue_name,
         is_paid: formData.is_paid,
-        ticket_tiers: tiers, // New JSONB field
+        ticket_tiers: tiers as unknown as Json,
         ticket_price: minPrice, // Still used for "Starting from" display
         total_seats: totalCapacity,
         remaining_seats: totalCapacity,
