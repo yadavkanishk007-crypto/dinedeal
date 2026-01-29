@@ -80,7 +80,7 @@ const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState<
     | "overview"
     | "analytics"
-    | "restaurant"
+    | "restaurants"
     | "users"
     | "admins"
     | "notifications"
@@ -477,4 +477,5 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
 
