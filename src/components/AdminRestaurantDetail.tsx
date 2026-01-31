@@ -204,8 +204,11 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
           is_active: approve ? true : false
         })
         .eq("id", restaurant.id);
-
+        .select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Update failed! Database Policy (RLS) blocked the change.");
+      }
       setRestaurant({ ...restaurant, is_approved: approve, is_active: approve ? true : false });
       if (onApprovalChange){
         await onApprovalChange();
