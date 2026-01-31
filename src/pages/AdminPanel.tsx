@@ -166,6 +166,17 @@ const AdminPanel = () => {
       fetchData();
     }
   }, [user, role, loading, isAdmin]);
+  const refetchRestaurants = async () => {
+  const { data, error } = await supabase
+    .from("restaurants")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (!error) {
+    setRestaurants(data || []);
+  }
+};
+
 
   /* --- FILTER LOGIC --- */
   const filteredRestaurants = restaurants.filter((rest) => {
@@ -477,6 +488,7 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
 
 
 
