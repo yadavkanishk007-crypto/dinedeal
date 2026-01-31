@@ -86,8 +86,11 @@ export default function EventDetail() {
         return;
       }
 
+      // DEBUG: Casting to any to handle the ticket_tiers property check
       const rawData = data as any;
       
+      // Safety check: parse ticket_tiers if it comes back as a string, 
+      // or default to empty array
       let tiers: TicketTier[] = [];
       if (Array.isArray(rawData.ticket_tiers)) {
         tiers = rawData.ticket_tiers;
@@ -109,6 +112,7 @@ export default function EventDetail() {
       if (formattedData.ticket_tiers.length > 0) {
         setSelectedTier(formattedData.ticket_tiers[0]);
       } else {
+        // Fallback for events with no tiers defined
         setSelectedTier({
           name: "General Admission",
           price: Number(formattedData.ticket_price) || 0,
@@ -164,7 +168,6 @@ export default function EventDetail() {
       const qrHash = generateQRHash();
 
       const finalize = async () => {
-        // Step 1: Insert Booking
         const { error: bookingError } = await supabase.from('event_bookings').insert([{
           event_id: event.id,
           user_id: user.id,
@@ -177,14 +180,11 @@ export default function EventDetail() {
 
         if (bookingError) throw bookingError;
         
-        // Step 2: Atomic Update via RPC (Patched Logic)
-        const { error: updateError } = await supabase.rpc('book_event_tickets' as any, {
-          p_event_id: event.id,
-          p_seats_to_book: seats,
-          p_tier_name: selectedTier.name
-        });
+        const { error: updateError } = await supabase.from('events')
+          .update({ remaining_seats: event.remaining_seats - seats })
+          .eq('id', event.id);
 
-        if (updateError) throw new Error("Failed to update seat availability.");
+        if (updateError) throw updateError;
 
         toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
         navigate('/reservations');
