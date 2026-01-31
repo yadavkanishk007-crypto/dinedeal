@@ -240,6 +240,7 @@ export default function Pay() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: finalAmount,
+            payment_type: paymentType === "event" ? "event_booking" : "restaurant_booking",
             restaurantId: restaurant.id,
             userId: user?.id ?? "guest",
             metadata: {
@@ -248,10 +249,8 @@ export default function Pay() {
               offerId: activeOffer?.id, // Optional: Pass offer ID if backend tracks it
               frontendRef: transactionId,
               // 🔹 ADD THESE (EVENT SUPPORT)
-              type: paymentType,          // "event"
               eventId: eventId || null,
               seats,
-              userId: user?.id ?? null
             }
           }),
         }
