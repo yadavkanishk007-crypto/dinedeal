@@ -26,7 +26,6 @@ import { format, isValid } from "date-fns";
 interface TicketTier {
   name: string;
   price: number;
-  capacity: number;
 }
 
 interface Event {
@@ -41,11 +40,10 @@ interface Event {
   venue_name: string;
   is_paid: boolean;
   ticket_price: number;
-  remaining_seats: number;
-  total_seats: number;
   booking_deadline: string;
   status: string;
   ticket_tiers: TicketTier[]; 
+  available_seats: number;
 }
 
 export default function EventDetail() {
@@ -74,8 +72,23 @@ export default function EventDetail() {
   const fetchEvent = async () => {
     try {
       const { data, error } = await supabase
-        .from('events')
-        .select('*')
+        .from('event_availability')
+        .select(' *,
+              events (
+                title,
+                description,
+                cover_image,
+                event_date,
+                start_time,
+                end_time,
+                city,
+                venue_name,
+                is_paid,
+                ticket_price,
+                booking_deadline,
+                status,
+                ticket_tiers
+    )' )
         .eq('id', id)
         .eq('status', 'published')
         .single();
@@ -87,23 +100,24 @@ export default function EventDetail() {
       }
 
       // DEBUG: Casting to any to handle the ticket_tiers property check
-      const rawData = data as any;
-      
+      const base = data.events;
+      const availableSeats = data.available_seats;
       // Safety check: parse ticket_tiers if it comes back as a string, 
       // or default to empty array
       let tiers: TicketTier[] = [];
-      if (Array.isArray(rawData.ticket_tiers)) {
-        tiers = rawData.ticket_tiers;
-      } else if (typeof rawData.ticket_tiers === 'string') {
+      if (Array.isArray(base.ticket_tiers)) {
+        tiers = base.ticket_tiers;
+      } else if (typeof base.ticket_tiers === 'string') {
         try {
-          tiers = JSON.parse(rawData.ticket_tiers);
+          tiers = JSON.parse(base.ticket_tiers);
         } catch {
           tiers = [];
         }
       }
 
       const formattedData: Event = {
-        ...rawData,
+        ...base,
+        available_seats: availableSeats,
         ticket_tiers: tiers
       };
 
@@ -155,7 +169,7 @@ export default function EventDetail() {
     
     if (!event || !selectedTier || booking) return;
 
-    if (seats > event.remaining_seats) {
+    if (seats > event.available_seats) {
       toast({ title: "Limited Availability", description: "The requested number of seats is no longer available.", variant: "destructive" });
       return;
     }
@@ -254,7 +268,7 @@ export default function EventDetail() {
     );
   }
 
-  const isSoldOut = event.remaining_seats <= 0;
+  const isSoldOut = event.available_seats <= 0;
   const eventDateObj = new Date(event.event_date);
   const displayDate = isValid(eventDateObj) ? format(eventDateObj, "PPP") : "Date TBA";
 
