@@ -325,7 +325,7 @@ const AdminPanel = () => {
             <AdminRestaurantDetail
               restaurantId={selectedRestaurantId}
               onBack={() => setSelectedRestaurantId(null)}
-              onApprovalChange={fetchData}
+              onApprovalChange={refetchRestaurants}
             />
           ) : (
             <div className="space-y-6">
@@ -477,5 +477,6 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
 
 
