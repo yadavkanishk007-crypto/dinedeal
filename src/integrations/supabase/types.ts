@@ -300,6 +300,20 @@ export type Database = {
             foreignKeyName: "event_bookings_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
+            referencedRelation: "event_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_bookings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "event_with_availability"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_bookings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
@@ -1207,31 +1221,69 @@ export type Database = {
       }
     }
     Views: {
+      event_availability: {
+        Row: {
+          available_seats: number | null
+          booked_seats: number | null
+          event_date: string | null
+          id: string | null
+          title: string | null
+          total_seats: number | null
+        }
+        Relationships: []
+      }
       event_with_availability: {
         Row: {
-          id: string
-          title: string
-          description: string | null
-          cover_image: string | null
-          event_date: string
-          start_time: string
-          end_time: string | null
-          city: string
-          venue_name: string
-          is_paid: boolean | null
-          ticket_price: number | null
-          total_seats: number
-          remaining_seats: number
           booking_deadline: string | null
-          status: Database["public"]["Enums"]["event_status"] | null
-          ticket_tiers: Json | null
+          city: string | null
+          cover_image: string | null
           created_at: string | null
+          created_by_id: string | null
+          description: string | null
+          end_time: string | null
+          event_date: string | null
+          id: string | null
+          is_paid: boolean | null
+          remaining_seats: number | null
+          start_time: string | null
+          status: Database["public"]["Enums"]["event_status"] | null
+          ticket_price: number | null
+          ticket_tiers: Json | null
+          title: string | null
+          total_seats: number | null
           updated_at: string | null
-          created_by_id: string
+          venue_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
-  }
-}
     Functions: {
+      book_event_seats: {
+        Args: {
+          p_amount?: number
+          p_event_id: string
+          p_seats: number
+          p_tier_name: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      book_event_tickets: {
+        Args: {
+          p_event_id: string
+          p_seats_to_book: number
+          p_tier_name: string
+        }
+        Returns: undefined
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1247,7 +1299,7 @@ export type Database = {
     }
     Enums: {
       app_role: "customer" | "restaurant" | "admin" | "event_organiser"
-      booking_status: "confirmed" | "cancelled" | "attended"
+      booking_status: "confirmed" | "cancelled" | "attended" | "expired"
       event_status: "draft" | "published" | "cancelled" | "completed"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status: "open" | "in_progress" | "resolved" | "closed"
@@ -1379,7 +1431,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["customer", "restaurant", "admin", "event_organiser"],
-      booking_status: ["confirmed", "cancelled", "attended"],
+      booking_status: ["confirmed", "cancelled", "attended", "expired"],
       event_status: ["draft", "published", "cancelled", "completed"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: ["open", "in_progress", "resolved", "closed"],
