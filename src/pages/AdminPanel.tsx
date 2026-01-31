@@ -135,11 +135,11 @@ const AdminPanel = () => {
 
       const { count: restCount } = await supabase
         .from("restaurants")
-        .select("*", { count: "exact", head: true });
+        .select("*", { count: "exact", head: false });
 
       const { count: pendingCount } = await supabase
         .from("restaurants")
-        .select("*", { count: "exact", head: true })
+        .select("*", { count: "exact", head: false })
         .eq("is_approved", false);
 
       const { data: txData } = await supabase
@@ -485,6 +485,7 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
 
 
 
