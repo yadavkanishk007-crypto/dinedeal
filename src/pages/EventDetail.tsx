@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Share2, 
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  Users,
+  Share2,
   Ticket,
   Minus,
   Plus,
@@ -21,11 +21,12 @@ import { useToast } from "@/hooks/use-toast";
 import { format, isValid } from "date-fns";
 
 /* =========================
-   TYPES
+    TYPES
 ========================= */
 interface TicketTier {
   name: string;
   price: number;
+  capacity?: number;
 }
 
 interface Event {
@@ -42,8 +43,10 @@ interface Event {
   ticket_price: number;
   booking_deadline: string;
   status: string;
-  ticket_tiers: TicketTier[]; 
+  ticket_tiers: TicketTier[];
   available_seats: number;
+  remaining_seats?: number;
+  total_seats?: number;
 }
 
 export default function EventDetail() {
@@ -60,7 +63,7 @@ export default function EventDetail() {
 
   useEffect(() => {
     if (id) fetchEvent();
-    
+
     return () => {
       const rzpContainer = document.getElementsByClassName('razorpay-container')[0];
       if (rzpContainer) {
@@ -73,22 +76,24 @@ export default function EventDetail() {
     try {
       const { data, error } = await supabase
         .from('event_availability')
-        .select(' *,
-              events (
-                title,
-                description,
-                cover_image,
-                event_date,
-                start_time,
-                end_time,
-                city,
-                venue_name,
-                is_paid,
-                ticket_price,
-                booking_deadline,
-                status,
-                ticket_tiers
-    )' )
+        .select(`
+          *,
+          events (
+            title,
+            description,
+            cover_image,
+            event_date,
+            start_time,
+            end_time,
+            city,
+            venue_name,
+            is_paid,
+            ticket_price,
+            booking_deadline,
+            status,
+            ticket_tiers
+          )
+        `)
         .eq('id', id)
         .eq('status', 'published')
         .single();
@@ -99,11 +104,9 @@ export default function EventDetail() {
         return;
       }
 
-      // DEBUG: Casting to any to handle the ticket_tiers property check
       const base = data.events;
       const availableSeats = data.available_seats;
-      // Safety check: parse ticket_tiers if it comes back as a string, 
-      // or default to empty array
+      
       let tiers: TicketTier[] = [];
       if (Array.isArray(base.ticket_tiers)) {
         tiers = base.ticket_tiers;
@@ -117,8 +120,10 @@ export default function EventDetail() {
 
       const formattedData: Event = {
         ...base,
+        id: data.id, // Using availability ID
         available_seats: availableSeats,
-        ticket_tiers: tiers
+        ticket_tiers: tiers,
+        remaining_seats: data.available_seats
       };
 
       setEvent(formattedData);
@@ -126,11 +131,9 @@ export default function EventDetail() {
       if (formattedData.ticket_tiers.length > 0) {
         setSelectedTier(formattedData.ticket_tiers[0]);
       } else {
-        // Fallback for events with no tiers defined
         setSelectedTier({
           name: "General Admission",
           price: Number(formattedData.ticket_price) || 0,
-          capacity: formattedData.total_seats
         });
       }
     } catch (err) {
@@ -161,12 +164,12 @@ export default function EventDetail() {
   const generateQRHash = () => `EVT-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
   const handleBooking = async () => {
-    if (!user) { 
+    if (!user) {
       toast({ title: "Login Required", description: "Please sign in to book tickets." });
-      navigate('/auth'); 
-      return; 
+      navigate('/auth');
+      return;
     }
-    
+
     if (!event || !selectedTier || booking) return;
 
     if (seats > event.available_seats) {
@@ -179,48 +182,52 @@ export default function EventDetail() {
     try {
       const isPaidFlow = event.is_paid && selectedTier.price > 0;
       const totalAmount = isPaidFlow ? selectedTier.price * seats : 0;
-      const qrHash = generateQRHash();
 
       const finalize = async () => {
-        const { error: bookingError } = await supabase.from('event_bookings').insert([{
-          event_id: event.id,
-          user_id: user.id,
-          seats_booked: seats,
-          amount_paid: totalAmount,
-          qr_code_hash: qrHash,
-          booking_status: 'confirmed',
-          ticket_tier_name: selectedTier.name
-        }]);
+        const { error } = await supabase.rpc("book_event_seats", {
+          p_event_id: event.id,
+          p_user_id: user.id,
+          p_seats: seats,
+          p_tier_name: selectedTier.name,
+          p_amount: totalAmount
+        });
 
-        if (bookingError) throw bookingError;
-        
-        const { error: updateError } = await supabase.from('events')
-          .update({ remaining_seats: event.remaining_seats - seats })
-          .eq('id', event.id);
+        if (error) {
+          if (error.message?.includes("EVENT_SOLD_OUT")) {
+            toast({
+              title: "Sold Out",
+              description: "These seats were just booked by someone else.",
+              variant: "destructive"
+            });
+          }
+          throw error;
+        }
 
-        if (updateError) throw updateError;
+        toast({
+          title: "Tickets Confirmed!",
+          description: `Successfully booked ${seats} ${selectedTier.name} pass(es).`
+        });
 
-        toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
-        navigate('/reservations');
+        navigate("/reservations");
       };
 
       if (isPaidFlow) {
         const res = await fetch("https://dinedeal-backend-076n.onrender.com/api/payments/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            amount: totalAmount, 
-            type: "event", 
-            eventId: event.id, 
-            userId: user.id, 
-            tierName: selectedTier.name 
+          body: JSON.stringify({
+            amount: totalAmount,
+            type: "event",
+            eventId: event.id,
+            userId: user.id,
+            tierName: selectedTier.name
           }),
         });
 
         if (!res.ok) throw new Error("Could not initialize payment gateway.");
-        
+
         const orderData = await res.json();
-        
+
         const options = {
           key: import.meta.env.VITE_RAZORPAY_KEY_ID,
           amount: orderData.order.amount,
@@ -285,10 +292,10 @@ export default function EventDetail() {
       </header>
 
       <div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
-        <img 
-          src={event.cover_image || "/placeholder.svg"} 
-          className="h-full w-full object-cover transition-transform hover:scale-105 duration-700" 
-          alt={event.title} 
+        <img
+          src={event.cover_image || "/placeholder.svg"}
+          className="h-full w-full object-cover transition-transform hover:scale-105 duration-700"
+          alt={event.title}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <Badge className="absolute bottom-4 left-4 text-lg font-bold bg-primary border-none px-4 py-1.5 shadow-xl">
@@ -320,19 +327,23 @@ export default function EventDetail() {
         {event.ticket_tiers && event.ticket_tiers.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold flex items-center gap-2"><Ticket className="h-5 w-5 text-primary" /> Tickets</h2>
-              <span className="text-xs text-muted-foreground bg-accent px-2 py-1 rounded-full">{event.remaining_seats} available</span>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Ticket className="h-5 w-5 text-primary" /> Tickets
+              </h2>
+              <span className="text-xs text-muted-foreground bg-accent px-2 py-1 rounded-full">
+                {event.remaining_seats} available
+              </span>
             </div>
             <div className="grid gap-3">
               {event.ticket_tiers.map((tier) => (
-                <button 
+                <button
                   key={tier.name}
                   disabled={booking}
                   onClick={() => setSelectedTier(tier)}
                   className={`flex items-center justify-between rounded-2xl border-2 p-5 transition-all active:scale-[0.98] ${
-                    selectedTier?.name === tier.name 
-                    ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md" 
-                    : "border-border hover:border-primary/40 bg-card"
+                    selectedTier?.name === tier.name
+                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md"
+                      : "border-border hover:border-primary/40 bg-card"
                   }`}
                 >
                   <div className="text-left">
@@ -368,35 +379,35 @@ export default function EventDetail() {
             <div className="flex items-center justify-between px-1">
               <div>
                 <p className="text-sm font-bold">Select Quantity</p>
-                <p className="text-xs text-muted-foreground">Max {Math.min(10, event.remaining_seats)} per booking</p>
+                <p className="text-xs text-muted-foreground">Max {Math.min(10, event.available_seats)} per booking</p>
               </div>
               <div className="flex items-center gap-4 bg-secondary p-1 rounded-xl">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-9 w-9 rounded-lg"
                   onClick={() => setSeats(s => Math.max(1, s - 1))}
                   disabled={booking || seats <= 1}
                 >
-                  <Minus className="h-4 w-4" />
+                  <circle><Minus className="h-4 w-4" /></circle>
                 </Button>
                 <span className="font-extrabold text-xl w-6 text-center">{seats}</span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-9 w-9 rounded-lg"
-                  onClick={() => setSeats(s => Math.min(event.remaining_seats, s + 1))}
-                  disabled={booking || seats >= event.remaining_seats || seats >= 10}
+                  onClick={() => setSeats(s => Math.min(event.available_seats, s + 1))}
+                  disabled={booking || seats >= event.available_seats || seats >= 10}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           )}
-          
-          <Button 
-            className="w-full h-14 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg" 
-            onClick={handleBooking} 
+
+          <Button
+            className="w-full h-14 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg"
+            onClick={handleBooking}
             disabled={booking || isSoldOut || !selectedTier}
           >
             {isSoldOut ? (
@@ -412,7 +423,6 @@ export default function EventDetail() {
           </Button>
         </div>
       </div>
-      
       <BottomNav />
     </div>
   );
