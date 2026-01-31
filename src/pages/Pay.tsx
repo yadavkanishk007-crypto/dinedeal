@@ -213,6 +213,15 @@ export default function Pay() {
   // --- Payment Handler (Razorpay) ---
 
   const handlePayment = async () => {
+    if (finalAmount <= 0) {
+        toast({
+           title: "Invalid Amount",
+           description: "Payable amount must be greater than ₹0",
+            variant: "destructive",
+     });
+      return;
+    }
+
     // 🔒 Guarantees restaurant.id is valid before calling backend
     if (!restaurant || !restaurant.id) {
       toast({
