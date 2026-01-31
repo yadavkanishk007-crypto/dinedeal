@@ -5,18 +5,13 @@ import {
   Store,
   MapPin,
   Phone,
-  Mail,
   Clock,
   DollarSign,
   Receipt,
   Users,
-  TrendingUp,
-  Percent,
-  Star,
   Download,
   CheckCircle,
   XCircle,
-  AlertCircle,
   FileText,
   Sparkles,
   Link2,
@@ -106,7 +101,7 @@ interface MenuItem {
 interface AdminRestaurantDetailProps {
   restaurantId: string;
   onBack: () => void;
-  onApprovalChange?: () => void;
+  onApprovalChange?: () => Promise<void> | void;
 }
 
 const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: AdminRestaurantDetailProps) => {
@@ -197,24 +192,34 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
     if (!restaurant) return;
     setApproving(true);
     try {
-      const { error } = await supabase
+      // FIX 1: Add 'data' to destructuring so we can check it
+      const { data, error } = await supabase
         .from("restaurants")
         .update({ 
           is_approved: approve,
           is_active: approve ? true : false
         })
-        .eq("id", restaurant.id);
-        .select();
+        .eq("id", restaurant.id)
+        .select(); // FIX 2: Removed the semicolon that was here before .select()
+
       if (error) throw error;
+
+      // FIX 3: Now 'data' is defined, so this check works
       if (!data || data.length === 0) {
         throw new Error("Update failed! Database Policy (RLS) blocked the change.");
       }
+
       setRestaurant({ ...restaurant, is_approved: approve, is_active: approve ? true : false });
-      if (onApprovalChange){
+      
+      if (onApprovalChange) {
         await onApprovalChange();
       }
-      toast({ title: approve ? "Profile Approved" : "Profile Rejected",
-            description: approve ? "The business is now active." : "he business has been restricted."});
+      
+      toast({ 
+        title: approve ? "Profile Approved" : "Profile Rejected",
+        description: approve ? "The business is now active." : "The business has been restricted."
+      });
+
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
