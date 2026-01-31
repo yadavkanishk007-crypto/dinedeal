@@ -201,14 +201,17 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
         .from("restaurants")
         .update({ 
           is_approved: approve,
-          is_active: approve ? restaurant.is_active : false 
+          is_active: approve ? true : false
         })
         .eq("id", restaurant.id);
 
       if (error) throw error;
-      setRestaurant({ ...restaurant, is_approved: approve, is_active: approve ? restaurant.is_active : false });
-      await onApprovalChange?.();
-      toast({ title: approve ? "Profile Approved" : "Profile Rejected" });
+      setRestaurant({ ...restaurant, is_approved: approve, is_active: approve ? true : false });
+      if (onApprovalChange){
+        await onApprovalChange();
+      }
+      toast({ title: approve ? "Profile Approved" : "Profile Rejected",
+            description: approve ? "The business is now active." : "he business has been restricted."});
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
