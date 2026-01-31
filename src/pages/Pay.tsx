@@ -249,7 +249,7 @@ export default function Pay() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: finalAmount,
-            payment_type: paymentType === "event" ? "event_booking" : "restaurant_booking",
+            type: paymentType === "event" ? "event_booking" : "restaurant_booking",
             restaurantId: restaurant.id,
             userId: user?.id ?? "guest",
             metadata: {
