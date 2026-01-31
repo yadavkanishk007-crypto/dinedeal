@@ -178,7 +178,7 @@ export default function EventDetail() {
         if (bookingError) throw bookingError;
         
         // Step 2: Atomic Update via RPC (Patched Logic)
-        const { error: updateError } = await supabase.rpc('book_event_tickets', {
+        const { error: updateError } = await supabase.rpc('book_event_tickets' as any, {
           p_event_id: event.id,
           p_seats_to_book: seats,
           p_tier_name: selectedTier.name
