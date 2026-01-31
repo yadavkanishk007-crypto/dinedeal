@@ -106,7 +106,7 @@ interface MenuItem {
 interface AdminRestaurantDetailProps {
   restaurantId: string;
   onBack: () => void;
-  await onApprovalChange?: () => void;
+  onApprovalChange?: () => void;
 }
 
 const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: AdminRestaurantDetailProps) => {
@@ -207,7 +207,7 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
 
       if (error) throw error;
       setRestaurant({ ...restaurant, is_approved: approve, is_active: approve ? restaurant.is_active : false });
-      onApprovalChange?.();
+      await onApprovalChange?.();
       toast({ title: approve ? "Profile Approved" : "Profile Rejected" });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
