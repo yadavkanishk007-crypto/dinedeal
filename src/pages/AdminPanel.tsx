@@ -167,17 +167,12 @@ const AdminPanel = () => {
     }
   }, [user, role, loading, isAdmin]);
   const refetchRestaurants = async () => {
-  const { data, error } = await supabase
-    .from("restaurants")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (!error) {
-    setRestaurants(data || []);
-  }
-};
-
-
+    try {
+      await fetchData();
+    } catch (error) {
+      console.error("Error during refetch:", error);
+    }
+  };
   /* --- FILTER LOGIC --- */
   const filteredRestaurants = restaurants.filter((rest) => {
     const matchesSearch = rest.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -335,7 +330,9 @@ const AdminPanel = () => {
           selectedRestaurantId ? (
             <AdminRestaurantDetail
               restaurantId={selectedRestaurantId}
-              onBack={() => setSelectedRestaurantId(null)}
+              onBack={() => {
+                refetchRestaurants();
+                setSelectedRestaurantId(null);}}
               onApprovalChange={refetchRestaurants}
             />
           ) : (
@@ -488,6 +485,7 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
 
 
 
