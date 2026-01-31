@@ -330,7 +330,7 @@ const AdminPanel = () => {
           selectedRestaurantId ? (
             <AdminRestaurantDetail
               restaurantId={selectedRestaurantId}
-              onBack={() => {
+              onBack={async () => {
                 await refetchRestaurants();
                 setSelectedRestaurantId(null);}}
               onApprovalChange={refetchRestaurants}
@@ -485,6 +485,7 @@ const AdminPanel = () => {
 };
 
 export default AdminPanel;
+
 
 
 
