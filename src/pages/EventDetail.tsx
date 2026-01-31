@@ -57,7 +57,7 @@ export default function EventDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [event, setEvent] = useState<Event | null>(null);
+  const [event, setEvent] = useState<EventWithAvailability | null>(null);
   const [loading, setLoading] = useState(true);
   const [seats, setSeats] = useState(1);
   const [booking, setBooking] = useState(false);
@@ -183,15 +183,23 @@ export default function EventDetail() {
 
         if (bookingError) throw bookingError;
 
-        const { data: refreshedEvent } = await supabase
+        const { data: refreshedEvent, error: refreshError } = await supabase
            .from('event_with_availability')
            .select('*')
            .eq('id', event.id)
            .single();
-        if (refreshedEvent) {
-          setEvent(refreshedEvent as Event);
+        if (refreshError || refreshedEvent) {
+          throw new Error("Failed to refresh event availability");
         }
-        
+        const parsedEvent: EventWithAvailability = {
+             ...(refreshedEvent as BaseEvent),
+             remaining_seats: refreshedEvent.remaining_seats,
+             ticket_tiers: Array.isArray(refreshedEvent.ticket_tiers)
+               ? refreshedEvent.ticket_tiers
+                : JSON.parse(refreshedEvent.ticket_tiers || "[]"),
+};
+        setEvent(parsedEvent);
+  
 
         toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
         navigate('/reservations');
