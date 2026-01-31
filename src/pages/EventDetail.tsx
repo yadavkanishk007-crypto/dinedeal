@@ -74,7 +74,7 @@ export default function EventDetail() {
   const fetchEvent = async () => {
     try {
       const { data, error } = await supabase
-        .from('events')
+        .from('event_with_availability')
         .select('*')
         .eq('id', id)
         .eq('status', 'published')
