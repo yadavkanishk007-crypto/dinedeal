@@ -324,7 +324,6 @@ export type Database = {
           event_date: string
           id: string
           is_paid: boolean | null
-          remaining_seats: number
           start_time: string
           status: Database["public"]["Enums"]["event_status"] | null
           ticket_price: number | null
@@ -345,7 +344,6 @@ export type Database = {
           event_date: string
           id?: string
           is_paid?: boolean | null
-          remaining_seats?: number
           start_time: string
           status?: Database["public"]["Enums"]["event_status"] | null
           ticket_price?: number | null
@@ -366,7 +364,6 @@ export type Database = {
           event_date?: string
           id?: string
           is_paid?: boolean | null
-          remaining_seats?: number
           start_time?: string
           status?: Database["public"]["Enums"]["event_status"] | null
           ticket_price?: number | null
@@ -1210,8 +1207,30 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      event_with_availability: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          cover_image: string | null
+          event_date: string
+          start_time: string
+          end_time: string | null
+          city: string
+          venue_name: string
+          is_paid: boolean | null
+          ticket_price: number | null
+          total_seats: number
+          remaining_seats: number
+          booking_deadline: string | null
+          status: Database["public"]["Enums"]["event_status"] | null
+          ticket_tiers: Json | null
+          created_at: string | null
+          updated_at: string | null
+          created_by_id: string
     }
+  }
+}
     Functions: {
       get_user_role: {
         Args: { _user_id: string }
