@@ -81,8 +81,8 @@ export default function EventForm({
 
   const handleSubmit = async (e: React.FormEvent, status: 'draft' | 'published' = 'draft') => {
     e.preventDefault();
-    if (!formData.title || !formData.event_date || tiers.some(t => !t.name)) {
-      toast({ title: "Validation Error", description: "Ensure all tiers have names and required fields are filled.", variant: "destructive" });
+    if (!formData.title || !formData.event_date || !formData.start_time || tiers.some(t => !t.name)) {
+      toast({ title: "Validation Error", description: "Ensure title, date, start time, and tier names are filled.", variant: "destructive" });
       return;
     }
 
@@ -172,9 +172,29 @@ export default function EventForm({
 
       <Separator />
 
-      <div className="grid grid-cols-2 gap-4">
-        <Input type="date" value={formData.event_date} onChange={e => setFormData({...formData, event_date: e.target.value})} />
-        <Input placeholder="Venue" value={formData.venue_name} onChange={e => setFormData({...formData, venue_name: e.target.value})} />
+      <div className="space-y-4">
+        <Label>Schedule & Location</Label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Event Date</Label>
+            <Input type="date" value={formData.event_date} onChange={e => setFormData({...formData, event_date: e.target.value})} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Venue Name</Label>
+            <Input placeholder="Venue" value={formData.venue_name} onChange={e => setFormData({...formData, venue_name: e.target.value})} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Start Time</Label>
+            <Input type="time" value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">End Time (Optional)</Label>
+            <Input type="time" value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} />
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-3">
