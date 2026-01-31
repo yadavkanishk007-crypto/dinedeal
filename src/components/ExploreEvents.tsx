@@ -31,7 +31,7 @@ interface ExploreEventsProps {
 
 export default function ExploreEvents({ searchQuery, location }: ExploreEventsProps) {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<BaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
