@@ -179,12 +179,16 @@ export default function EventDetail() {
         }]);
 
         if (bookingError) throw bookingError;
-        
-        const { error: updateError } = await supabase.from('events')
-          .update({ remaining_seats: event.remaining_seats - seats })
-          .eq('id', event.id);
 
-        if (updateError) throw updateError;
+        const { data: refreshedEvent } = await supabase
+           .from('event_with_availability')
+           .select('*')
+           .eq('id', event.id)
+           .single();
+        if (refreshedEvent) {
+          setEvent(refreshedEvent as Event);
+        }
+        
 
         toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
         navigate('/reservations');
