@@ -106,7 +106,7 @@ interface MenuItem {
 interface AdminRestaurantDetailProps {
   restaurantId: string;
   onBack: () => void;
-  onApprovalChange?: () => void;
+  await onApprovalChange?: () => void;
 }
 
 const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: AdminRestaurantDetailProps) => {
