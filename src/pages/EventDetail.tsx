@@ -348,8 +348,8 @@ export default function EventDetail() {
         )}
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 p-4 pb-10 backdrop-blur-lg shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
-        <div className="container max-w-lg mx-auto flex flex-col gap-5">
+      <div className="fixed bottom-16 left-0 right-0 z-50 border-t bg-background/95 p-4 pb-10 backdrop-blur-lg shadow-[0_-10px_30px_rgba(0,0,0,0.08)]">
+        <div className="container max-w-lg mx-auto flex flex-col gap-3">
           {!isSoldOut && (
             <div className="flex items-center justify-between px-1">
               <div>
@@ -381,7 +381,7 @@ export default function EventDetail() {
           )}
           
           <Button 
-            className="w-full h-14 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg" 
+            className="w-full h-11 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg" 
             onClick={handleBooking} 
             disabled={booking || isSoldOut || !selectedTier}
           >
