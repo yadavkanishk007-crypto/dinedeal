@@ -50,7 +50,7 @@ interface EventManagerProps {
 
 export default function EventManager({ restaurantId, restaurantName }: EventManagerProps) {
   const { toast } = useToast();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<BaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
