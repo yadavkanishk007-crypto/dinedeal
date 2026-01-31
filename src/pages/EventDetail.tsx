@@ -32,20 +32,23 @@ interface TicketTier {
 interface Event {
   id: string;
   title: string;
-  description: string;
-  cover_image: string;
+  description: string | null
+  cover_image: string | null
   event_date: string;
   start_time: string;
-  end_time: string;
+  end_time: string | null;
   city: string;
   venue_name: string;
-  is_paid: boolean;
-  ticket_price: number;
-  remaining_seats: number;
+  is_paid: boolean | null;
+  ticket_price: number | null;
   total_seats: number;
-  booking_deadline: string;
-  status: string;
-  ticket_tiers: TicketTier[]; 
+  booking_deadline: string | null;
+  status: string | null;
+  ticket_tiers: Json | null; 
+}
+interface EventWithAvailability extends BaseEvent {
+  remaining_seats: number;
+  ticket_tiers: TicketTier[]; // parsed version
 }
 
 export default function EventDetail() {
