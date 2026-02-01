@@ -152,7 +152,7 @@ export default function EventDetail() {
     setBooking(true);
 
     try {
-      const isPaidFlow = event.is_paid && selectedTier.price > 0;
+      const isPaidFlow = Boolean(event.is_paid) && selectedTier.price > 0;
       const totalAmount = isPaidFlow ? selectedTier.price * seats : 0;
       const qrHash = generateQRHash();
 
