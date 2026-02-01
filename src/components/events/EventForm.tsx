@@ -103,7 +103,6 @@ export default function EventForm({
         ticket_tiers: tiers as unknown as Json,
         ticket_price: minPrice, // Still used for "Starting from" display
         total_seats: totalCapacity,
-        remaining_seats: totalCapacity,
         booking_deadline: formData.booking_deadline || null,
         status,
       };
