@@ -19,37 +19,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { format, isValid } from "date-fns";
+import type { Database } from "@/integrations/supabase/types";
 
 /* =========================
    TYPES
 ========================= */
-interface TicketTier {
+type EventRow = Database["public"]["Tables"]["events"]["Row"];
+type TicketTier = {
   name: string;
   price: number;
   capacity: number;
-}
+};
 
-interface Event {
-  id: string;
-  title: string;
-  description: string | null
-  cover_image: string | null
-  event_date: string;
-  start_time: string;
-  end_time: string | null;
-  city: string;
-  venue_name: string;
-  is_paid: boolean | null;
-  ticket_price: number | null;
-  total_seats: number;
-  booking_deadline: string | null;
-  status: string | null;
-  ticket_tiers: Json | null; 
-}
-interface EventWithAvailability extends BaseEvent {
+type EventUI = EventRow & {
   remaining_seats: number;
-  ticket_tiers: TicketTier[]; // parsed version
-}
+  ticket_tiers: TicketTier[];
+};
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -57,7 +42,7 @@ export default function EventDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [event, setEvent] = useState<EventWithAvailability | null>(null);
+  const [event, setEvent] = useState<EventUI | null>(null);
   const [loading, setLoading] = useState(true);
   const [seats, setSeats] = useState(1);
   const [booking, setBooking] = useState(false);
@@ -105,8 +90,9 @@ export default function EventDetail() {
         }
       }
 
-      const formattedData: Event = {
-        ...rawData,
+      const formattedData: EventUI = {
+        ...(rawData as EventRow),
+        remaining_seats: rawData.remaining_seats,
         ticket_tiers: tiers
       };
 
@@ -183,22 +169,24 @@ export default function EventDetail() {
 
         if (bookingError) throw bookingError;
 
-        const { data: refreshedEvent, error: refreshError } = await supabase
+        const { data, error } = await supabase
            .from('event_with_availability')
            .select('*')
            .eq('id', event.id)
            .single();
-        if (refreshError || refreshedEvent) {
-          throw new Error("Failed to refresh event availability");
+        if (error || !data) {
+          toast(title: "Event not found", variant:"destructive" });
+          navigate("/explore");
+          return;
         }
-        const parsedEvent: EventWithAvailability = {
-             ...(refreshedEvent as BaseEvent),
-             remaining_seats: refreshedEvent.remaining_seats,
-             ticket_tiers: Array.isArray(refreshedEvent.ticket_tiers)
-               ? refreshedEvent.ticket_tiers
-                : JSON.parse(refreshedEvent.ticket_tiers || "[]"),
+        const updatedEvent: EventUI = {
+             ...(data as EventRow),
+             remaining_seats: data.remaining_seats,
+             ticket_tiers: Array.isArray(data.ticket_tiers)
+               ? data.ticket_tiers
+                : JSON.parse(data.ticket_tiers || "[]"),
 };
-        setEvent(parsedEvent);
+        setEvent(updatedEvent);
   
 
         toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
