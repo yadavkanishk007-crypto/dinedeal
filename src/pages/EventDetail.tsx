@@ -175,7 +175,7 @@ export default function EventDetail() {
            .eq('id', event.id)
            .single();
         if (error || !data) {
-          toast(title: "Event not found", variant:"destructive" });
+          toast({title: "Event not found", variant:"destructive" });
           navigate("/explore");
           return;
         }
