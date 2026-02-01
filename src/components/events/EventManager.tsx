@@ -41,7 +41,7 @@ export default function EventManager({ restaurantId, restaurantName }: EventMana
   const [events, setEvents] = useState<EventUI[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [editingEvent, setEditingEvent] = useState<EventUI | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
   const fetchEvents = async () => {
@@ -64,7 +64,7 @@ export default function EventManager({ restaurantId, restaurantName }: EventMana
     if (restaurantId) fetchEvents();
   }, [restaurantId]);
 
-  const handleStatusToggle = async (event: Event) => {
+  const handleStatusToggle = async (event: EventUI) => {
     const newStatus = event.status === 'published' ? 'draft' : 'published';
     const { error } = await supabase
       .from('events')
