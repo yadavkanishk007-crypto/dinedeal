@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.dinedeal.app",
+      "sha256_cert_fingerprints": [
+        "FB:A4:B0:CC:46:C3:1A:CD:B5:CC:61:93:72:0C:10:5B:F4:D5:15:03:E6:5B:81:7F:07:F9:6F:2E:48:53:BE:E3"
+      ]
+    }
+  }
+]
