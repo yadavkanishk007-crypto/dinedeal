@@ -7,22 +7,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import type { Database } from "@/integrations/supabase/types";
 
-interface Event {
-  id: string;
-  title: string;
-  description: string | null;
-  cover_image: string | null;
-  event_date: string;
-  start_time: string;
-  end_time: string | null;
-  city: string;
-  venue_name: string;
-  is_paid: boolean;
-  ticket_price: number;
-  total_seats: number;
+type EventRow = Database["public"]["Tables"]["events"]["Row"];
+
+type EventUI = EventRow & {
   remaining_seats: number;
-}
+};
+
+
 
 interface ExploreEventsProps {
   searchQuery: string;
@@ -31,7 +24,7 @@ interface ExploreEventsProps {
 
 export default function ExploreEvents({ searchQuery, location }: ExploreEventsProps) {
   const navigate = useNavigate();
-  const [events, setEvents] = useState<BaseEvent[]>([]);
+  const [events, setEvents] = useState<EventUI[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,14 +34,14 @@ export default function ExploreEvents({ searchQuery, location }: ExploreEventsPr
   const fetchEvents = async () => {
     try {
       const { data, error } = await supabase
-        .from("events")
+        .from("event_with_availability")
         .select("*")
         .eq("status", "published")
         .gte("event_date", new Date().toISOString().split("T")[0])
         .order("event_date", { ascending: true });
 
       if (error) throw error;
-      setEvents(data || []);
+      setEvents(data as EventUI[] || []);
     } catch (error) {
       console.error("Error fetching events:", error);
     } finally {
