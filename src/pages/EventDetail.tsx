@@ -184,7 +184,9 @@ export default function EventDetail() {
              remaining_seats: data.remaining_seats,
              ticket_tiers: Array.isArray(data.ticket_tiers)
                ? data.ticket_tiers
-                : JSON.parse(data.ticket_tiers ?? "[]"),
+               : typeof data.ticket_tiers === "string"
+                 ? JSON.parse(data.ticket_tiers)
+                  : [],
 };
         setEvent(updatedEvent);
   
