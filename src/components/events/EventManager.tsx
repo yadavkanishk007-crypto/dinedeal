@@ -23,25 +23,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import EventForm from "./EventForm";
+import type { Database } from "@/integrations/supabase/types";
 
-interface Event {
-  id: string;
-  title: string;
-  description: string;
-  cover_image: string;
-  event_date: string;
-  start_time: string;
-  end_time: string;
-  city: string;
-  venue_name: string;
-  is_paid: boolean;
-  ticket_price: number;
-  total_seats: number;
+type EventRow = Database["public"]["Tables"]["events"]["Row"];
+
+type EventUI = EventRow & {
   remaining_seats: number;
-  booking_deadline: string;
-  status: string;
-  created_at: string;
-}
+};
 
 interface EventManagerProps {
   restaurantId: string;
@@ -50,7 +38,7 @@ interface EventManagerProps {
 
 export default function EventManager({ restaurantId, restaurantName }: EventManagerProps) {
   const { toast } = useToast();
-  const [events, setEvents] = useState<BaseEvent[]>([]);
+  const [events, setEvents] = useState<EventUI[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
@@ -59,7 +47,7 @@ export default function EventManager({ restaurantId, restaurantName }: EventMana
   const fetchEvents = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from('events')
+      .from('event_with_availability')
       .select('*')
       .eq('created_by_id', restaurantId)
       .order('event_date', { ascending: true });
@@ -67,7 +55,7 @@ export default function EventManager({ restaurantId, restaurantName }: EventMana
     if (error) {
       toast({ title: "Error loading events", description: error.message, variant: "destructive" });
     } else {
-      setEvents(data || []);
+      setEvents((data as EventUI[])|| []);
     }
     setLoading(false);
   };
