@@ -109,6 +109,7 @@ const DineIn = () => {
         .eq("customer_id", user.id)        
         .order("created_at", { ascending: false })
         .limit(1)
+        .returns<DineInSession | null>()
         .maybeSingle() as any;
 
       if (error) throw error;
