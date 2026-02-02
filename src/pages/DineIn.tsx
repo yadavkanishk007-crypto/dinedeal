@@ -89,7 +89,7 @@ const DineIn = () => {
     }
 
     try {
-      const query = supabase
+      const query = (supabase as any)
         .from("dinein_sessions")
         .select(`
           id,
