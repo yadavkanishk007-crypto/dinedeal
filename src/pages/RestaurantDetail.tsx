@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useMotionValue, animate } from "framer-motion";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -61,6 +61,13 @@ const RestaurantDetail = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBookingModal, setShowBookingModal] = useState(false);
+
+  // --- SURGICAL FIX 1: State + Constants for Bottom Sheet ---
+  const SHEET_COLLAPSED = 96;
+  const SHEET_EXPANDED = 220;
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetY = useMotionValue(0);
+  // ---------------------------------------------------------
 
   useEffect(() => {
     if (id) {
@@ -155,9 +162,29 @@ const RestaurantDetail = () => {
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </motion.button>
           <div className="flex gap-2">
-            <motion.button className="w-10 h-10 rounded-full glass flex items-center justify-center" whileTap={{ scale: 0.95 }}>
+            
+            {/* --- SURGICAL FIX 2: Functional Share Button --- */}
+            <motion.button 
+              className="w-10 h-10 rounded-full glass flex items-center justify-center" 
+              whileTap={{ scale: 0.95 }}
+              onClick={async () => {
+                if (navigator.share) {
+                  await navigator.share({
+                    title: restaurant.name,
+                    text: `Check out ${restaurant.name} on DineDeal`,
+                    url: window.location.href,
+                  });
+                } else {
+                  await navigator.clipboard.writeText(window.location.href);
+                  // Optional: Add a toast notification here if available in your project
+                  alert("Link copied to clipboard");
+                }
+              }}
+            >
               <Share2 className="w-5 h-5 text-foreground" />
             </motion.button>
+            {/* --------------------------------------------- */}
+
             <motion.button
               className="w-10 h-10 rounded-full glass flex items-center justify-center"
               onClick={() => setIsFavorite(!isFavorite)}
@@ -181,7 +208,6 @@ const RestaurantDetail = () => {
                 <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-success/10">
                   <Star className="w-4 h-4 text-success fill-success" />
                   <span className="font-semibold text-success">
-                    {/* FIXED: Uses real rating from SQL trigger, or "New" if null/0 */}
                     {restaurant.rating && restaurant.rating > 0 ? restaurant.rating.toFixed(1) : "New"}
                   </span>
                 </div>
@@ -207,7 +233,6 @@ const RestaurantDetail = () => {
 
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <h2 className="font-display font-bold text-lg text-foreground mb-4">Active Offers</h2>
-          {/* FIXED: Only shows if real offers exist in Supabase */}
           {offers.length > 0 ? (
             <div className="space-y-3">
               {offers.map((offer, index) => (
@@ -312,22 +337,66 @@ const RestaurantDetail = () => {
         </motion.section>
       </main>
 
-      <motion.div className="fixed bottom-20 left-0 right-0 z-40 p-4" initial={{ y: 100 }} animate={{ y: 0 }} transition={{ delay: 0.3 }}>
+      {/* --- SURGICAL FIX 3: Draggable Bottom Sheet --- */}
+      <motion.div
+        className="fixed left-0 right-0 z-40 px-4"
+        drag="y"
+        dragConstraints={{ top: -(SHEET_EXPANDED - SHEET_COLLAPSED), bottom: 0 }}
+        dragElastic={0.15}
+        onDragEnd={(_, info) => {
+          if (info.offset.y < -40) {
+            setSheetOpen(true);
+            animate(sheetY, -(SHEET_EXPANDED - SHEET_COLLAPSED), { type: "spring" });
+          } else {
+            setSheetOpen(false);
+            animate(sheetY, 0, { type: "spring" });
+          }
+        }}
+        initial={{ y: 120 }}
+        animate={{ y: 0 }}
+        style={{ bottom: "env(safe-area-inset-bottom)", y: sheetY }}
+      >
         <div className="container max-w-lg mx-auto">
-         <div className="glass rounded-2xl p-4 h-[96px] flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">You can save up to</p>
-              <p className="text-xl font-display font-bold gradient-text">₹{maxDiscount}</p>
+          <div
+            className="glass rounded-2xl border border-border/30 px-4 pt-2 pb-4"
+            style={{ height: sheetOpen ? SHEET_EXPANDED : SHEET_COLLAPSED }}
+          >
+            {/* Drag handle */}
+            <div className="flex justify-center mb-2">
+              <div className="w-10 h-1.5 rounded-full bg-muted-foreground/30" />
             </div>
-            <Button variant="secondary" size="lg" className="shrink-0" onClick={() => setShowBookingModal(true)}>
-              <CalendarDays className="w-4 h-4 mr-2" /> Book Table
-            </Button>
-            <Button variant="gradient" size="lg" className="shrink-0" onClick={() => navigate(`/pay?restaurant=${restaurant.id}`)}>
-              Pay Now
-            </Button>
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">You can save up to</p>
+                <p className="text-xl font-display font-bold gradient-text">
+                  ₹{maxDiscount}
+                </p>
+              </div>
+
+              <Button
+                variant="secondary"
+                size="lg"
+                className="shrink-0"
+                onClick={() => setShowBookingModal(true)}
+              >
+                <CalendarDays className="w-4 h-4 mr-2" />
+                Book Table
+              </Button>
+
+              <Button
+                variant="gradient"
+                size="lg"
+                className="shrink-0"
+                onClick={() => navigate(`/pay?restaurant=${restaurant.id}`)}
+              >
+                Pay Now
+              </Button>
+            </div>
           </div>
         </div>
       </motion.div>
+      {/* --------------------------------------------- */}
 
       <TableBookingModal
         isOpen={showBookingModal}
