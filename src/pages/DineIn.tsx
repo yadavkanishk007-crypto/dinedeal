@@ -89,7 +89,7 @@ const DineIn = () => {
     }
 
     try {
-      const { data: existing, error } = await supabase
+      const query = supabase
         .from("dinein_sessions")
         .select(`
           id,
@@ -109,9 +109,8 @@ const DineIn = () => {
         .eq("customer_id", user.id)        
         .order("created_at", { ascending: false })
         .limit(1)
-        .returns<DineInSession | null>()
-        .maybeSingle() as any;
-
+      const { data, error } = await query.maybeSingle();
+      const existing = data as DineInSession | null;
       if (error) throw error;
 
       if (existing) {
