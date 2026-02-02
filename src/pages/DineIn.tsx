@@ -77,7 +77,7 @@ const DineIn = () => {
       return;
     }
 
-    if (user && restaurantId) {
+    if (user && restaurantId && !session) {
       initializeSession();
     }
   }, [authLoading, user, restaurantId]);
@@ -104,8 +104,9 @@ const DineIn = () => {
           )
         `)
         .eq("restaurant_id", restaurantId)
-        .eq("customer_id", user.id)
-        .in("status", ["open", "bill_posted"])
+        .eq("is_expired", false)
+        .in("status", ["open", "bill_posted", "paid"])
+        .eq("customer_id", user.id)        
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle() as any;
