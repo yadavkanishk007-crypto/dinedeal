@@ -135,7 +135,7 @@ const RestaurantDetail = () => {
   }, {} as Record<string, MenuItem[]>);
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="min-h-screen bg-background pb-[calc(160px+env(safe-area-inset-bottom))]">
       <div className="relative">
         <motion.div className="h-72 overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <img
@@ -314,7 +314,7 @@ const RestaurantDetail = () => {
 
       <motion.div className="fixed bottom-20 left-0 right-0 z-40 p-4" initial={{ y: 100 }} animate={{ y: 0 }} transition={{ delay: 0.3 }}>
         <div className="container max-w-lg mx-auto">
-          <div className="glass rounded-2xl p-4 flex items-center justify-between gap-4 border border-border/30">
+         <div className="glass rounded-2xl p-4 h-[96px] flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">You can save up to</p>
               <p className="text-xl font-display font-bold gradient-text">₹{maxDiscount}</p>
