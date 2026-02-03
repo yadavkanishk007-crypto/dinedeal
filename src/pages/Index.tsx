@@ -78,7 +78,7 @@ const Index = () => {
 
     const { data, error } = await supabase
       .from("transactions")
-      .select("savings_amount")
+      .select("discount_amount")
       .eq("user_id", user.id)
       .eq("status", "completed");
 
@@ -88,7 +88,7 @@ const Index = () => {
     }
 
     if (data) {
-      const total = data.reduce((acc, curr) => acc + (Number(curr.savings_amount) || 0), 0);
+      const total = data.reduce((acc, curr) => acc + (Number(curr.discount_amount) || 0), 0);
       setStats({
         totalSaved: total,
         transactionCount: data.length
@@ -152,7 +152,7 @@ const Index = () => {
       ...r,
       imageUrl: r.image_url || defaultImages[i % defaultImages.length],
       discount: r.offers?.[0]?.discount_percent || 0,
-      distance: r.distance_text || "Calculated at checkout",
+      distance: (r as any).distance_text || "Nearby",
       rating: r.rating || 0,
     }));
     setRestaurants(mapped);
