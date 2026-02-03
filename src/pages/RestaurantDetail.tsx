@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion, useMotionValue, animate } from "framer-motion";
+import { motion } from "framer-motion";
 import { 
   ArrowLeft, 
   MapPin, 
@@ -12,7 +12,8 @@ import {
   Share2,
   Info,
   CalendarDays,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Wallet // Only new icon added
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,12 +63,7 @@ const RestaurantDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
-  // --- SURGICAL FIX 1: State + Constants for Bottom Sheet ---
-  const SHEET_COLLAPSED = 96;
-  const SHEET_EXPANDED = 220;
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const sheetY = useMotionValue(0);
-  // ---------------------------------------------------------
+  // --- REMOVED: Sheet State & Constants (Cleaned up as requested) ---
 
   useEffect(() => {
     if (id) {
@@ -142,7 +138,8 @@ const RestaurantDetail = () => {
   }, {} as Record<string, MenuItem[]>);
 
   return (
-    <div className="min-h-screen bg-background pb-[calc(160px+env(safe-area-inset-bottom))]">
+    // Changed pb-160px to pb-100px since the big sheet is gone
+    <div className="min-h-screen bg-background pb-[calc(100px+env(safe-area-inset-bottom))]">
       <div className="relative">
         <motion.div className="h-72 overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <img
@@ -163,7 +160,7 @@ const RestaurantDetail = () => {
           </motion.button>
           <div className="flex gap-2">
             
-            {/* --- SURGICAL FIX 2: Functional Share Button --- */}
+            {/* --- SURGICAL FIX 2: Functional Share Button (PRESERVED EXACTLY) --- */}
             <motion.button 
               className="w-10 h-10 rounded-full glass flex items-center justify-center" 
               whileTap={{ scale: 0.95 }}
@@ -230,6 +227,44 @@ const RestaurantDetail = () => {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* --- NEW SECTION: Actions moved from Slider to Static Grid --- */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ delay: 0.05 }}
+          className="space-y-3"
+        >
+          {maxDiscount > 0 && (
+            <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium bg-primary/5 py-1.5 rounded-full border border-primary/10">
+               <Percent className="w-4 h-4" /> 
+               Save up to ₹{maxDiscount} on this booking
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 gap-3">
+             <Button
+                variant="outline"
+                size="lg"
+                className="w-full border-primary/20 hover:bg-primary/5 text-foreground h-12"
+                onClick={() => setShowBookingModal(true)}
+              >
+                <CalendarDays className="w-4 h-4 mr-2 text-primary" />
+                Book Table
+              </Button>
+
+              <Button
+                variant="default" 
+                size="lg"
+                className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
+                onClick={() => navigate(`/pay?restaurant=${restaurant.id}`)}
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                Pay Now
+              </Button>
+          </div>
+        </motion.div>
+        {/* --------------------------------------------------------- */}
 
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <h2 className="font-display font-bold text-lg text-foreground mb-4">Active Offers</h2>
@@ -337,66 +372,7 @@ const RestaurantDetail = () => {
         </motion.section>
       </main>
 
-      {/* --- SURGICAL FIX 3: Draggable Bottom Sheet --- */}
-      <motion.div
-        className="fixed left-0 right-0 z-40 px-4"
-        drag="y"
-        dragConstraints={{ top: -(SHEET_EXPANDED - SHEET_COLLAPSED), bottom: 0 }}
-        dragElastic={0.15}
-        onDragEnd={(_, info) => {
-          if (info.offset.y < -40) {
-            setSheetOpen(true);
-            animate(sheetY, -(SHEET_EXPANDED - SHEET_COLLAPSED), { type: "spring" });
-          } else {
-            setSheetOpen(false);
-            animate(sheetY, 0, { type: "spring" });
-          }
-        }}
-        initial={{ y: 120 }}
-        animate={{ y: 0 }}
-        style={{ bottom: "env(safe-area-inset-bottom)", y: sheetY }}
-      >
-        <div className="container max-w-lg mx-auto">
-          <div
-            className="glass rounded-2xl border border-border/30 px-4 pt-2 pb-4"
-            style={{ height: sheetOpen ? SHEET_EXPANDED : SHEET_COLLAPSED }}
-          >
-            {/* Drag handle */}
-            <div className="flex justify-center mb-2">
-              <div className="w-10 h-1.5 rounded-full bg-muted-foreground/30" />
-            </div>
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">You can save up to</p>
-                <p className="text-xl font-display font-bold gradient-text">
-                  ₹{maxDiscount}
-                </p>
-              </div>
-
-              <Button
-                variant="secondary"
-                size="lg"
-                className="shrink-0"
-                onClick={() => setShowBookingModal(true)}
-              >
-                <CalendarDays className="w-4 h-4 mr-2" />
-                Book Table
-              </Button>
-
-              <Button
-                variant="gradient"
-                size="lg"
-                className="shrink-0"
-                onClick={() => navigate(`/pay?restaurant=${restaurant.id}`)}
-              >
-                Pay Now
-              </Button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-      {/* --------------------------------------------- */}
+      {/* --- SURGICAL FIX 3: Removed the Draggable Sheet Div from here --- */}
 
       <TableBookingModal
         isOpen={showBookingModal}
