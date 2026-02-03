@@ -27,8 +27,40 @@ const FavoriteRestaurants = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // For now, show empty state since favorites table doesn't exist yet
-    setLoading(false);
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchFavorites = async () => {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("favorites")
+        .select(`
+          id,
+          restaurant:restaurants (
+            id,
+            name,
+            cuisine,
+            address,
+            image_url,
+            rating
+          )
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        setFavorites(data as unknown as FavoriteRestaurant[]);
+      } else {
+        console.error("Error fetching favorites:", error);
+      }
+
+      setLoading(false);
+    };
+
+    fetchFavorites();
   }, [user]);
 
   return (
