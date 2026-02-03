@@ -83,7 +83,7 @@ const Rewards = () => {
         }
       });
       const rewardsJson = await rewardsRes.json();
-      if(!rewardsRes.ok || !rewarsjson.success) {
+      if(!rewardsRes.ok || !rewardsJson.success) {
         throw new Error("failed to fetch rewards");
       }
       const rewardsData = rewardsJson.data;
