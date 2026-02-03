@@ -13,7 +13,7 @@ import {
   Info,
   CalendarDays,
   UtensilsCrossed,
-  Wallet // Only new icon added
+  Wallet 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import TableBookingModal from "@/components/TableBookingModal";
 import RestaurantGallery from "@/components/RestaurantGallery";
+import { useAuth } from "@/hooks/use-auth"; 
 
 interface Restaurant {
   id: string;
@@ -56,6 +57,7 @@ interface MenuItem {
 const RestaurantDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isFavorite, setIsFavorite] = useState(false);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -63,13 +65,11 @@ const RestaurantDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
-  // --- REMOVED: Sheet State & Constants (Cleaned up as requested) ---
-
   useEffect(() => {
     if (id) {
       fetchRestaurantData();
     }
-  }, [id]);
+  }, [id, user]);
 
   const fetchRestaurantData = async () => {
     try {
@@ -85,6 +85,18 @@ const RestaurantDetail = () => {
 
       if (restaurantData) {
         setRestaurant(restaurantData);
+
+        // SYNC FAVORITE STATE
+        if (user) {
+          const { data: favData } = await supabase
+            .from("favorites")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("restaurant_id", restaurantData.id)
+            .maybeSingle();
+
+          setIsFavorite(!!favData);
+        }
 
         const { data: offersData } = await supabase
           .from("offers")
@@ -110,6 +122,29 @@ const RestaurantDetail = () => {
     }
   };
 
+  const toggleFavorite = async () => {
+    if (!user || !restaurant) return;
+
+    try {
+      if (isFavorite) {
+        await supabase
+          .from("favorites")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("restaurant_id", restaurant.id);
+        setIsFavorite(false);
+      } else {
+        await supabase.from("favorites").insert({
+          user_id: user.id,
+          restaurant_id: restaurant.id,
+        });
+        setIsFavorite(true);
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -118,7 +153,6 @@ const RestaurantDetail = () => {
     );
   }
 
-  // PRODUCTION CHECK: No mock fallback allowed
   if (!restaurant) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -138,7 +172,6 @@ const RestaurantDetail = () => {
   }, {} as Record<string, MenuItem[]>);
 
   return (
-    // Changed pb-160px to pb-100px since the big sheet is gone
     <div className="min-h-screen bg-background pb-[calc(100px+env(safe-area-inset-bottom))]">
       <div className="relative">
         <motion.div className="h-72 overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -160,7 +193,6 @@ const RestaurantDetail = () => {
           </motion.button>
           <div className="flex gap-2">
             
-            {/* --- SURGICAL FIX 2: Functional Share Button (PRESERVED EXACTLY) --- */}
             <motion.button 
               className="w-10 h-10 rounded-full glass flex items-center justify-center" 
               whileTap={{ scale: 0.95 }}
@@ -173,18 +205,16 @@ const RestaurantDetail = () => {
                   });
                 } else {
                   await navigator.clipboard.writeText(window.location.href);
-                  // Optional: Add a toast notification here if available in your project
                   alert("Link copied to clipboard");
                 }
               }}
             >
               <Share2 className="w-5 h-5 text-foreground" />
             </motion.button>
-            {/* --------------------------------------------- */}
 
             <motion.button
               className="w-10 h-10 rounded-full glass flex items-center justify-center"
-              onClick={() => setIsFavorite(!isFavorite)}
+              onClick={toggleFavorite}
               whileTap={{ scale: 0.95 }}
             >
               <Heart className={`w-5 h-5 ${isFavorite ? "fill-primary text-primary" : "text-foreground"}`} />
@@ -228,7 +258,6 @@ const RestaurantDetail = () => {
           </Card>
         </motion.div>
 
-        {/* --- NEW SECTION: Actions moved from Slider to Static Grid --- */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }} 
           animate={{ opacity: 1, y: 0 }} 
@@ -264,7 +293,6 @@ const RestaurantDetail = () => {
               </Button>
           </div>
         </motion.div>
-        {/* --------------------------------------------------------- */}
 
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <h2 className="font-display font-bold text-lg text-foreground mb-4">Active Offers</h2>
@@ -371,8 +399,6 @@ const RestaurantDetail = () => {
           </Card>
         </motion.section>
       </main>
-
-      {/* --- SURGICAL FIX 3: Removed the Draggable Sheet Div from here --- */}
 
       <TableBookingModal
         isOpen={showBookingModal}
