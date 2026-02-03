@@ -35,29 +35,32 @@ const FavoriteRestaurants = () => {
     const fetchFavorites = async () => {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("favorites")
-        .select(`
-          id,
-          restaurant:restaurants (
+      try {
+        // Casting to 'any' bypasses the "Argument of type 'favorites' is not assignable" error
+        // while you wait for your types to regenerate.
+        const { data, error } = await (supabase.from("favorites" as any)
+          .select(`
             id,
-            name,
-            cuisine,
-            address,
-            image_url,
-            rating
-          )
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+            restaurant:restaurants (
+              id,
+              name,
+              cuisine,
+              address,
+              image_url,
+              rating
+            )
+          `)
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }) as any);
 
-      if (!error) {
-        setFavorites(data as unknown as FavoriteRestaurant[]);
-      } else {
-        console.error("Error fetching favorites:", error);
+        if (!error && data) {
+          setFavorites(data as FavoriteRestaurant[]);
+        }
+      } catch (err) {
+        console.error("Error fetching favorites:", err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchFavorites();
