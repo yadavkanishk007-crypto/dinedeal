@@ -20,7 +20,7 @@ interface TableBookingModalProps {
 }
 
 // Fixed Advance Amount
-const BOOKING_AMOUNT = 299;
+const BOOKING_AMOUNT = 1;
 
 const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: TableBookingModalProps) => {
   const { user } = useAuth();
