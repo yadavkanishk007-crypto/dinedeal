@@ -13,7 +13,7 @@ import {
   Info,
   CalendarDays,
   UtensilsCrossed,
-  Wallet // Only new icon added
+  Wallet 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,51 +65,52 @@ const RestaurantDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
-  // --- REMOVED: Sheet State & Constants (Cleaned up as requested) ---
-
   useEffect(() => {
     if (id) {
       fetchRestaurantData();
     }
-  }, [id]);
+  }, [id, user]);
 
   const fetchRestaurantData = async () => {
     try {
-      const { data: restaurantData, error: restaurantError } = await supabase
+      // Entire chain cast to 'any' to bypass SelectQueryError
+      const { data: restaurantData, error: restaurantError } = await (supabase
         .from("restaurants" as any)
         .select("*")
         .eq("id", id)
         .eq("is_approved", true)
         .eq("is_active", true)
-        .maybeSingle();
+        .maybeSingle() as any);
 
       if (restaurantError) throw restaurantError;
 
       if (restaurantData) {
-        setRestaurant(restaurantData);
-      if (user) {
-        const { data: favData } = await (supabase
-          .from("favorites" as any)
-          .select("id")
-          .eq("user_id", user.id)                               
-          .eq("restaurant_id", restaurantData.id)
-          .maybeSingle() as any);
-        setIsFavorite(!!favData);
-      }
-        const { data: offersData } = await supabase
-          .from("offers")
+        setRestaurant(restaurantData as Restaurant);
+
+        if (user) {
+          const { data: favData } = await (supabase
+            .from("favorites" as any)
+            .select("id")
+            .eq("user_id", user.id)                                
+            .eq("restaurant_id", restaurantData.id)
+            .maybeSingle() as any);
+          setIsFavorite(!!favData);
+        }
+
+        const { data: offersData } = await (supabase
+          .from("offers" as any)
           .select("*")
           .eq("restaurant_id", id)
-          .eq("is_active", true);
+          .eq("is_active", true) as any);
 
         setOffers(offersData || []);
 
-        const { data: menuData } = await supabase
-          .from("menu_items")
+        const { data: menuData } = await (supabase
+          .from("menu_items" as any)
           .select("*")
           .eq("restaurant_id", id)
           .eq("is_available", true)
-          .order("category");
+          .order("category") as any);
 
         setMenuItems(menuData || []);
       }
@@ -119,6 +120,7 @@ const RestaurantDetail = () => {
       setLoading(false);
     }
   };
+
   const toggleFavorite = async () => {
     if (!user || !restaurant) return;
 
@@ -150,7 +152,6 @@ const RestaurantDetail = () => {
     );
   }
 
-  // PRODUCTION CHECK: No mock fallback allowed
   if (!restaurant) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -170,7 +171,6 @@ const RestaurantDetail = () => {
   }, {} as Record<string, MenuItem[]>);
 
   return (
-    // Changed pb-160px to pb-100px since the big sheet is gone
     <div className="min-h-screen bg-background pb-[calc(100px+env(safe-area-inset-bottom))]">
       <div className="relative">
         <motion.div className="h-72 overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -191,8 +191,6 @@ const RestaurantDetail = () => {
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </motion.button>
           <div className="flex gap-2">
-            
-            {/* --- SURGICAL FIX 2: Functional Share Button (PRESERVED EXACTLY) --- */}
             <motion.button 
               className="w-10 h-10 rounded-full glass flex items-center justify-center" 
               whileTap={{ scale: 0.95 }}
@@ -205,14 +203,12 @@ const RestaurantDetail = () => {
                   });
                 } else {
                   await navigator.clipboard.writeText(window.location.href);
-                  // Optional: Add a toast notification here if available in your project
                   alert("Link copied to clipboard");
                 }
               }}
             >
               <Share2 className="w-5 h-5 text-foreground" />
             </motion.button>
-            {/* --------------------------------------------- */}
 
             <motion.button
               className="w-10 h-10 rounded-full glass flex items-center justify-center"
@@ -260,7 +256,6 @@ const RestaurantDetail = () => {
           </Card>
         </motion.div>
 
-        {/* --- NEW SECTION: Actions moved from Slider to Static Grid --- */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }} 
           animate={{ opacity: 1, y: 0 }} 
@@ -296,7 +291,6 @@ const RestaurantDetail = () => {
               </Button>
           </div>
         </motion.div>
-        {/* --------------------------------------------------------- */}
 
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <h2 className="font-display font-bold text-lg text-foreground mb-4">Active Offers</h2>
@@ -403,8 +397,6 @@ const RestaurantDetail = () => {
           </Card>
         </motion.section>
       </main>
-
-      {/* --- SURGICAL FIX 3: Removed the Draggable Sheet Div from here --- */}
 
       <TableBookingModal
         isOpen={showBookingModal}
