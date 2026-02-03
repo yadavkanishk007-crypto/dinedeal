@@ -271,7 +271,7 @@ const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: Ta
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -296,7 +296,7 @@ const TableBookingModal = ({ isOpen, onClose, restaurantId, restaurantName }: Ta
                 
                 {/* --- STATE: FORM --- */}
                 {step === "form" && (
-                  <form onSubmit={handlePaymentInitiation} className="space-y-4">
+                  <form onSubmit={handlePaymentInitiation} className="space-y-4 pb-24">
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
