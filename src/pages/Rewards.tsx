@@ -77,11 +77,16 @@ const Rewards = () => {
       }
 
       // Fetch rewards
-      const { data: rewardsData } = await supabase
-        .from("rewards")
-        .select("*")
-        .eq("user_id", user?.id)
-        .maybeSingle();
+      const rewardsRes = await fetch("/api/rewards/me", {
+        headers: {
+          "Content-Type": "application/json",
+        }
+      });
+      const rewardsJson = await rewardsRes.json();
+      if(!rewardsRes.ok || !rewarsjson.success) {
+        throw new Error("failed to fetch rewards");
+      }
+      const rewardsData = rewardsJson.data;
 
       // Calculate stats
       const totalSaved = (txData || []).reduce((sum, tx) => sum + Number(tx.discount_amount), 0);
@@ -90,7 +95,7 @@ const Rewards = () => {
         totalSaved,
         rewardPoints: rewardsData?.points || 0,
         totalTransactions: txData?.length || 0,
-        redeemableAmount: Math.floor((rewardsData?.points || 0) / 10), // 10 points = ₹1
+        redeemableAmount: rewardsData.redeemable_amount,
         lifetimeSavings: totalSaved,
       });
     } catch (error) {
