@@ -9,6 +9,11 @@ interface StatsCardProps {
   gradient?: string;
 }
 
+interface QuickStatsProps {
+  totalSaved?: number;
+  transactions?: number;
+}
+
 const StatsCard = ({ icon, label, value, subValue, gradient = "gradient-primary" }: StatsCardProps) => {
   return (
     <motion.div
@@ -24,20 +29,20 @@ const StatsCard = ({ icon, label, value, subValue, gradient = "gradient-primary"
         <p className="text-xs text-muted-foreground mb-1">{label}</p>
         <p className="text-xl font-bold font-display text-foreground">{value}</p>
         {subValue && (
-          <p className="text-xs text-muted-foreground mt-1">{subValue}</p>
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{subValue}</p>
         )}
       </div>
     </motion.div>
   );
 };
 
-const QuickStats = () => {
+const QuickStats = ({ totalSaved = 0, transactions = 0 }: QuickStatsProps) => {
   const stats = [
     {
       icon: <TrendingUp className="w-5 h-5 text-primary-foreground" />,
       label: "Total Saved",
-      value: "—",
-      subValue: "Available after first payment",
+      value: totalSaved > 0 ? `₹${totalSaved.toFixed(2)}` : "—",
+      subValue: totalSaved > 0 ? "Instant savings applied" : "Available after first payment",
       gradient: "gradient-primary",
     },
     {
@@ -50,8 +55,8 @@ const QuickStats = () => {
     {
       icon: <Receipt className="w-5 h-5 text-primary-foreground" />,
       label: "Transactions",
-      value: "—",
-      subValue: "No activity yet",
+      value: transactions > 0 ? transactions.toString() : "—",
+      subValue: transactions > 0 ? "Recent activity recorded" : "No activity yet",
       gradient: "gradient-warm",
     },
     {
