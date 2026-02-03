@@ -21,6 +21,7 @@ import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import TableBookingModal from "@/components/TableBookingModal";
 import RestaurantGallery from "@/components/RestaurantGallery";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Restaurant {
   id: string;
@@ -56,6 +57,7 @@ interface MenuItem {
 const RestaurantDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isFavorite, setIsFavorite] = useState(false);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -74,7 +76,7 @@ const RestaurantDetail = () => {
   const fetchRestaurantData = async () => {
     try {
       const { data: restaurantData, error: restaurantError } = await supabase
-        .from("restaurants")
+        .from("restaurants" as any)
         .select("*")
         .eq("id", id)
         .eq("is_approved", true)
@@ -85,7 +87,15 @@ const RestaurantDetail = () => {
 
       if (restaurantData) {
         setRestaurant(restaurantData);
-
+      if (user) {
+        const { data: favData } = await (supabase
+          .from("favorites" as any)
+          .select("id")
+          .eq("user_id", user.id)                               
+          .eq("restaurant_id", restaurantData.id)
+          .maybeSingle() as any);
+        setIsFavorite(!!favData);
+      }
         const { data: offersData } = await supabase
           .from("offers")
           .select("*")
@@ -107,6 +117,28 @@ const RestaurantDetail = () => {
       console.error("Error fetching restaurant:", error);
     } finally {
       setLoading(false);
+    }
+  };
+  const toggleFavorite = async () => {
+    if (!user || !restaurant) return;
+
+    try {
+      if (isFavorite) {
+        await (supabase
+          .from("favorites" as any)
+          .delete()
+          .eq("user_id", user.id)
+          .eq("restaurant_id", restaurant.id) as any);
+        setIsFavorite(false);
+      } else {
+        await (supabase.from("favorites" as any).insert({
+          user_id: user.id,
+          restaurant_id: restaurant.id,
+        }) as any);
+        setIsFavorite(true);
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
     }
   };
 
@@ -184,7 +216,7 @@ const RestaurantDetail = () => {
 
             <motion.button
               className="w-10 h-10 rounded-full glass flex items-center justify-center"
-              onClick={() => setIsFavorite(!isFavorite)}
+              onClick={toggleFavorite}
               whileTap={{ scale: 0.95 }}
             >
               <Heart className={`w-5 h-5 ${isFavorite ? "fill-primary text-primary" : "text-foreground"}`} />
