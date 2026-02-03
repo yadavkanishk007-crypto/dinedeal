@@ -64,20 +64,22 @@ const Index = () => {
   const [stats, setStats] = useState({ totalSaved: 0, transactionCount: 0 });
 
   const fetchActivePromotion = async () => {
-    const { data } = await supabase
-      .from("promotions")
-      .select("*")
-      .eq("is_active", true)
-      .maybeSingle();
+    try {
+      const { data } = await (supabase.from("promotions" as any) as any)
+        .select("*")
+        .eq("is_active", true)
+        .maybeSingle();
 
-    if (data) setActivePromo(data);
+      if (data) setActivePromo(data);
+    } catch (err) {
+      console.error("Promotions table not found yet");
+    }
   };
 
   const fetchUserStats = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from("transactions")
+    const { data, error } = await (supabase.from("transactions" as any) as any)
       .select("discount_amount")
       .eq("user_id", user.id)
       .eq("status", "completed");
@@ -88,7 +90,7 @@ const Index = () => {
     }
 
     if (data) {
-      const total = data.reduce((acc, curr) => acc + (Number(curr.discount_amount) || 0), 0);
+      const total = data.reduce((acc: number, curr: any) => acc + (Number(curr.discount_amount) || 0), 0);
       setStats({
         totalSaved: total,
         transactionCount: data.length
@@ -108,14 +110,9 @@ const Index = () => {
                 `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
               );
               const data = await response.json();
-              const city = data.address?.city ||
-                data.address?.town ||
-                data.address?.village ||
-                data.address?.district ||
-                "Jhansi";
+              const city = data.address?.city || data.address?.town || data.address?.village || data.address?.district || "Jhansi";
               setLocation(city);
             } catch (error) {
-              console.error("Reverse geocoding failed:", error);
               setLocation("Jhansi");
             }
             setIsLocating(false);
@@ -148,11 +145,11 @@ const Index = () => {
       return;
     }
 
-    const mapped = (data || []).map((r, i) => ({
+    const mapped = (data || []).map((r: any, i: number) => ({
       ...r,
       imageUrl: r.image_url || defaultImages[i % defaultImages.length],
       discount: r.offers?.[0]?.discount_percent || 0,
-      distance: (r as any).distance_text || "Nearby",
+      distance: r.distance_text || "Nearby",
       rating: r.rating || 0,
     }));
     setRestaurants(mapped);
