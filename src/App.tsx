@@ -34,7 +34,7 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleRoute from "@/components/RoleRoute";
 import DeleteAccount from "./pages/DeleteAccount";
-
+import RefundPolicy from "./pages/RefundPolicy";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -75,7 +75,7 @@ const App = () => (
             <Route path="/help" element={<FAQs />} /> 
             <Route path="/auth" element={<Auth />} />
             <Route path="/delete-account" element={<DeleteAccount />} />
-
+            <Route path="/refund-policy" element={<RefundPolicy />} />
             {/* ✅ PASSWORD RESET ROUTE */}
             <Route path="/reset-password" element={<ResetPassword />} />
 
