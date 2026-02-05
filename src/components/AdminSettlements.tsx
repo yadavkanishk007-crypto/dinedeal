@@ -140,8 +140,9 @@ const AdminSettlements = () => {
           restaurants!inner(name, organiser_type)
         `)
         .eq("payment_status", "completed")
-        .is("settlement_id", null);
-
+        .eq("is_settled", false)
+        .or("settlement_id.is.null,settlement_id.eq.''");
+      
       if (txError) throw txError;
 
       const pendingMap = new Map<string, PendingSettlement>();
