@@ -223,7 +223,7 @@ const DineIn = () => {
   
       // 1️⃣ Ask backend to create Razorpay order
       const res = await fetch(
-        "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
+        "https://dinedeal-backend-53ub5174f-kanishks-projects-9c34ac85.vercel.app",
         {
           method: "POST",
           headers: {
