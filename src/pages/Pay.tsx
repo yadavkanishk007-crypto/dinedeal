@@ -243,7 +243,7 @@ export default function Pay() {
     try {
       // 1. Create Order on Backend
       const res = await fetch(
-        "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
+        "https://dinedeal-backend-53ub5174f-kanishks-projects-9c34ac85.vercel.app",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
