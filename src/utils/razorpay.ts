@@ -1,7 +1,7 @@
 export async function startRazorpayPayment(amount: number) {
   // 1️⃣ Call backend to create order
   const res = await fetch(
-    "https://dinedeal-backend-53ub5174f-kanishks-projects-9c34ac85.vercel.app",
+    "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
     {
       method: "POST",
       headers: {
