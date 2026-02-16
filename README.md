@@ -1,7 +1,7 @@
 DineDeal
 A Local Dining Deals and Reservation Platform
 
-Repository: https://github.com/yadavkanishk007-crypto/zave-flavor-joy
+Repository: https://github.com/yadavkanishk007-crypto/dinedeal
 
 Introduction
 
