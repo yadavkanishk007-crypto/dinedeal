@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Calendar, Clock, MapPin, Users, IndianRupee, 
-  Image as ImageIcon, X, Plus, Trash2, Ticket 
+import {
+  Calendar, Clock, MapPin, Users, IndianRupee,
+  Image as ImageIcon, X, Plus, Trash2, Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,18 +28,18 @@ interface EventFormProps {
   initialData?: any;
 }
 
-export default function EventForm({ 
-  restaurantId, 
-  venueName = "", 
-  onSuccess, 
+export default function EventForm({
+  restaurantId,
+  venueName = "",
+  onSuccess,
   onCancel,
-  initialData 
+  initialData
 }: EventFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>(initialData?.cover_image || "");
-  
+
   // Tiers State: Initializes with existing tiers or a default General pass
   const [tiers, setTiers] = useState<TicketTier[]>(
     initialData?.ticket_tiers || [{ name: "General Admission", price: 0, capacity: 100 }]
@@ -99,7 +99,7 @@ export default function EventForm({
         end_time: formData.end_time || null,
         city: formData.city,
         venue_name: formData.venue_name,
-        is_paid: formData.is_paid,
+        is_paid: minPrice > 0, // FIXED: Automatically determine if paid based on price
         ticket_tiers: tiers as unknown as Json,
         ticket_price: minPrice, // Still used for "Starting from" display
         total_seats: totalCapacity,
@@ -107,7 +107,7 @@ export default function EventForm({
         status,
       };
 
-      const { error } = initialData?.id 
+      const { error } = initialData?.id
         ? await supabase.from('events').update(eventData).eq('id', initialData.id)
         : await supabase.from('events').insert([eventData]);
 
@@ -129,8 +129,8 @@ export default function EventForm({
 
       <div className="space-y-4">
         <Label>Event Details</Label>
-        <Input placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-        <Textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+        <Input placeholder="Title" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+        <Textarea placeholder="Description" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
       </div>
 
       <Separator />
@@ -164,8 +164,8 @@ export default function EventForm({
         </AnimatePresence>
 
         <div className="flex justify-between p-3 bg-primary/5 rounded-lg border border-primary/20 text-sm font-medium">
-          <span className="flex items-center gap-2"><Users className="w-4 h-4"/> Capacity: {totalCapacity}</span>
-          <span className="flex items-center gap-2"><Ticket className="w-4 h-4"/> Min Price: ₹{minPrice}</span>
+          <span className="flex items-center gap-2"><Users className="w-4 h-4" /> Capacity: {totalCapacity}</span>
+          <span className="flex items-center gap-2"><Ticket className="w-4 h-4" /> Min Price: ₹{minPrice}</span>
         </div>
       </div>
 
@@ -176,22 +176,22 @@ export default function EventForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Event Date</Label>
-            <Input type="date" value={formData.event_date} onChange={e => setFormData({...formData, event_date: e.target.value})} />
+            <Input type="date" value={formData.event_date} onChange={e => setFormData({ ...formData, event_date: e.target.value })} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Venue Name</Label>
-            <Input placeholder="Venue" value={formData.venue_name} onChange={e => setFormData({...formData, venue_name: e.target.value})} />
+            <Input placeholder="Venue" value={formData.venue_name} onChange={e => setFormData({ ...formData, venue_name: e.target.value })} />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Start Time</Label>
-            <Input type="time" value={formData.start_time} onChange={e => setFormData({...formData, start_time: e.target.value})} />
+            <Input type="time" value={formData.start_time} onChange={e => setFormData({ ...formData, start_time: e.target.value })} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">End Time (Optional)</Label>
-            <Input type="time" value={formData.end_time} onChange={e => setFormData({...formData, end_time: e.target.value})} />
+            <Input type="time" value={formData.end_time} onChange={e => setFormData({ ...formData, end_time: e.target.value })} />
           </div>
         </div>
       </div>
