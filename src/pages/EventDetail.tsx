@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Share2, 
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  Users,
+  Share2,
   Ticket,
   Minus,
   Plus,
@@ -47,11 +47,10 @@ export default function EventDetail() {
   const [seats, setSeats] = useState(1);
   const [booking, setBooking] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
-  const [coverImageUrl, setCoverImageUrl] = useState<string>("");
 
   useEffect(() => {
     if (id) fetchEvent();
-    
+
     return () => {
       const rzpContainer = document.getElementsByClassName('razorpay-container')[0];
       if (rzpContainer) {
@@ -77,7 +76,7 @@ export default function EventDetail() {
 
       // DEBUG: Casting to any to handle the ticket_tiers property check
       const rawData = data as any;
-      
+
       // Safety check: parse ticket_tiers if it comes back as a string, 
       // or default to empty array
       let tiers: TicketTier[] = [];
@@ -98,15 +97,6 @@ export default function EventDetail() {
       };
 
       setEvent(formattedData);
-
-      // Generate public URL from the stored path
-      if (formattedData.cover_image) {
-        const { data: { publicUrl } } = supabase
-          .storage
-          .from('restaurant-images')
-          .getPublicUrl(formattedData.cover_image);
-        setCoverImageUrl(publicUrl);
-      }
 
       if (formattedData.ticket_tiers.length > 0) {
         setSelectedTier(formattedData.ticket_tiers[0]);
@@ -146,12 +136,12 @@ export default function EventDetail() {
   const generateQRHash = () => `EVT-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
   const handleBooking = async () => {
-    if (!user) { 
+    if (!user) {
       toast({ title: "Login Required", description: "Please sign in to book tickets." });
-      navigate('/auth'); 
-      return; 
+      navigate('/auth');
+      return;
     }
-    
+
     if (!event || !selectedTier || booking) return;
 
     if (seats > event.remaining_seats) {
@@ -180,26 +170,26 @@ export default function EventDetail() {
         if (bookingError) throw bookingError;
 
         const { data, error } = await supabase
-           .from('event_with_availability')
-           .select('*')
-           .eq('id', event.id)
-           .single();
+          .from('event_with_availability')
+          .select('*')
+          .eq('id', event.id)
+          .single();
         if (error || !data) {
-          toast({title: "Event not found", variant:"destructive" });
+          toast({ title: "Event not found", variant: "destructive" });
           navigate("/explore");
           return;
         }
         const updatedEvent: EventUI = {
-             ...(data as EventRow),
-             remaining_seats: data.remaining_seats,
-             ticket_tiers: Array.isArray(data.ticket_tiers)
-               ? data.ticket_tiers
-               : typeof data.ticket_tiers === "string"
-                 ? JSON.parse(data.ticket_tiers)
-                  : [],
-};
+          ...(data as EventRow),
+          remaining_seats: data.remaining_seats,
+          ticket_tiers: Array.isArray(data.ticket_tiers)
+            ? data.ticket_tiers
+            : typeof data.ticket_tiers === "string"
+              ? JSON.parse(data.ticket_tiers)
+              : [],
+        };
         setEvent(updatedEvent);
-  
+
 
         toast({ title: "Tickets Confirmed!", description: `Successfully booked ${seats} ${selectedTier.name} pass(es).` });
         navigate('/reservations');
@@ -209,19 +199,19 @@ export default function EventDetail() {
         const res = await fetch("https://dinedeal-backend-076n.onrender.com/api/payments/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            amount: totalAmount, 
-            type: "event", 
-            eventId: event.id, 
-            userId: user.id, 
-            tierName: selectedTier.name 
+          body: JSON.stringify({
+            amount: totalAmount,
+            type: "event",
+            eventId: event.id,
+            userId: user.id,
+            tierName: selectedTier.name
           }),
         });
 
         if (!res.ok) throw new Error("Could not initialize payment gateway.");
-        
+
         const orderData = await res.json();
-        
+
         const options = {
           key: import.meta.env.VITE_RAZORPAY_KEY_ID,
           amount: orderData.order.amount,
@@ -285,18 +275,17 @@ export default function EventDetail() {
         </button>
       </header>
 
-      {<div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
-        <img 
-          src={coverImageUrl || "/placeholder.svg"} 
-          className="h-full w-full object-cover transition-transform hover:scale-105 duration-700" 
-          alt={event.title} 
+      <div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
+        <img
+          src={event.cover_image || "/placeholder.svg"}
+          className="h-full w-full object-cover transition-transform hover:scale-105 duration-700"
+          alt={event.title}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <Badge className="absolute bottom-4 left-4 text-lg font-bold bg-primary border-none px-4 py-1.5 shadow-xl">
           {selectedTier?.price === 0 ? "FREE" : `₹${selectedTier?.price ?? event.ticket_price}`}
         </Badge>
       </div>
-    }
       <main className="container max-w-3xl space-y-8 py-8 px-4">
         <section className="space-y-4">
           <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">{event.title}</h1>
@@ -326,15 +315,14 @@ export default function EventDetail() {
             </div>
             <div className="grid gap-3">
               {event.ticket_tiers.map((tier) => (
-                <button 
+                <button
                   key={tier.name}
                   disabled={booking}
                   onClick={() => setSelectedTier(tier)}
-                  className={`flex items-center justify-between rounded-2xl border-2 p-5 transition-all active:scale-[0.98] ${
-                    selectedTier?.name === tier.name 
-                    ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md" 
-                    : "border-border hover:border-primary/40 bg-card"
-                  }`}
+                  className={`flex items-center justify-between rounded-2xl border-2 p-5 transition-all active:scale-[0.98] ${selectedTier?.name === tier.name
+                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md"
+                      : "border-border hover:border-primary/40 bg-card"
+                    }`}
                 >
                   <div className="text-left">
                     <p className="font-bold text-lg">{tier.name}</p>
@@ -342,9 +330,8 @@ export default function EventDetail() {
                       {tier.price === 0 ? "Complimentary" : `₹${tier.price}`}
                     </p>
                   </div>
-                  <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    selectedTier?.name === tier.name ? "bg-primary border-primary" : "border-muted"
-                  }`}>
+                  <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedTier?.name === tier.name ? "bg-primary border-primary" : "border-muted"
+                    }`}>
                     {selectedTier?.name === tier.name && <Check className="h-4 w-4 text-white" />}
                   </div>
                 </button>
@@ -372,9 +359,9 @@ export default function EventDetail() {
                 <p className="text-xs text-muted-foreground">Max {Math.min(10, event.remaining_seats)} per booking</p>
               </div>
               <div className="flex items-center gap-4 bg-secondary p-1 rounded-xl">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-9 w-9 rounded-lg"
                   onClick={() => setSeats(s => Math.max(1, s - 1))}
                   disabled={booking || seats <= 1}
@@ -382,9 +369,9 @@ export default function EventDetail() {
                   <Minus className="h-4 w-4" />
                 </Button>
                 <span className="font-extrabold text-xl w-6 text-center">{seats}</span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-9 w-9 rounded-lg"
                   onClick={() => setSeats(s => Math.min(event.remaining_seats, s + 1))}
                   disabled={booking || seats >= event.remaining_seats || seats >= 10}
@@ -394,10 +381,10 @@ export default function EventDetail() {
               </div>
             </div>
           )}
-          
-          <Button 
-            className="w-full h-11 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg" 
-            onClick={handleBooking} 
+
+          <Button
+            className="w-full h-11 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg"
+            onClick={handleBooking}
             disabled={booking || isSoldOut || !selectedTier}
           >
             {isSoldOut ? (
@@ -413,7 +400,7 @@ export default function EventDetail() {
           </Button>
         </div>
       </div>
-      
+
       <BottomNav />
     </div>
   );
