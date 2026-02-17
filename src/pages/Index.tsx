@@ -178,9 +178,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <motion.header 
-        className="sticky top-0 z-40 glass border-b border-border/30" 
-        initial={{ y: -100 }} 
+      <motion.header
+        className="sticky top-0 z-40 glass border-b border-border/30"
+        initial={{ y: -100 }}
         animate={{ y: 0 }}
       >
         <div className="container py-4 flex items-center justify-between">
@@ -201,8 +201,8 @@ const Index = () => {
             </button>
           </div>
           <Link to="/profile">
-            <motion.div 
-              className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm" 
+            <motion.div
+              className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold text-sm"
               whileHover={{ scale: 1.05 }}
             >
               {user.email?.charAt(0).toUpperCase()}
@@ -218,9 +218,9 @@ const Index = () => {
         />
 
         {activePromo && (
-          <motion.div 
-            className="relative overflow-hidden rounded-3xl gradient-primary p-6 text-primary-foreground" 
-            initial={{ opacity: 0, y: 20 }} 
+          <motion.div
+            className="relative overflow-hidden rounded-3xl gradient-primary p-6 text-primary-foreground"
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <div className="relative z-10">
@@ -248,21 +248,21 @@ const Index = () => {
           <motion.div className="grid gap-4 mt-4" layout>
             <AnimatePresence>
               {restaurants.map((r, i) => (
-                <motion.div 
-                  key={r.id} 
-                  initial={{ opacity: 0, y: 20 }} 
-                  animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                  key={r.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <RestaurantCard 
-                    id={r.id} 
-                    name={r.name} 
-                    cuisine={r.cuisine} 
-                    distance={r.distance} 
-                    rating={r.rating} 
-                    discount={r.discount} 
-                    imageUrl={r.imageUrl} 
-                    isPopular={r.is_popular || false} 
+                  <RestaurantCard
+                    id={r.id}
+                    name={r.name}
+                    cuisine={r.cuisine}
+                    distance={r.distance}
+                    rating={r.rating}
+                    discount={r.discount}
+                    imageUrl={r.imageUrl}
+                    isPopular={r.is_popular || false}
                   />
                 </motion.div>
               ))}
@@ -306,7 +306,7 @@ const LandingPage = () => {
               Pay at your favorite restaurants through DineDeal and get instant discounts, cashback, and exclusive rewards.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/auth">
+              <Link to="/explore">
                 <Button variant="gradient" size="xl">
                   Start Saving Now <ArrowRight className="w-5 h-5" />
                 </Button>
@@ -314,7 +314,7 @@ const LandingPage = () => {
               <Link to="/explore"><Button variant="outline" size="xl">Explore Restaurants</Button></Link>
             </div>
             {isInstallable && (
-              <motion.div 
+              <motion.div
                 className="mt-6 p-4 rounded-xl bg-primary/10 border border-primary/20"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -329,12 +329,12 @@ const LandingPage = () => {
             )}
           </motion.div>
           <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} className="relative">
-            <motion.img 
-              src={heroIllustration} 
-              alt="DineDeal" 
-              className="w-full max-w-lg mx-auto" 
-              animate={{ y: [0, -15, 0] }} 
-              transition={{ repeat: Infinity, duration: 4 }} 
+            <motion.img
+              src={heroIllustration}
+              alt="DineDeal"
+              className="w-full max-w-lg mx-auto"
+              animate={{ y: [0, -15, 0] }}
+              transition={{ repeat: Infinity, duration: 4 }}
             />
           </motion.div>
         </div>

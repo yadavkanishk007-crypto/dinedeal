@@ -48,10 +48,10 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/restaurant/:id" element={<RestaurantDetail />} />
-            <Route path="/pay" element={<Pay />} />
-            <Route path="/rewards" element={<Rewards />} />
-            <Route path="/dine-in" element={<DineIn />} />
-            <Route path="/scan" element={<ScanQR />} />
+            <Route path="/pay" element={<ProtectedRoute><Pay /></ProtectedRoute>} />
+            <Route path="/rewards" element={<ProtectedRoute><Rewards /></ProtectedRoute>} />
+            <Route path="/dine-in" element={<ProtectedRoute><DineIn /></ProtectedRoute>} />
+            <Route path="/scan" element={<ProtectedRoute><ScanQR /></ProtectedRoute>} />
             <Route path="/support" element={<Support />} />
             <Route
               path="/profile"
@@ -63,10 +63,10 @@ const App = () => (
               }
             />
 
-            <Route path="/transactions" element={<TransactionHistory />} />
-            <Route path="/reservations" element={<MyReservations />} />
-            <Route path="/favorites" element={<FavoriteRestaurants />} />
-            <Route path="/payments" element={<PaymentMethods />} />
+            <Route path="/transactions" element={<ProtectedRoute><TransactionHistory /></ProtectedRoute>} />
+            <Route path="/reservations" element={<ProtectedRoute><MyReservations /></ProtectedRoute>} />
+            <Route path="/favorites" element={<ProtectedRoute><FavoriteRestaurants /></ProtectedRoute>} />
+            <Route path="/payments" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
             <Route path="/security" element={<PrivacySecurity />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsConditions />} />
@@ -74,7 +74,7 @@ const App = () => (
             <Route path="/RestaurantTermsCondition" element={<RestaurantTermsCondition />} />
             <Route path="/help" element={<FAQs />} /> 
             <Route path="/auth" element={<Auth />} />
-            <Route path="/delete-account" element={<DeleteAccount />} />
+            <Route path="/delete-account" element={<ProtectedRoute><DeleteAccount /></ProtectedRoute>} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             {/* ✅ PASSWORD RESET ROUTE */}
             <Route path="/reset-password" element={<ResetPassword />} />
