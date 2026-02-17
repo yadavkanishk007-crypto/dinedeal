@@ -47,6 +47,7 @@ export default function EventDetail() {
   const [seats, setSeats] = useState(1);
   const [booking, setBooking] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string>("");
 
   useEffect(() => {
     if (id) fetchEvent();
@@ -97,6 +98,15 @@ export default function EventDetail() {
       };
 
       setEvent(formattedData);
+
+      // Generate public URL from the stored path
+      if (formattedData.cover_image) {
+        const { data: { publicUrl } } = supabase
+          .storage
+          .from('restaurant-images')
+          .getPublicUrl(formattedData.cover_image);
+        setCoverImageUrl(publicUrl);
+      }
 
       if (formattedData.ticket_tiers.length > 0) {
         setSelectedTier(formattedData.ticket_tiers[0]);
@@ -277,7 +287,7 @@ export default function EventDetail() {
 
       {<div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
         <img 
-          src={event.cover_image || "/placeholder.svg"} 
+          src={coverImageUrl || "/placeholder.svg"} 
           className="h-full w-full object-cover transition-transform hover:scale-105 duration-700" 
           alt={event.title} 
         />
