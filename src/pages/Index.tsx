@@ -138,7 +138,8 @@ const Index = () => {
       .from("restaurants")
       .select("*, offers(*)")
       .eq("is_approved", true)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .neq("organiser_type", "event_group");
 
     if (error) {
       console.error("Error fetching restaurants:", error);
