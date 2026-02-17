@@ -79,6 +79,18 @@ export default function EventForm({
     return publicUrl;
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent, status: 'draft' | 'published' = 'draft') => {
     e.preventDefault();
     if (!formData.title || !formData.event_date || !formData.start_time || tiers.some(t => !t.name)) {
@@ -128,6 +140,38 @@ export default function EventForm({
       </div>
 
       <div className="space-y-4">
+        <Label>Event Banner</Label>
+        <div className="mb-4">
+          {imagePreview ? (
+            <div className="relative w-full h-48 rounded-lg overflow-hidden border bg-muted">
+              <img src={imagePreview} alt="Banner preview" className="w-full h-full object-cover" />
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                className="absolute top-2 right-2 rounded-full"
+                onClick={() => {
+                  setImageFile(null);
+                  setImagePreview("");
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-input rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:bg-muted/50 transition-colors relative">
+              <ImageIcon className="w-8 h-8 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Click to upload banner image</span>
+              <Input
+                type="file"
+                accept="image/*"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={handleImageChange}
+              />
+            </div>
+          )}
+        </div>
+
         <Label>Event Details</Label>
         <Input placeholder="Title" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
         <Textarea placeholder="Description" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
