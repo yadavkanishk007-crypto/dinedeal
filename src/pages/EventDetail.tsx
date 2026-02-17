@@ -275,7 +275,7 @@ export default function EventDetail() {
         </button>
       </header>
 
-      {/*<div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
+      {<div className="relative aspect-video w-full overflow-hidden md:aspect-[21/9]">
         <img 
           src={event.cover_image || "/placeholder.svg"} 
           className="h-full w-full object-cover transition-transform hover:scale-105 duration-700" 
@@ -286,7 +286,7 @@ export default function EventDetail() {
           {selectedTier?.price === 0 ? "FREE" : `₹${selectedTier?.price ?? event.ticket_price}`}
         </Badge>
       </div>
-*/}
+    }
       <main className="container max-w-3xl space-y-8 py-8 px-4">
         <section className="space-y-4">
           <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">{event.title}</h1>
