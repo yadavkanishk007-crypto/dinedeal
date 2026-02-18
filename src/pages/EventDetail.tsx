@@ -448,6 +448,43 @@ export default function EventDetail() {
             </div>
           )}
 
+          )}
+
+          {/* Coupon Input */}
+          {!isSoldOut && selectedTier?.price !== 0 && (
+            <div className="space-y-2">
+              {!appliedCoupon ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Coupon Code"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="uppercase h-10 bg-background"
+                  />
+                  <Button onClick={handleApplyCoupon} disabled={couponLoading} variant="outline" className="h-10">
+                    {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex justify-between items-center p-2 bg-green-500/10 rounded-lg border border-green-500/20">
+                  <span className="text-sm font-medium text-green-600 flex items-center gap-2">
+                    <Check className="w-4 h-4" /> Code {appliedCoupon.code} applied
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setAppliedCoupon(null)} className="h-6 w-6 p-0 hover:bg-green-500/20">
+                    <X className="w-3 h-3 text-green-700" />
+                  </Button>
+                </div>
+              )}
+              {couponError && <p className="text-xs text-destructive ml-1">{couponError}</p>}
+              {appliedCoupon && (
+                <div className="flex justify-between px-1 text-sm text-green-600 font-medium">
+                  <span>Discount</span>
+                  <span>- ₹{Math.min((selectedTier?.price || 0) * seats * (appliedCoupon.discount_percent / 100), appliedCoupon.max_discount || Infinity).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <Button
             className="w-full h-11 text-lg font-bold rounded-2xl transition-all shadow-purple-500/20 shadow-lg"
             onClick={handleBooking}
