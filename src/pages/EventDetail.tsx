@@ -448,8 +448,6 @@ export default function EventDetail() {
             </div>
           )}
 
-          )}
-
           {/* Coupon Input */}
           {!isSoldOut && selectedTier?.price !== 0 && (
             <div className="space-y-2">
