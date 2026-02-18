@@ -9,8 +9,12 @@ import {
   Ticket,
   Minus,
   Plus,
-  Check
+  Check,
+  Loader2,
+  Tag,
+  X
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Logo from "@/components/Logo";
@@ -36,6 +40,15 @@ type EventUI = EventRow & {
   ticket_tiers: TicketTier[];
 };
 
+type Coupon = {
+  id: string;
+  code: string;
+  discount_percent: number;
+  max_discount: number | null;
+  min_order_amount: number | null;
+  valid_until: string | null;
+};
+
 export default function EventDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -47,6 +60,12 @@ export default function EventDetail() {
   const [seats, setSeats] = useState(1);
   const [booking, setBooking] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TicketTier | null>(null);
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   useEffect(() => {
     if (id) fetchEvent();
@@ -133,6 +152,39 @@ export default function EventDetail() {
     }
   };
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError("");
+
+    try {
+      const { data, error } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("code", couponCode.trim().toUpperCase())
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (error || !data) {
+        setCouponError("Invalid coupon code");
+        return;
+      }
+
+      const now = new Date();
+      if (data.valid_until && new Date(data.valid_until) < now) {
+        setCouponError("Coupon expired");
+        return;
+      }
+
+      setAppliedCoupon(data as any);
+      toast({ title: "Coupon Applied", description: `${data.discount_percent}% saved!` });
+    } catch (err) {
+      setCouponError("Error checking coupon");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
   const generateQRHash = () => `EVT-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
   const handleBooking = async () => {
@@ -153,7 +205,16 @@ export default function EventDetail() {
 
     try {
       const isPaidFlow = selectedTier.price > 0;
-      const totalAmount = isPaidFlow ? selectedTier.price * seats : 0;
+      const baseAmount = isPaidFlow ? selectedTier.price * seats : 0;
+
+      const couponDiscount = appliedCoupon
+        ? Math.min(
+          baseAmount * (appliedCoupon.discount_percent / 100),
+          appliedCoupon.max_discount || Infinity
+        )
+        : 0;
+
+      const totalAmount = Math.max(baseAmount - couponDiscount, 0);
       const qrHash = generateQRHash();
 
       const finalize = async () => {
@@ -164,7 +225,11 @@ export default function EventDetail() {
           amount_paid: totalAmount,
           qr_code_hash: qrHash,
           booking_status: 'confirmed',
-          ticket_tier_name: selectedTier.name
+          ticket_tier_name: selectedTier.name,
+          // Storing coupon info in metadata if columns don't exist, or specific columns if they do.
+          // For now assuming we might not have columns, but if we did:
+          // coupon_code: appliedCoupon?.code, 
+          // discount_amount: couponDiscount
         }]);
 
         if (bookingError) throw bookingError;
@@ -204,7 +269,8 @@ export default function EventDetail() {
             type: "event",
             eventId: event.id,
             userId: user.id,
-            tierName: selectedTier.name
+            tierName: selectedTier.name,
+            couponCode: appliedCoupon?.code
           }),
         });
 
@@ -320,8 +386,8 @@ export default function EventDetail() {
                   disabled={booking}
                   onClick={() => setSelectedTier(tier)}
                   className={`flex items-center justify-between rounded-2xl border-2 p-5 transition-all active:scale-[0.98] ${selectedTier?.name === tier.name
-                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md"
-                      : "border-border hover:border-primary/40 bg-card"
+                    ? "border-primary bg-primary/5 ring-1 ring-primary shadow-md"
+                    : "border-border hover:border-primary/40 bg-card"
                     }`}
                 >
                   <div className="text-left">
@@ -395,7 +461,7 @@ export default function EventDetail() {
                 Verifying...
               </div>
             ) : (
-              `Reserve Seats • ${selectedTier?.price === 0 ? "FREE" : `₹${(selectedTier?.price || 0) * seats}`}`
+              `Reserve Seats • ${selectedTier?.price === 0 ? "FREE" : `₹${Math.max(((selectedTier?.price || 0) * seats) - (appliedCoupon ? Math.min((selectedTier?.price || 0) * seats * (appliedCoupon.discount_percent / 100), appliedCoupon.max_discount || Infinity) : 0), 0).toFixed(2)}`}`
             )}
           </Button>
         </div>
