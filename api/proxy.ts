@@ -1,11 +1,22 @@
 export default async function handler(req: any, res: any) {
-  const allowedOrigin = "https://www.dinedeal.in";
+  const origin = req.headers.origin || "";
+  const allowedOrigins = [
+    "https://www.dinedeal.in",
+    "https://dinedeal.in",
+  ];
 
-  // 🔥 Handle CORS preflight
+  const allowOrigin = allowedOrigins.includes(origin)
+    ? origin
+    : "https://www.dinedeal.in";
+
+  // 🔥 Always set CORS headers
+  res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, apikey");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // 🔥 Handle preflight immediately
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, apikey");
     return res.status(200).end();
   }
 
@@ -30,12 +41,6 @@ export default async function handler(req: any, res: any) {
     });
 
     const buffer = await response.arrayBuffer();
-
-    // 🔥 Add CORS headers to actual response
-    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, apikey");
-
     res.status(response.status).send(Buffer.from(buffer));
 
   } catch (error) {
