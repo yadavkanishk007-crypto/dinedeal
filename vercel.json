@@ -1,23 +1,9 @@
 {
   "routes": [
-    {
-      "src": "/rest/(.*)",
-      "dest": "/[...path].ts"
-    },
-    {
-      "src": "/auth/(.*)",
-      "dest": "/[...path].ts"
-    },
-    {
-      "src": "/storage/(.*)",
-      "dest": "/[...path].ts"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
+    { "src": "/rest/(.*)", "dest": "/[...path].ts" },
+    { "src": "/auth/(.*)", "dest": "/[...path].ts" },
+    { "src": "/storage/(.*)", "dest": "/[...path].ts" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/" }
   ]
 }
