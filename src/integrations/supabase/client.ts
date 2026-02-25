@@ -32,8 +32,8 @@ const safeStorage = (() => {
 })();
 
 export const supabase = createClient<Database>(
-  "/api", // IMPORTANT: use proxy
-  SUPABASE_KEY,
+  "https://api.dinedeal.in",
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
   {
     auth: {
       storage: safeStorage,
