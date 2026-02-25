@@ -3,7 +3,7 @@ import type { Database } from "./types";
 
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL 
+  import.meta.env.VITE_SUPABASE_URL;
 
 const memoryStorage = (() => {
   const store = new Map<string, string>();
