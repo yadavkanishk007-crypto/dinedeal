@@ -1,12 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY =
-  
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Prevent hard-crashes in environments where localStorage is unavailable (rare, but possible)
 const memoryStorage = (() => {
   const store = new Map<string, string>();
   return {
@@ -35,10 +31,14 @@ const safeStorage = (() => {
   }
 })();
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    storage: safeStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-});
+export const supabase = createClient<Database>(
+  "/api", // IMPORTANT: use proxy
+  SUPABASE_KEY,
+  {
+    auth: {
+      storage: safeStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  }
+);
