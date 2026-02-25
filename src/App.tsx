@@ -36,7 +36,7 @@ import RoleRoute from "@/components/RoleRoute";
 import DeleteAccount from "./pages/DeleteAccount";
 import RefundPolicy from "./pages/RefundPolicy";
 const queryClient = new QueryClient();
-
+import NetworkBanner from "./components/NetworkBanner";
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -44,6 +44,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <NetworkBanner />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/explore" element={<Explore />} />
