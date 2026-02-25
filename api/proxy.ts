@@ -1,21 +1,31 @@
 export default async function handler(req: any, res: any) {
-  const path = req.query.path || "";
-  const query = req.url.includes("?") ? "?" + req.url.split("?")[1] : "";
+  const { path } = req.query;
 
-  const supabaseUrl = "https://biokoqkqledhvrqfbwvd.supabase.co";
+  const supabaseUrl = process.env.SUPABASE_URL;
+
+  if (!supabaseUrl) {
+    return res.status(500).json({ error: "SUPABASE_URL not configured" });
+  }
+
+  const targetPath = Array.isArray(path) ? path.join("/") : path;
+  const targetUrl = `${supabaseUrl}/${targetPath}`;
 
   try {
-    const response = await fetch(`${supabaseUrl}/${path}${query}`, {
+    const response = await fetch(targetUrl, {
       method: req.method,
       headers: {
         ...req.headers,
+        host: undefined,
       },
       body: req.method !== "GET" ? req.body : undefined,
     });
 
-    const data = await response.text();
+    const contentType = response.headers.get("content-type");
+    res.setHeader("content-type", contentType || "application/json");
 
-    res.status(response.status).send(data);
+    const data = await response.arrayBuffer();
+    res.status(response.status).send(Buffer.from(data));
+
   } catch (error) {
     res.status(500).json({ error: "Proxy failed" });
   }
