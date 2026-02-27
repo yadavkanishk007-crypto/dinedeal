@@ -34,7 +34,7 @@ const safeStorage = (() => {
 })();
 
 export const supabase = createClient<Database>(
-  SUPABASE_URL,
+  "https://api.dinedeal.in",
   SUPABASE_KEY,
   {
     auth: {
