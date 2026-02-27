@@ -37,6 +37,8 @@ import DeleteAccount from "./pages/DeleteAccount";
 import RefundPolicy from "./pages/RefundPolicy";
 const queryClient = new QueryClient();
 import NetworkBanner from "./components/NetworkBanner";
+import AuthCallback from "./pages/AuthCallback";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -75,6 +77,7 @@ const App = () => (
             <Route path="/RestaurantTermsCondition" element={<RestaurantTermsCondition />} />
             <Route path="/help" element={<FAQs />} /> 
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/delete-account" element={<ProtectedRoute><DeleteAccount /></ProtectedRoute>} />
             <Route path="/refund-policy" element={<RefundPolicy />} />
             {/* ✅ PASSWORD RESET ROUTE */}
