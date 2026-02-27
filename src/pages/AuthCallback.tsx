@@ -7,23 +7,34 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const handleAuth = async () => {
-      const { error } = await supabase.auth.exchangeCodeForSession(
-        window.location.href
-      );
+      const params = new URLSearchParams(window.location.search);
+      const token_hash = params.get("token_hash");
+      const type = params.get("type");
 
-      if (error) {
-        console.error("Auth error:", error.message);
+      if (!token_hash || !type) {
         navigate("/auth");
         return;
       }
 
-      navigate("/"); // redirect after success
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: type as any,
+      });
+
+      if (error) {
+        console.error("Verification error:", error.message);
+        navigate("/auth");
+        return;
+      }
+
+      // ✅ User is now verified AND logged in
+      navigate("/");
     };
 
     handleAuth();
   }, [navigate]);
 
-  return <p>Authenticating...</p>;
+  return <p>Verifying account...</p>;
 };
 
 export default AuthCallback;
