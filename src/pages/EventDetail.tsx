@@ -330,7 +330,7 @@ export default function EventDetail() {
   const displayDate = isValid(eventDateObj) ? format(eventDateObj, "PPP") : "Date TBA";
 
   return (
-    <div className="min-h-screen bg-background pb-44">
+    <div className="min-h-screen bg-background pb-96">
       <header className="sticky top-0 z-50 flex items-center justify-between border-b bg-background/95 p-4 backdrop-blur-md">
         <button onClick={() => navigate(-1)} className="rounded-full p-2 hover:bg-accent">
           <ArrowLeft className="h-6 w-6" />
