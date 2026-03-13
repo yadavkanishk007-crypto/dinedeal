@@ -45,7 +45,15 @@ export type Database = {
           id?: string
           ip_address?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_logs_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       admin_permissions: {
         Row: {
@@ -84,7 +92,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       admins: {
         Row: {
@@ -108,7 +124,15 @@ export type Database = {
           role?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       coupon_usages: {
         Row: {
@@ -146,6 +170,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "transactions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -203,6 +234,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "coupons_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "coupons_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
@@ -217,6 +255,7 @@ export type Database = {
           customer_id: string | null
           expires_at: string
           id: string
+          is_expired: boolean | null
           restaurant_id: string
           session_code: string
           status: string
@@ -228,6 +267,7 @@ export type Database = {
           customer_id?: string | null
           expires_at?: string
           id?: string
+          is_expired?: boolean | null
           restaurant_id: string
           session_code?: string
           status?: string
@@ -239,6 +279,7 @@ export type Database = {
           customer_id?: string | null
           expires_at?: string
           id?: string
+          is_expired?: boolean | null
           restaurant_id?: string
           session_code?: string
           status?: string
@@ -246,6 +287,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "dinein_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "dinein_sessions_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -397,6 +445,42 @@ export type Database = {
           },
         ]
       }
+      favorites: {
+        Row: {
+          created_at: string | null
+          id: string
+          restaurant_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          restaurant_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          restaurant_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorites_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           created_at: string | null
@@ -516,7 +600,15 @@ export type Database = {
           total_failed?: number | null
           total_sent?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notification_logs_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       offers: {
         Row: {
@@ -599,7 +691,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       push_subscriptions: {
         Row: {
@@ -629,7 +729,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       ratings: {
         Row: {
@@ -676,6 +784,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "transactions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -771,6 +886,13 @@ export type Database = {
             referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       restaurant_images: {
@@ -824,6 +946,7 @@ export type Database = {
           email: string | null
           id: string
           image_url: string | null
+          instagram: string | null
           is_active: boolean | null
           is_approved: boolean | null
           is_auto_eligible: boolean | null
@@ -839,8 +962,10 @@ export type Database = {
           rating: number | null
           settlement_cycle: string | null
           tier: string | null
+          twitter: string | null
           updated_at: string
           upi_id: string | null
+          website: string | null
         }
         Insert: {
           address: string
@@ -857,6 +982,7 @@ export type Database = {
           email?: string | null
           id?: string
           image_url?: string | null
+          instagram?: string | null
           is_active?: boolean | null
           is_approved?: boolean | null
           is_auto_eligible?: boolean | null
@@ -872,8 +998,10 @@ export type Database = {
           rating?: number | null
           settlement_cycle?: string | null
           tier?: string | null
+          twitter?: string | null
           updated_at?: string
           upi_id?: string | null
+          website?: string | null
         }
         Update: {
           address?: string
@@ -890,6 +1018,7 @@ export type Database = {
           email?: string | null
           id?: string
           image_url?: string | null
+          instagram?: string | null
           is_active?: boolean | null
           is_approved?: boolean | null
           is_auto_eligible?: boolean | null
@@ -905,10 +1034,20 @@ export type Database = {
           rating?: number | null
           settlement_cycle?: string | null
           tier?: string | null
+          twitter?: string | null
           updated_at?: string
           upi_id?: string | null
+          website?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "restaurants_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       rewards: {
         Row: {
@@ -938,7 +1077,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rewards_user_fk"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       settlements: {
         Row: {
@@ -1021,6 +1168,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "settlements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "settlements_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
@@ -1055,6 +1209,13 @@ export type Database = {
           ticket_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "support_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "support_messages_ticket_id_fkey"
             columns: ["ticket_id"]
@@ -1095,7 +1256,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       transactions: {
         Row: {
@@ -1196,6 +1365,13 @@ export type Database = {
             referencedRelation: "settlements"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transactions_user_fk"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_roles: {
@@ -1217,7 +1393,15 @@ export type Database = {
           role?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1261,6 +1445,54 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "restaurants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_reward_balance_view: {
+        Row: {
+          points: number | null
+          redeemable_amount: number | null
+          total_earned: number | null
+          total_redeemed: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      user_reward_earned_view: {
+        Row: {
+          total_earned_points: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_user_fk"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_reward_redeemed_view: {
+        Row: {
+          total_redeemed_points: number | null
+          user_id: string | null
+        }
+        Insert: {
+          total_redeemed_points?: never
+          user_id?: string | null
+        }
+        Update: {
+          total_redeemed_points?: never
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rewards_user_fk"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
           },
         ]
       }
