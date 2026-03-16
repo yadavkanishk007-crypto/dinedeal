@@ -58,7 +58,13 @@ const Explore = () => {
       // This stops TypeScript from trying to calculate the infinite type depth of the query chain.
       const { data, error } = await (supabase as any)
         .from("restaurants")
-        .select("*")
+        .select(`
+          *,
+          offers (
+            discount_percent,
+            is_active
+          )
+        `)
         .eq("is_approved", true)
         .eq("is_active", true)
         .neq("organiser_type", "event_group");
@@ -67,19 +73,27 @@ const Explore = () => {
 
       const rows = Array.isArray(data) ? data : [];
 
-      const normalized: RestaurantUI[] = rows.map((row: any) => ({
-        id: String(row.id),
-        name: String(row.name ?? "Unnamed Restaurant"),
-        cuisine: String(row.cuisine ?? "Multi-cuisine"),
-        distance: `${Number(row.distance ?? 0)} km`,
-        rating: Number(row.rating ?? 4),
-        discount: Number(row.discount ?? 0),
-        imageUrl:
-          typeof row.image_url === "string" && row.image_url.length > 0
-            ? row.image_url
-            : "/images/restaurant-placeholder.jpg",
-        isPopular: Boolean(row.is_popular),
-      }));
+      const normalized: RestaurantUI[] = rows.map((row: any) => {
+        // Filter for active offers and find the maximum discount percentage
+        const activeOffers = row.offers?.filter((offer: any) => String(offer.is_active) === "true") || [];
+        const highestDiscount = activeOffers.length > 0 
+          ? Math.max(...activeOffers.map((o: any) => Number(o.discount_percent || 0)))
+          : 0;
+
+        return {
+          id: String(row.id),
+          name: String(row.name ?? "Unnamed Restaurant"),
+          cuisine: String(row.cuisine ?? "Multi-cuisine"),
+          distance: `${Number(row.distance ?? 0)} km`,
+          rating: Number(row.rating ?? 4),
+          discount: highestDiscount,
+          imageUrl:
+            typeof row.image_url === "string" && row.image_url.length > 0
+              ? row.image_url
+              : "/images/restaurant-placeholder.jpg",
+          isPopular: Boolean(row.is_popular),
+        };
+      });
 
       setRestaurants(normalized);
     } catch (err) {
