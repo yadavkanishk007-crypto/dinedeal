@@ -12,6 +12,9 @@ interface RestaurantCardProps {
   discount: number;
   imageUrl: string;
   isPopular?: boolean;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
 }
 
 const RestaurantCard = ({
@@ -23,7 +26,27 @@ const RestaurantCard = ({
   discount,
   imageUrl,
   isPopular,
+  latitude,
+  longitude,
+  address,
 }: RestaurantCardProps) => {
+
+  const handleDirections = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    let url = "";
+    if (latitude && longitude) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+    } else if (address) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+    } else {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(name + " " + cuisine)}`;
+    }
+    
+    window.open(url, "_blank");
+  };
+
   return (
     <Link to={`/restaurant/${id}`}>
       <motion.div
@@ -94,9 +117,19 @@ const RestaurantCard = ({
                 <MapPin className="w-3.5 h-3.5" />
                 <span className="text-xs">{distance}</span>
               </div>
-              <div className="flex items-center gap-1 text-primary font-medium text-sm">
-                <span>Pay & Save</span>
-                <ChevronRight className="w-4 h-4" />
+              
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleDirections}
+                  className="flex items-center justify-center bg-secondary hover:bg-secondary/80 text-primary p-1.5 rounded-full transition-colors"
+                  aria-label="Get Directions"
+                >
+                  <MapPin className="w-4 h-4 fill-primary/10" />
+                </button>
+                <div className="flex items-center gap-1 text-primary font-medium text-sm">
+                  <span>Pay & Save</span>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
               </div>
             </div>
           </div>

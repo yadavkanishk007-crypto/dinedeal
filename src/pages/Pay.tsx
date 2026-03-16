@@ -249,6 +249,9 @@ export default function Pay() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: finalAmount,
+            // ✅ Fix: Send explicit bill & discount amounts for tracking
+            billAmount: amount,
+            discountAmount: totalDiscount,
             type: paymentType === "event" ? "event" : "restaurant",
             restaurantId: restaurant.id,
             userId: user?.id ?? "guest",

@@ -20,7 +20,8 @@ import {
   VolumeX,
   Save,
   Mail,
-  Sparkles 
+  Sparkles,
+  MapPin
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,8 @@ interface Restaurant {
   // [STEP 1: Added Interface Fields]
   is_event_organiser?: boolean;
   organiser_type?: "restaurant" | "event_group";
+  latitude?: number;
+  longitude?: number;
 }
 
 interface RestaurantSettingsProps {
@@ -181,17 +184,77 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
     setSavingBasic(true);
 
     try {
+      let lat = restaurant.latitude;
+      let lng = restaurant.longitude;
+
+      // Try background geocoding if address is provided
+      if (formData.address) {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(formData.address)}&format=json&limit=1`,
+            {
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'DineDeal App v1'
+              }
+            }
+          );
+          const data = await response.json();
+          if (data && data.length > 0) {
+            lat = parseFloat(data[0].lat);
+            lng = parseFloat(data[0].lon);
+          }
+        } catch (geocodeError) {
+          console.error("Geocoding silently failed:", geocodeError);
+          // Non-blocking, continue saving basic info even if geocoding fails
+        }
+      }
+
+      const updatePayload = {
+        ...formData,
+        ...(lat && lng ? { latitude: lat, longitude: lng } : {})
+      };
+
       const { error } = await supabase
         .from("restaurants")
-        .update(formData)
+        .update(updatePayload)
         .eq("id", restaurant.id);
 
       if (error) throw error;
 
-      setRestaurant({ ...restaurant, ...formData });
-      toast({ title: "Settings Updated", description: "Basic information has been saved." });
+      setRestaurant({ ...restaurant, ...updatePayload } as Restaurant);
+      toast({ title: "Settings Updated", description: "Information and location successfully saved." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setSavingBasic(false);
+    }
+  };
+
+  const handleManualGeocode = async () => {
+    if (!formData.address) {
+      toast({ title: "Address Required", description: "Please enter your address first.", variant: "destructive" });
+      return;
+    }
+    setSavingBasic(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(formData.address)}&format=json&limit=1`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'DineDeal App v1'
+          }
+        }
+      );
+      const data = await response.json();
+      if (data && data.length > 0) {
+        toast({ title: "Success", description: "Map pin updated successfully!" });
+      } else {
+        toast({ title: "Not Found", description: "Could not find coordinates for this address on the map.", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to fetch map coordinates.", variant: "destructive" });
     } finally {
       setSavingBasic(false);
     }
@@ -359,12 +422,25 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Address</label>
-                  <Input
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  />
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <label className="text-sm text-muted-foreground">Address</label>
+                    <Input
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end">
+                    <Button 
+                      variant="outline" 
+                      onClick={handleManualGeocode} 
+                      disabled={savingBasic || !formData.address}
+                      className="border-primary/20 hover:bg-primary/5 text-primary"
+                    >
+                      <MapPin className="w-4 h-4 mr-2" />
+                      Find on Map
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>

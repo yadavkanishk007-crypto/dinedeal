@@ -33,6 +33,8 @@ interface Restaurant {
   open_hours: string | null;
   rating: number | null;
   image_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface Offer {
@@ -142,6 +144,19 @@ const RestaurantDetail = () => {
     } catch (error) {
       console.error("Error toggling favorite:", error);
     }
+  };
+
+  const handleDirections = () => {
+    if (!restaurant) return;
+    let url = "";
+    if (restaurant.latitude && restaurant.longitude) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${restaurant.latitude},${restaurant.longitude}`;
+    } else if (restaurant.address) {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(restaurant.address)}`;
+    } else {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(restaurant.name + " " + restaurant.city)}`;
+    }
+    window.open(url, "_blank");
   };
 
   if (loading) {
@@ -379,7 +394,10 @@ const RestaurantDetail = () => {
         </motion.section>
 
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-border/50">
+          <Card 
+            className="border-border/50 cursor-pointer hover:bg-secondary/20 transition-colors"
+            onClick={handleDirections}
+          >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -387,7 +405,7 @@ const RestaurantDetail = () => {
                     <MapPin className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">Address</p>
+                    <p className="text-sm font-medium text-foreground">Get Directions</p>
                     <p className="text-xs text-muted-foreground">{restaurant.address}, {restaurant.city}</p>
                   </div>
                 </div>

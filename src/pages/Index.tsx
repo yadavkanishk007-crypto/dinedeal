@@ -8,6 +8,8 @@ import RestaurantCard from "@/components/RestaurantCard";
 import QuickStats from "@/components/QuickStats";
 import FilterChips from "@/components/FilterChips";
 import BottomNav from "@/components/BottomNav";
+import { LocationSelector } from "@/components/LocationSelector";
+import { useLocation } from "@/contexts/LocationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import heroIllustration from "@/assets/hero-illustration.png";
@@ -55,11 +57,10 @@ const filters = [
 
 const Index = () => {
   const { user, role, loading } = useAuth();
+  const { city, coordinates, detectLocation } = useLocation();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("all");
   const [restaurants, setRestaurants] = useState<any[]>([]);
-  const [location, setLocation] = useState("Detecting...");
-  const [isLocating, setIsLocating] = useState(true);
   const [activePromo, setActivePromo] = useState<any>(null);
   const [stats, setStats] = useState({ totalSaved: 0, transactionCount: 0, rewardPoints: 0, redeemable: 0 });
 
@@ -76,91 +77,127 @@ const Index = () => {
     }
   };
 
+  // Frontend Haversine Fallback
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
   const fetchUserStats = async () => {
     if (!user) return;
 
-    const { data, error } = await (supabase.from("transactions" as any) as any)
+    // 1. Fetch Transactions for Total Saved and Count
+    const { data: txData, error: txError } = await (supabase.from("transactions" as any) as any)
       .select("discount_amount")
       .eq("user_id", user.id)
       .eq("payment_status", "completed");
 
-    // Fetch points directly from the view
-    const { data: rewardsData } = await (supabase.from("user_reward_balance_view" as any) as any)
-      .select("points, redeemable_amount")
+    // 2. Fetch Rewards directly from the `rewards` table (ignoring the broken view)
+    const { data: rewardsData, error: rewardsError } = await (supabase.from("rewards" as any) as any)
+      .select("points")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (error) {
-      console.error("Error fetching stats:", error);
+    if (txError) {
+      console.error("Error fetching stats:", txError);
       return;
     }
 
-    if (data) {
-      const total = data.reduce((acc: number, curr: any) => acc + (Number(curr.discount_amount) || 0), 0);
+    if (txData) {
+      const total = txData.reduce((acc: number, curr: any) => acc + (Number(curr.discount_amount) || 0), 0);
+      const points = rewardsData?.points || 0;
+      // Define a conversion rate, e.g., 1 point = ₹1
+      const redeemableValue = points; 
+
       setStats({
         totalSaved: total,
-        transactionCount: data.length,
-        rewardPoints: rewardsData?.points || 0,
-        redeemable: rewardsData?.redeemable_amount || 0
+        transactionCount: txData.length,
+        rewardPoints: points,
+        redeemable: redeemableValue
       });
     }
   };
 
-  const detectLocation = async () => {
-    setIsLocating(true);
-    try {
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            try {
-              const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-              );
-              const data = await response.json();
-              const city = data.address?.city || data.address?.town || data.address?.village || data.address?.district || "Jhansi";
-              setLocation(city);
-            } catch (error) {
-              setLocation("Jhansi");
-            }
-            setIsLocating(false);
-          },
-          () => {
-            setLocation("Jhansi");
-            setIsLocating(false);
-          },
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
-      } else {
-        setLocation("Jhansi");
-        setIsLocating(false);
-      }
-    } catch (error) {
-      setLocation("Jhansi");
-      setIsLocating(false);
+  // Removed redundant detectLocation since it's handled by LocationContext
+  // Auto-detect on first load if no city is set
+  useEffect(() => {
+    if (user && !city && !coordinates) {
+      detectLocation();
     }
-  };
+  }, [user, city, coordinates, detectLocation]);
 
   const fetchRestaurants = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("restaurants")
       .select("*, offers(*)")
       .eq("is_approved", true)
       .eq("is_active", true)
       .neq("organiser_type", "event_group");
 
+    // Try Haversine RPC for exact distance sorting if coordinates exist
+    if (coordinates || city) {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_nearby_restaurants' as any, {
+        user_lat: coordinates?.lat || null,
+        user_lon: coordinates?.lng || null,
+        user_city: city || null,
+        max_distance_km: 50
+      });
+
+      // If RPC succeeds, map and return immediately
+      if (!rpcError && rpcData && Array.isArray(rpcData) && rpcData.length > 0) {
+        const mapped = rpcData.map((r: any, i: number) => ({
+          ...r,
+          imageUrl: r.image_url || defaultImages[i % defaultImages.length],
+          discount: 0, // RPC doesn't join offers, a separate query could fetch these
+          distance: r.distance_km ? `${r.distance_km.toFixed(1)} km` : "Nearby",
+          rating: r.rating || 0,
+        }));
+        setRestaurants(mapped);
+        return;
+      }
+      
+      // Fallback to standard Supabase query by city if RPC fails or isn't installed
+      if (city && (rpcError || !rpcData || rpcData.length === 0)) {
+        query = query.ilike("city", `%${city}%`);
+      }
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error("Error fetching restaurants:", error);
       return;
     }
 
-    const mapped = (data || []).map((r: any, i: number) => ({
-      ...r,
-      imageUrl: r.image_url || defaultImages[i % defaultImages.length],
-      discount: r.offers?.[0]?.discount_percent || 0,
-      distance: r.distance_text || "Nearby",
-      rating: r.rating || 0,
-    }));
+    const mapped = (data || []).map((r: any, i: number) => {
+      let distanceText = "Nearby";
+      
+      // Apply Frontend Haversine if we have both coordinates
+      if (coordinates && r.latitude && r.longitude) {
+        const distKm = calculateDistance(
+          coordinates.lat, 
+          coordinates.lng, 
+          Number(r.latitude), 
+          Number(r.longitude)
+        );
+        distanceText = `${distKm.toFixed(1)} km`;
+      }
+
+      return {
+        ...r,
+        imageUrl: r.image_url || defaultImages[i % defaultImages.length],
+        discount: r.offers?.[0]?.discount_percent || 0,
+        distance: distanceText,
+        rating: r.rating || 0,
+      };
+    });
     setRestaurants(mapped);
   };
 
@@ -178,10 +215,9 @@ const Index = () => {
     fetchRestaurants();
     fetchActivePromotion();
     if (user) {
-      detectLocation();
       fetchUserStats();
     }
-  }, [user]);
+  }, [user, city, coordinates]); // Re-fetch when location changes
 
   if (!user) return <LandingPage />;
 
@@ -196,18 +232,7 @@ const Index = () => {
           <div className="flex items-center gap-3">
             <Logo size="default" />
             <div className="h-6 w-px bg-border" />
-            <button className="flex items-center gap-1 text-sm text-muted-foreground">
-              <MapPin className="w-4 h-4 text-primary" />
-              {isLocating ? (
-                <span className="flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Detecting...
-                </span>
-              ) : (
-                <span>{location}</span>
-              )}
-              <ChevronDown className="w-3 h-3" />
-            </button>
+            <LocationSelector />
           </div>
           <Link to="/profile">
             <motion.div
@@ -274,13 +299,26 @@ const Index = () => {
                     discount={r.discount}
                     imageUrl={r.imageUrl}
                     isPopular={r.is_popular || false}
+                    address={r.address}
+                    latitude={r.latitude}
+                    longitude={r.longitude}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
           </motion.div>
           {restaurants.length === 0 && (
-            <p className="text-center py-12 text-muted-foreground">No restaurants available yet. Check back soon!</p>
+            <div className="text-center py-16 px-4 bg-orange-50/50 rounded-3xl border border-orange-100 mt-6">
+              <div className="w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MapPin className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Sorry, {city ? city : "this area"} is not serviceable yet
+              </h3>
+              <p className="text-gray-500 max-w-md mx-auto">
+                We are expanding rapidly and will be coming to {city ? city : "your area"} soon. Try selecting a different location or check back later!
+              </p>
+            </div>
           )}
         </section>
       </main>
