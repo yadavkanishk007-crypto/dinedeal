@@ -286,7 +286,9 @@ export default function Pay() {
             amount: finalAmount,
             // ✅ Fix: Send explicit bill & discount amounts for tracking
             billAmount: amount,
-            discountAmount: totalDiscount,
+            discountAmount: restaurantDiscount + couponDiscount,
+            cashbackApplied: cashbackDiscount,
+            restaurantBill: amount - (restaurantDiscount + couponDiscount),
             type: paymentType === "event" ? "event" : "restaurant",
             restaurantId: restaurant.id,
             userId: user?.id ?? "guest",

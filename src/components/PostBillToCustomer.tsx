@@ -214,6 +214,8 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
           bill_amount: amount,
           pos_bill_no: posBillNo || null,
           discount_amount: totalDiscount, // Total discount given to user including reservation advance
+          cashback_applied: 0, // Cashback from points is applied later in the DineIn flow
+          restaurant_bill: amount - totalDiscount, 
           final_amount: finalAmount,
           offer_id: offer?.id || null,
           payment_status: 'pending'

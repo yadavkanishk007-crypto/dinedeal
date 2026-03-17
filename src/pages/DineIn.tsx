@@ -353,6 +353,8 @@ const DineIn = () => {
             restaurantId: session.restaurant_id,
             pointsUsed: pointsUsed, 
             discountAmount: totalAddedDiscount, 
+            cashbackApplied: cashbackDiscount,
+            restaurantBill: baseAmount - couponDiscount,
             couponCode: appliedCoupon?.code,
             type: "dine_in",
             userId: user.id

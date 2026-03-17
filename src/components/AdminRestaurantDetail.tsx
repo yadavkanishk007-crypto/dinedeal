@@ -160,7 +160,7 @@ const AdminRestaurantDetail = ({ restaurantId, onBack, onApprovalChange }: Admin
       if (txData) {
         const completedTx = txData.filter(t => t.payment_status === "completed");
         const uniqueCustomers = new Set(completedTx.map(t => t.user_id)).size;
-        const totalRevenue = completedTx.reduce((sum, t) => sum + Number(t.final_amount), 0);
+        const totalRevenue = completedTx.reduce((sum, t) => sum + Number(t.restaurant_bill || (t.bill_amount - t.discount_amount) || t.final_amount), 0);
         const totalDiscounts = completedTx.reduce((sum, t) => sum + Number(t.discount_amount), 0);
 
         setStats({

@@ -39,6 +39,9 @@ interface Transaction {
   payment_status: string;
   is_settled: boolean;
   event_group_id?: string | null;
+  restaurant_bill?: number | null;
+  bill_amount: number;
+  discount_amount: number;
 }
 
 const RestaurantEarningsTab = ({ restaurantId }: RestaurantEarningsTabProps) => {
@@ -215,10 +218,12 @@ const RestaurantEarningsTab = ({ restaurantId }: RestaurantEarningsTabProps) => 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((tx) => (
+                {transactions.map((tx) => {
+                  const grossAmount = tx.restaurant_bill || (tx.bill_amount - tx.discount_amount);
+                  return (
                   <TableRow key={tx.id}>
                     <TableCell className="text-sm">{format(new Date(tx.created_at), "dd MMM, HH:mm")}</TableCell>
-                    <TableCell className="text-right">₹{tx.final_amount.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">₹{grossAmount.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-muted-foreground">₹{tx.platform_commission.toLocaleString()}</TableCell>
                     <TableCell className="text-right font-medium text-green-600">₹{tx.restaurant_earning.toLocaleString()}</TableCell>
                     <TableCell>
@@ -227,7 +232,8 @@ const RestaurantEarningsTab = ({ restaurantId }: RestaurantEarningsTabProps) => 
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

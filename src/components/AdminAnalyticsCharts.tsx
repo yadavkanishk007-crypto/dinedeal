@@ -150,7 +150,11 @@ const AdminAnalyticsCharts = () => {
         if (!revenueByMonth[monthKey]) {
           revenueByMonth[monthKey] = { revenue: 0, transactions: 0 };
         }
-        revenueByMonth[monthKey].revenue += Number(tx.bill_amount);
+        
+        // Use restaurant_bill or calculate pre-cashback total
+        const grossAmount = (tx as any).restaurant_bill || (tx.bill_amount - (tx.discount_amount || 0)) || tx.final_amount;
+        
+        revenueByMonth[monthKey].revenue += Number(grossAmount);
         revenueByMonth[monthKey].transactions++;
       });
 
@@ -172,8 +176,11 @@ const AdminAnalyticsCharts = () => {
       transactionsData?.forEach((tx) => {
         const date = new Date(tx.created_at);
         const dayName = dayNames[date.getDay()];
+        
+        const grossAmount = (tx as any).restaurant_bill || (tx.bill_amount - (tx.discount_amount || 0)) || tx.final_amount;
+        
         transactionsByDay[dayName].count++;
-        transactionsByDay[dayName].revenue += Number(tx.bill_amount);
+        transactionsByDay[dayName].revenue += Number(grossAmount);
       });
 
       const transactionsByDayArray = dayNames.map(day => ({
@@ -189,7 +196,8 @@ const AdminAnalyticsCharts = () => {
           if (!restaurantStats[tx.restaurant_id]) {
             restaurantStats[tx.restaurant_id] = { revenue: 0, transactions: 0, customers: new Set() };
           }
-          restaurantStats[tx.restaurant_id].revenue += Number(tx.bill_amount);
+          const grossAmount = (tx as any).restaurant_bill || (tx.bill_amount - (tx.discount_amount || 0)) || tx.final_amount;
+          restaurantStats[tx.restaurant_id].revenue += Number(grossAmount);
           restaurantStats[tx.restaurant_id].transactions++;
           if (tx.user_id) {
             restaurantStats[tx.restaurant_id].customers.add(tx.user_id);
@@ -241,7 +249,10 @@ const AdminAnalyticsCharts = () => {
         .slice(0, 5);
 
       // Calculate totals
-      const totalRevenue = transactionsData?.reduce((sum, tx) => sum + Number(tx.bill_amount), 0) || 0;
+      const totalRevenue = transactionsData?.reduce((sum, tx) => {
+        const grossAmount = (tx as any).restaurant_bill || (tx.bill_amount - (tx.discount_amount || 0)) || tx.final_amount;
+        return sum + Number(grossAmount);
+      }, 0) || 0;
       const totalDiscountGiven = transactionsData?.reduce((sum, tx) => sum + Number(tx.discount_amount || 0), 0) || 0;
       const avgOrderValue = transactionsData?.length ? totalRevenue / transactionsData.length : 0;
       const totalTransactions = transactionsData?.length || 0;

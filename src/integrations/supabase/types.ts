@@ -1269,6 +1269,7 @@ export type Database = {
       transactions: {
         Row: {
           bill_amount: number
+          cashback_applied: number | null
           created_at: string | null
           dinein_session_id: string | null
           discount_amount: number
@@ -1283,6 +1284,7 @@ export type Database = {
           platform_commission_percent: number | null
           pos_bill_no: string | null
           razorpay_order_id: string | null
+          restaurant_bill: number | null
           restaurant_earning: number | null
           restaurant_id: string | null
           rewards_earned: number | null
@@ -1292,6 +1294,7 @@ export type Database = {
         }
         Insert: {
           bill_amount: number
+          cashback_applied?: number | null
           created_at?: string | null
           dinein_session_id?: string | null
           discount_amount?: number
@@ -1306,6 +1309,7 @@ export type Database = {
           platform_commission_percent?: number | null
           pos_bill_no?: string | null
           razorpay_order_id?: string | null
+          restaurant_bill?: number | null
           restaurant_earning?: number | null
           restaurant_id?: string | null
           rewards_earned?: number | null
@@ -1315,6 +1319,7 @@ export type Database = {
         }
         Update: {
           bill_amount?: number
+          cashback_applied?: number | null
           created_at?: string | null
           dinein_session_id?: string | null
           discount_amount?: number
@@ -1329,6 +1334,7 @@ export type Database = {
           platform_commission_percent?: number | null
           pos_bill_no?: string | null
           razorpay_order_id?: string | null
+          restaurant_bill?: number | null
           restaurant_earning?: number | null
           restaurant_id?: string | null
           rewards_earned?: number | null

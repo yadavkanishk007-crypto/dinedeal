@@ -144,10 +144,10 @@ const AdminPanel = () => {
 
       const { data: txData } = await supabase
         .from("transactions")
-        .select("final_amount")
+        .select("final_amount, bill_amount, discount_amount, restaurant_bill")
         .eq("payment_status", "completed");
 
-      const revenue = txData?.reduce((sum, t) => sum + Number(t.final_amount), 0) || 0;
+      const revenue = txData?.reduce((sum, t) => sum + Number(t.restaurant_bill || (t.bill_amount - t.discount_amount) || t.final_amount), 0) || 0;
 
       setStats({
         users: userCount || 0,

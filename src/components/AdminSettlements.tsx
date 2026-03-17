@@ -134,6 +134,9 @@ const AdminSettlements = () => {
         .select(`
           restaurant_id,
           final_amount,
+          bill_amount,
+          discount_amount,
+          restaurant_bill,
           platform_commission,
           restaurant_earning,
           created_at,
@@ -162,8 +165,10 @@ const AdminSettlements = () => {
           });
         }
         const existing = pendingMap.get(id)!;
+        const grossAmount = tx.restaurant_bill || (tx.bill_amount - tx.discount_amount) || tx.final_amount;
+        
         existing.orders_count += 1;
-        existing.gross_amount += Number(tx.final_amount || 0);
+        existing.gross_amount += Number(grossAmount || 0);
         existing.platform_commission += Number(tx.platform_commission || 0);
         existing.net_payable += Number(tx.restaurant_earning || 0);
         if (tx.created_at < existing.min_date) existing.min_date = tx.created_at;
@@ -205,7 +210,7 @@ const AdminSettlements = () => {
     try {
       const { data: txData, error: txError } = await supabase
         .from("transactions")
-        .select("id, final_amount")
+        .select("id, final_amount, bill_amount, discount_amount, restaurant_bill")
         .eq("restaurant_id", createEntityId)
         .eq("payment_status", "completed")
         .is("settlement_id", null)
@@ -214,7 +219,7 @@ const AdminSettlements = () => {
 
       if (txError || !txData?.length) throw new Error("No unsettled transactions found.");
 
-      const grossAmount = txData.reduce((sum, t) => sum + Number(t.final_amount), 0);
+      const grossAmount = txData.reduce((sum, t) => sum + Number(t.restaurant_bill || (t.bill_amount - t.discount_amount) || t.final_amount), 0);
       const platformCommission = grossAmount * (commRate / 100);
       const netPayableCalculated = grossAmount - platformCommission;
 
