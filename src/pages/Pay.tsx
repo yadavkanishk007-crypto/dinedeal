@@ -67,7 +67,6 @@ export default function Pay() {
   const restaurantId = searchParams.get("restaurant");
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [activeOffer, setActiveOffer] = useState<ActiveOffer | null>(null);
-  const [hasReservation, setHasReservation] = useState(false);
   const [step, setStep] = useState<PaymentStep>("loading");
 
   // Cashback State
@@ -138,27 +137,14 @@ export default function Pay() {
             .select("points")
             .eq("user_id", user?.id || "")
             .maybeSingle(),
-
-          // 4. Fetch Active Reservation
-          supabase
-            .from("reservations")
-            .select("id")
-            .eq("restaurant_id", restaurantId)
-            .eq("user_id", user?.id || "")
-            .eq("reservation_date", now.split('T')[0])
-            .in("status", ["confirmed", "completed", "pending"])
-            .maybeSingle(),
         ]);
 
         if (restaurantError || !restaurantData) throw new Error("Restaurant not found");
 
-        const hasRes = !!cbData[3]?.data; // from Promise.all array index 3
-
         setRestaurant(restaurantData);
         setActiveOffer(offerData ?? null); // Offer might be null, that's okay
-        setAvailablePoints(cbData[2]?.data?.points || 0);
-        setRedeemableAmount(Math.floor((cbData[2]?.data?.points || 0) / 10));
-        setHasReservation(hasRes);
+        setAvailablePoints(cbData?.points || 0);
+        setRedeemableAmount(Math.floor((cbData?.points || 0) / 10));
         setStep("amount");
         setTransactionId(`DD${Date.now().toString().slice(-6)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`);
       } catch (err) {
@@ -196,10 +182,7 @@ export default function Pay() {
     )
     : 0;
 
-  const amountAfterOffers = amount - restaurantDiscount - couponDiscount;
-  const reservationDiscount = hasReservation ? Math.min(299, amountAfterOffers) : 0;
-  
-  const amountAfterPrevDiscounts = amountAfterOffers - reservationDiscount;
+  const amountAfterPrevDiscounts = amount - restaurantDiscount - couponDiscount;
   
   // Custom points usage logic
   const parsedPointsInput = parseInt(pointsToRedeemInput) || 0;
@@ -216,7 +199,7 @@ export default function Pay() {
   
   const pointsUsed = useCashback ? actualPointsToUse : 0;
 
-  const totalDiscount = restaurantDiscount + couponDiscount + cashbackDiscount + reservationDiscount;
+  const totalDiscount = restaurantDiscount + couponDiscount + cashbackDiscount;
   const finalAmount = Math.max(amount - totalDiscount, 0);
 
   // Rewards are now calculated by the Webhook, (20% cashback, 10 points = 1 Rs)
@@ -554,13 +537,6 @@ export default function Pay() {
                     <div className="flex justify-between text-success">
                       <span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Coupon ({appliedCoupon.code})</span>
                       <span>- ₹{couponDiscount.toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  {hasReservation && reservationDiscount > 0 && (
-                    <div className="flex justify-between text-blue-600">
-                      <span className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Reservation Advance</span>
-                      <span>- ₹{reservationDiscount.toFixed(2)}</span>
                     </div>
                   )}
 
