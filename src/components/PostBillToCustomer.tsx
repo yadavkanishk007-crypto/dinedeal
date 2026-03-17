@@ -27,6 +27,11 @@ interface UserProfile {
   phone: string | null;
 }
 
+interface ActiveReservation {
+  id: string;
+  user_id: string;
+}
+
 interface ActiveOffer {
   id: string;
   title: string;
@@ -46,6 +51,7 @@ interface PostBillToCustomerProps {
 const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   const [sessions, setSessions] = useState<DineInSession[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [activeReservations, setActiveReservations] = useState<ActiveReservation[]>([]);
   const [availableOffers, setAvailableOffers] = useState<ActiveOffer[]>([]);
   const [selectedOfferId, setSelectedOfferId] = useState<string>("auto");
   const [loading, setLoading] = useState(true);
@@ -112,6 +118,19 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
         .in('user_id', customerIds);
 
       if (profilesData) setProfiles(profilesData as UserProfile[]);
+      if (profilesData) setProfiles(profilesData as UserProfile[]);
+
+      // Check for reservations today for these customers
+      const today = new Date().toISOString().split('T')[0];
+      const { data: reservationsData } = await supabase
+        .from('reservations')
+        .select('id, user_id')
+        .eq('restaurant_id', restaurantId)
+        .in('user_id', customerIds)
+        .eq('reservation_date', today)
+        .in('status', ['confirmed', 'completed', 'pending']);
+        
+      if (reservationsData) setActiveReservations(reservationsData as ActiveReservation[]);
     }
   };
 
@@ -135,16 +154,33 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
     return availableOffers.find(o => o.id === selectedOfferId) || null;
   };
 
-  const calculateDiscount = (amount: number) => {
+  const calculateDiscount = (amount: number, customerId?: string) => {
+    let baseAmount = amount;
+    
+    // 1. Calculate Offer Discount
     const offer = getEffectiveOffer();
-    if (!offer || (offer.min_order_amount && amount < offer.min_order_amount)) {
-      return { discountAmount: 0, finalAmount: amount, offer: null };
+    let discountAmount = 0;
+    
+    if (offer && (!offer.min_order_amount || amount >= offer.min_order_amount)) {
+      discountAmount = Math.min((amount * offer.discount_percent) / 100, offer.max_discount);
+      discountAmount = Math.round(discountAmount * 100) / 100;
     }
 
-    const discountAmount = Math.min((amount * offer.discount_percent) / 100, offer.max_discount);
+    // 2. Check for Reservation Advance
+    let reservationAdvanceDeduction = 0;
+    if (customerId && activeReservations.some(r => r.user_id === customerId)) {
+      // Don't deduct more than the bill itself
+      reservationAdvanceDeduction = Math.min(299, amount - discountAmount);
+    }
+
+    const totalDiscount = discountAmount + reservationAdvanceDeduction;
+    const finalAmount = Math.max(Math.round((amount - totalDiscount) * 100) / 100, 0);
+
     return {
-      discountAmount: Math.round(discountAmount * 100) / 100,
-      finalAmount: Math.round((amount - discountAmount) * 100) / 100,
+      discountAmount,
+      reservationAdvanceDeduction,
+      totalDiscount,
+      finalAmount,
       offer
     };
   };
@@ -163,10 +199,10 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
 
     setPosting(true);
     try {
-      const { discountAmount, finalAmount, offer } = calculateDiscount(amount);
       const selectedSessionObj = sessions.find(s => s.id === selectedSession);
-
       if (!selectedSessionObj) throw new Error("Session not found");
+
+      const { discountAmount, reservationAdvanceDeduction, totalDiscount, finalAmount, offer } = calculateDiscount(amount, selectedSessionObj.customer_id);
 
       // 1. Create the Transaction
       const { error: billError } = await supabase
@@ -177,7 +213,7 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
           dinein_session_id: selectedSession,
           bill_amount: amount,
           pos_bill_no: posBillNo || null,
-          discount_amount: discountAmount,
+          discount_amount: totalDiscount, // Total discount given to user including reservation advance
           final_amount: finalAmount,
           offer_id: offer?.id || null,
           payment_status: 'pending'
@@ -211,7 +247,8 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
     return profile?.full_name || profile?.phone || 'Guest';
   };
 
-  const preview = billAmount ? calculateDiscount(parseFloat(billAmount) || 0) : null;
+  const selectedCustomerObj = sessions.find(s => s.id === selectedSession);
+  const preview = billAmount ? calculateDiscount(parseFloat(billAmount) || 0, selectedCustomerObj?.customer_id) : null;
 
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
 
@@ -231,7 +268,12 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
                 <div key={s.id} onClick={() => setSelectedSession(s.id)} className={`p-4 rounded-lg border cursor-pointer ${selectedSession === s.id ? 'border-primary bg-primary/5' : 'border-border'}`}>
                   <div className="flex justify-between items-center">
                     <div>
-                      <div className="font-medium">{getCustomerName(s.customer_id)}</div>
+                      <div className="font-medium flex items-center gap-2">
+                        {getCustomerName(s.customer_id)}
+                        {activeReservations.some(r => r.user_id === s.customer_id) && (
+                           <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-600 border-blue-200">Table Booked</Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">Started {format(new Date(s.created_at), 'h:mm a')}</p>
                     </div>
                     <Badge variant={s.status === 'bill_posted' ? 'secondary' : 'outline'}>{s.status === 'bill_posted' ? 'Bill Sent' : 'Dining'}</Badge>
@@ -274,19 +316,38 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
 
           {preview && parseFloat(billAmount) > 0 && (
             <div className="p-4 rounded-lg bg-muted space-y-2">
-              <div className="flex justify-between text-sm"><span>Original Bill</span><span>₹{billAmount}</span></div>
+              <div className="flex justify-between text-sm"><span>Original Bill</span><span>₹{parseFloat(billAmount).toFixed(2)}</span></div>
+              
               {preview.discountAmount > 0 && (
-                <div className="flex justify-between text-sm text-green-500">
-                  <span>Discount ({preview.offer?.title})</span>
-                  <span>-₹{preview.discountAmount}</span>
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>DineDeal Offer ({preview.offer?.title})</span>
+                  <span>-₹{preview.discountAmount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold pt-2 border-t"><span>Customer Pays</span><span className="text-primary">₹{preview.finalAmount}</span></div>
+              
+              {preview.reservationAdvanceDeduction > 0 && (
+                <div className="flex justify-between text-sm text-blue-600 font-medium">
+                  <span>Reservation Advance Paid</span>
+                  <span>-₹{preview.reservationAdvanceDeduction.toFixed(2)}</span>
+                </div>
+              )}
+
+              {preview.totalDiscount > 0 && (
+                 <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                   <span>Total Savings Shown to Customer</span>
+                   <span className="font-semibold text-green-600">₹{preview.totalDiscount.toFixed(2)}</span>
+                 </div>
+              )}
+              
+              <div className="flex justify-between font-bold pt-2 border-t mt-2">
+                 <span>Customer Pays</span>
+                 <span className="text-primary text-lg">₹{preview.finalAmount.toFixed(2)}</span>
+              </div>
             </div>
           )}
 
-          <Button className="w-full" onClick={handlePostBill} disabled={posting || !selectedSession || !billAmount}>
-            {posting ? <Loader2 className="animate-spin mr-2" /> : <Receipt className="mr-2" />}
+          <Button className="w-full h-12 text-lg mt-2" onClick={handlePostBill} disabled={posting || !selectedSession || !billAmount}>
+            {posting ? <Loader2 className="animate-spin mr-2" /> : <Receipt className="mr-2 h-5 w-5" />}
             Post Bill to Customer
           </Button>
         </CardContent>

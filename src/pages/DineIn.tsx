@@ -14,9 +14,16 @@ import {
   UtensilsCrossed,
   CreditCard,
   Download,
+  Tag,
+  Wallet,
+  Info,
+  X,
+  AlertCircle,
+  Check,
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
+import { Input } from "@/components/ui/input";
 
 // 1️⃣ REMOVED: loadRazorpay and createRazorpayOptions imports
 
@@ -49,7 +56,17 @@ interface Transaction {
   payment_reference: string | null;
   pos_bill_no: string | null;
   offer_id: string | null;
+  // Let the backend know we may have updated the final amount
 }
+
+type Coupon = {
+  id: string;
+  code: string;
+  discount_percent: number;
+  max_discount: number | null;
+  min_order_amount: number | null;
+  valid_until: string | null;
+};
 
 /* =========================
    COMPONENT
@@ -66,6 +83,19 @@ const DineIn = () => {
   const [bill, setBill] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
+
+  // Cashback State
+  const [availablePoints, setAvailablePoints] = useState(0);
+  const [redeemableAmount, setRedeemableAmount] = useState(0);
+  const [useCashback, setUseCashback] = useState(false);
+  const [pointsToRedeemInput, setPointsToRedeemInput] = useState("");
+  const [showClarification, setShowClarification] = useState(false);
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   /* =========================
       AUTH + SESSION INIT
@@ -157,6 +187,20 @@ const DineIn = () => {
     }
   };
 
+  const fetchPoints = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("rewards")
+      .select("points")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (data) {
+      setAvailablePoints(data.points || 0);
+      setRedeemableAmount(Math.floor((data.points || 0) / 10));
+    }
+  };
+
   /* =========================
       BILL FETCH + REALTIME
   ========================= */
@@ -165,6 +209,7 @@ const DineIn = () => {
     if (!session) return;
 
     fetchBill(session.id);
+    fetchPoints();
 
     // Keep realtime subscription: This will update the UI when payment is completed via webhook
     const channel = supabase
@@ -211,6 +256,78 @@ const DineIn = () => {
   };
 
   /* =========================
+      COUPONS & CALCS
+  ========================= */
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    if (!bill || !restaurantId) return;
+    
+    setCouponLoading(true);
+    setCouponError("");
+
+    try {
+      const now = new Date().toISOString();
+      const { data: coupon, error } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("code", couponCode.toUpperCase().trim())
+        .eq("restaurant_id", restaurantId)
+        .eq("is_active", true)
+        .or(`valid_until.gte.${now},valid_until.is.null`)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!coupon) throw new Error("Invalid or expired coupon code");
+
+      // Check min order amount against the RESTAURANT POSTED final amount
+      if (coupon.min_order_amount && bill.final_amount < coupon.min_order_amount) {
+        throw new Error(`Minimum order of ₹${coupon.min_order_amount} required`);
+      }
+
+      setAppliedCoupon(coupon as Coupon);
+      setCouponError("");
+      toast.success("Coupon applied successfully!");
+    } catch (err: any) {
+      setCouponError(err.message);
+      toast.error(err.message);
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  // Base is the final amount posted by the restaurant POS
+  const baseAmount = bill?.final_amount || 0;
+
+  const couponDiscount = appliedCoupon
+    ? Math.min(
+      baseAmount * (appliedCoupon.discount_percent / 100),
+      appliedCoupon.max_discount || Infinity
+    )
+    : 0;
+
+  const amountAfterPrevDiscounts = baseAmount - couponDiscount;
+  
+  // Custom points usage logic
+  const parsedPointsInput = parseInt(pointsToRedeemInput) || 0;
+  // Ensure we don't use more points than available, and not more than the pill permits
+  const actualPointsToUse = Math.min(
+    parsedPointsInput, 
+    availablePoints, 
+    Math.floor(amountAfterPrevDiscounts * 10) // Max points that can be covered by the bill
+  );
+
+  const cashbackDiscount = useCashback && baseAmount >= 1000 
+    ? actualPointsToUse / 10
+    : 0;
+  
+  const pointsUsed = useCashback ? actualPointsToUse : 0;
+
+  const totalAddedDiscount = couponDiscount + cashbackDiscount;
+  const newFinalAmount = Math.max(baseAmount - totalAddedDiscount, 0);
+
+  /* =========================
       PAYMENT (UPDATED)
   ========================= */
 
@@ -230,10 +347,15 @@ const DineIn = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            amount: bill.final_amount,
+            amount: newFinalAmount,
             transactionId: bill.id,
             dineinSessionId: session.id,
             restaurantId: session.restaurant_id,
+            pointsUsed: pointsUsed, 
+            discountAmount: totalAddedDiscount, 
+            couponCode: appliedCoupon?.code,
+            type: "dine_in",
+            userId: user.id
           }),
         }
       );
@@ -355,41 +477,169 @@ const DineIn = () => {
         )}
 
         {bill?.payment_status === "pending" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Your Bill</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span>Bill Amount</span>
-                <span>₹{bill.bill_amount}</span>
-              </div>
-              {bill.discount_amount > 0 && (
-                <div className="flex justify-between text-green-500">
-                  <span>Discount</span>
-                  <span>-₹{bill.discount_amount}</span>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Bill</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between">
+                  <span>Restaurant Bill</span>
+                  <span>₹{bill.final_amount.toFixed(2)}</span>
                 </div>
-              )}
-              <Separator />
-              <div className="flex justify-between font-bold">
-                <span>Pay</span>
-                <span>₹{bill.final_amount}</span>
+                {appliedCoupon && (
+                  <div className="flex justify-between text-success">
+                    <span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Coupon ({appliedCoupon.code})</span>
+                    <span>- ₹{couponDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+                {cashbackDiscount > 0 && (
+                  <div className="flex justify-between text-success">
+                    <span className="flex items-center gap-2"><Wallet className="w-4 h-4" /> Cashback Redeemed</span>
+                    <span>- ₹{cashbackDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+                <Separator />
+                <div className="flex justify-between font-bold">
+                  <span>Pay</span>
+                  <span>₹{newFinalAmount.toFixed(2)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Cashback Section */}
+            {availablePoints > 0 && (
+              <div className={`p-4 rounded-xl border transition-all bg-card ${(useCashback && baseAmount >= 1000) ? "border-success bg-success/5" : "border-border/40"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex gap-3">
+                    <div className="p-2 bg-success/10 text-success rounded-full mt-1">
+                      <Wallet className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-foreground text-sm">Reward Points</p>
+                        <button onClick={() => setShowClarification(true)} className="text-muted-foreground hover:text-primary transition-colors">
+                          <Info className="w-4 h-4 mt-0.5" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Balance: <span className="text-success font-medium">{availablePoints}</span> (₹{redeemableAmount})
+                      </p>
+                      {baseAmount < 1000 && (
+                        <p className="text-[11px] text-destructive mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Minimum bill ₹1,000 to redeem
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {/* Only show the apply/remove toggle if they aren't using cashback OR they are but haven't entered an amount */}
+                  {!useCashback || (useCashback && baseAmount < 1000) ? (
+                    <Button 
+                      variant="outline"
+                      size="sm" 
+                      onClick={() => {
+                        setUseCashback(true);
+                        // Default to max possible points when first clicking apply
+                        const maxPts = Math.min(availablePoints, Math.floor((baseAmount - couponDiscount) * 10));
+                        setPointsToRedeemInput(maxPts.toString());
+                      }}
+                      disabled={baseAmount < 1000 || availablePoints < 10}
+                    >
+                      Apply
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-destructive hover:text-destructive/90 h-8 px-2"
+                      onClick={() => {
+                        setUseCashback(false);
+                        setPointsToRedeemInput("");
+                      }}
+                    >
+                      <X className="w-4 h-4 mr-1" /> Remove
+                    </Button>
+                  )}
+                </div>
+
+                {useCashback && baseAmount >= 1000 && (
+                  <div className="mt-4 pt-4 border-t border-success/20 flex gap-2 items-center">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground mb-1 block">Points to redeem</label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={pointsToRedeemInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "" || parseInt(val) >= 0) {
+                            setPointsToRedeemInput(val);
+                          }
+                        }}
+                        className="h-9 border-success/30 focus-visible:ring-success"
+                      />
+                    </div>
+                    <div className="flex flex-col items-end justify-end self-end mb-1">
+                        <span className="text-xs text-muted-foreground">Savings</span>
+                        <span className="text-sm font-bold text-success">
+                          ₹{(actualPointsToUse / 10).toFixed(2)}
+                        </span>
+                    </div>
+                  </div>
+                )}
+                {useCashback && parsedPointsInput > availablePoints && (
+                    <p className="text-[11px] text-destructive mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> You only have {availablePoints} points.
+                    </p>
+                )}
               </div>
+            )}
 
-              {/* 3️⃣ PAY BUTTON (UPDATED) */}
-              <Button
-                onClick={handlePayment}
-                disabled={paying}
-                className="w-full"
-              >
-                {paying ? "Processing..." : "Pay Now"}
-              </Button>
+            {/* Coupon Section */}
+            {!appliedCoupon ? (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter Coupon Code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                  className="uppercase bg-card"
+                />
+                <Button onClick={handleApplyCoupon} disabled={couponLoading}>
+                  {couponLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center p-3 bg-success/10 rounded-lg border border-success/20">
+                <span className="text-sm font-medium text-success flex items-center gap-2">
+                  <Check className="w-4 h-4" /> Code {appliedCoupon.code} applied
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setAppliedCoupon(null);
+                    setCouponCode("");
+                  }}
+                  className="text-destructive hover:text-destructive/90 h-8 px-2"
+                >
+                  <X className="w-4 h-4" /> Remove
+                </Button>
+              </div>
+            )}
 
-              <p className="text-xs text-center text-muted-foreground">
-                GST bill will be provided by restaurant
-              </p>
-            </CardContent>
-          </Card>
+            {/* 3️⃣ PAY BUTTON (UPDATED) */}
+            <Button
+              onClick={handlePayment}
+              disabled={paying}
+              className="w-full h-12 text-lg"
+            >
+              {paying ? <Loader2 className="animate-spin mr-2" /> : "Pay Now"}
+            </Button>
+
+            <p className="text-xs text-center text-muted-foreground">
+              GST bill will be provided by restaurant
+            </p>
+          </div>
         )}
 
         {bill?.payment_status === "completed" && (
