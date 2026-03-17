@@ -113,8 +113,8 @@ const Index = () => {
     if (txData) {
       const total = txData.reduce((acc: number, curr: any) => acc + (Number(curr.discount_amount) || 0), 0);
       const points = rewardsData?.points || 0;
-      // Define a conversion rate, e.g., 1 point = ₹1
-      const redeemableValue = points; 
+      // Define a conversion rate: 10 points = ₹1
+      const redeemableValue = Math.floor(points / 10); 
 
       setStats({
         totalSaved: total,

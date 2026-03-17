@@ -78,8 +78,8 @@ const Rewards = () => {
 
       // Fetch rewards natively from Supabase
       const { data: rewardsData, error: rewardsErr } = await supabase
-        .from("user_reward_balance_view")
-        .select("*")
+        .from("rewards")
+        .select("points")
         .eq("user_id", user?.id)
         .maybeSingle();
 
@@ -90,7 +90,7 @@ const Rewards = () => {
         totalSaved,
         rewardPoints: rewardsData?.points || 0,
         totalTransactions: txData?.length || 0,
-        redeemableAmount: rewardsData?.redeemable_amount || 0,
+        redeemableAmount: Math.floor((rewardsData?.points || 0) / 10),
         lifetimeSavings: totalSaved,
       });
     } catch (error) {

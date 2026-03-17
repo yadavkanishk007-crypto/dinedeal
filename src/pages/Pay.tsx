@@ -13,6 +13,8 @@ import {
   AlertCircle,
   ShieldCheck,
   Loader2,
+  Wallet,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +69,13 @@ export default function Pay() {
   const [activeOffer, setActiveOffer] = useState<ActiveOffer | null>(null);
   const [step, setStep] = useState<PaymentStep>("loading");
 
+  // Cashback State
+  const [availablePoints, setAvailablePoints] = useState(0);
+  const [redeemableAmount, setRedeemableAmount] = useState(0);
+  const [useCashback, setUseCashback] = useState(false);
+  const [pointsToRedeemInput, setPointsToRedeemInput] = useState("");
+  const [showClarification, setShowClarification] = useState(false);
+
   const [billAmount, setBillAmount] = useState("");
   // Generated mostly for UI reference; actual correlation happens via Order ID in backend
   const [transactionId, setTransactionId] = useState("");
@@ -102,7 +111,7 @@ export default function Pay() {
         const now = new Date().toISOString();
 
         // ✅ Production-Grade Fix: Parallel Fetching & Domain Separation
-        const [{ data: restaurantData, error: restaurantError }, { data: offerData }] = await Promise.all([
+        const [{ data: restaurantData, error: restaurantError }, { data: offerData }, { data: cbData }] = await Promise.all([
           // 1. Fetch Restaurant Profile
           supabase
             .from("restaurants")
@@ -121,12 +130,21 @@ export default function Pay() {
             .order("discount_percent", { ascending: false })
             .limit(1)
             .maybeSingle(),
+
+          // 3. Fetch Rewards Balance
+          supabase
+            .from("rewards")
+            .select("points")
+            .eq("user_id", user?.id || "")
+            .maybeSingle(),
         ]);
 
         if (restaurantError || !restaurantData) throw new Error("Restaurant not found");
 
         setRestaurant(restaurantData);
         setActiveOffer(offerData ?? null); // Offer might be null, that's okay
+        setAvailablePoints(cbData?.points || 0);
+        setRedeemableAmount(Math.floor((cbData?.points || 0) / 10));
         setStep("amount");
         setTransactionId(`DD${Date.now().toString().slice(-6)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`);
       } catch (err) {
@@ -164,11 +182,28 @@ export default function Pay() {
     )
     : 0;
 
-  const totalDiscount = restaurantDiscount + couponDiscount;
+  const amountAfterPrevDiscounts = amount - restaurantDiscount - couponDiscount;
+  
+  // Custom points usage logic
+  const parsedPointsInput = parseInt(pointsToRedeemInput) || 0;
+  // Ensure we don't use more points than available, and not more than the pill permits
+  const actualPointsToUse = Math.min(
+    parsedPointsInput, 
+    availablePoints, 
+    Math.floor(amountAfterPrevDiscounts * 10) // Max points that can be covered by the bill
+  );
+
+  const cashbackDiscount = useCashback && amount >= 1000 
+    ? actualPointsToUse / 10
+    : 0;
+  
+  const pointsUsed = useCashback ? actualPointsToUse : 0;
+
+  const totalDiscount = restaurantDiscount + couponDiscount + cashbackDiscount;
   const finalAmount = Math.max(amount - totalDiscount, 0);
 
-  // Rewards are now calculated by the Webhook, but we can display an estimate
-  const estimatedRewards = Math.floor(amount * 0.02);
+  // Rewards are now calculated by the Webhook, (20% cashback, 10 points = 1 Rs)
+  const estimatedRewards = Math.floor(finalAmount * 0.20 * 10);
 
   // --- Coupon Handler ---
 
@@ -255,6 +290,7 @@ export default function Pay() {
             type: paymentType === "event" ? "event" : "restaurant",
             restaurantId: restaurant.id,
             userId: user?.id ?? "guest",
+            pointsUsed,
             metadata: {
               // We pass this data so the Backend Webhook knows what to apply
               couponCode: appliedCoupon?.code,
@@ -263,6 +299,7 @@ export default function Pay() {
               // 🔹 ADD THESE (EVENT SUPPORT)
               eventId: eventId || null,
               seats,
+              pointsUsed,
             }
           }),
         }
@@ -502,12 +539,107 @@ export default function Pay() {
                       <span>- ₹{couponDiscount.toFixed(2)}</span>
                     </div>
                   )}
+
+                  {cashbackDiscount > 0 && (
+                    <div className="flex justify-between text-success">
+                      <span className="flex items-center gap-2"><Wallet className="w-4 h-4" /> Cashback Redeemed</span>
+                      <span>- ₹{cashbackDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="border-t pt-4 flex justify-between items-center font-bold text-lg">
                     <span>To Pay</span>
                     <span>₹{finalAmount.toFixed(2)}</span>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Cashback Section */}
+              {availablePoints > 0 && (
+                <div className={`p-4 rounded-xl border transition-all ${(useCashback && amount >= 1000) ? "border-success bg-success/5" : "border-border/40"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex gap-3">
+                      <div className="p-2 bg-success/10 text-success rounded-full mt-1">
+                        <Wallet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-foreground text-sm">Reward Points</p>
+                          <button onClick={() => setShowClarification(true)} className="text-muted-foreground hover:text-primary transition-colors">
+                            <Info className="w-4 h-4 mt-0.5" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Balance: <span className="text-success font-medium">{availablePoints}</span> (₹{redeemableAmount})
+                        </p>
+                        {amount < 1000 && (
+                          <p className="text-[11px] text-destructive mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> Minimum bill ₹1,000 to redeem
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {/* Only show the apply/remove toggle if they aren't using cashback OR they are but haven't entered an amount */}
+                    {!useCashback || (useCashback && amount < 1000) ? (
+                      <Button 
+                        variant="outline"
+                        size="sm" 
+                        onClick={() => {
+                          setUseCashback(true);
+                          // Default to max possible points when first clicking apply
+                          const maxPts = Math.min(availablePoints, Math.floor((amount - restaurantDiscount - couponDiscount) * 10));
+                          setPointsToRedeemInput(maxPts.toString());
+                        }}
+                        disabled={amount < 1000 || availablePoints < 10}
+                      >
+                        Apply
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-destructive hover:text-destructive/90 h-8 px-2"
+                        onClick={() => {
+                          setUseCashback(false);
+                          setPointsToRedeemInput("");
+                        }}
+                      >
+                        <X className="w-4 h-4 mr-1" /> Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  {useCashback && amount >= 1000 && (
+                    <div className="mt-4 pt-4 border-t border-success/20 flex gap-2 items-center">
+                      <div className="flex-1">
+                        <label className="text-xs text-muted-foreground mb-1 block">Points to redeem</label>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={pointsToRedeemInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "" || parseInt(val) >= 0) {
+                              setPointsToRedeemInput(val);
+                            }
+                          }}
+                          className="h-9 border-success/30 focus-visible:ring-success"
+                        />
+                      </div>
+                      <div className="flex flex-col items-end justify-end self-end mb-1">
+                         <span className="text-xs text-muted-foreground">Savings</span>
+                         <span className="text-sm font-bold text-success">
+                           ₹{(actualPointsToUse / 10).toFixed(2)}
+                         </span>
+                      </div>
+                    </div>
+                  )}
+                  {useCashback && parsedPointsInput > availablePoints && (
+                     <p className="text-[11px] text-destructive mt-2 flex items-center gap-1">
+                       <AlertCircle className="w-3 h-3" /> You only have {availablePoints} points.
+                     </p>
+                  )}
+                </div>
+              )}
 
               {/* Coupon Section */}
               {!appliedCoupon ? (
@@ -652,6 +784,67 @@ export default function Pay() {
             </motion.div>
           )}
 
+        </AnimatePresence>
+
+        {/* Clarification Modal */}
+        <AnimatePresence>
+          {showClarification && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                exit={{ opacity: 0, scale: 0.95 }} 
+                className="bg-card w-full max-w-sm rounded-2xl shadow-xl overflow-hidden relative border border-border"
+              >
+                <div className="bg-primary/5 p-6 text-center border-b border-primary/10">
+                  <h3 className="text-2xl font-bold text-primary">20% CASHBACK</h3>
+                  <p className="text-sm text-foreground/70 mt-1">on every dining bill</p>
+                  <Button variant="ghost" size="icon" className="absolute top-2 right-2 rounded-full text-foreground/50 hover:text-foreground" onClick={() => setShowClarification(false)}>
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div>
+                    <h4 className="font-semibold text-sm flex items-center justify-center gap-2 mb-4 text-muted-foreground uppercase tracking-wider">
+                       Steps to redeem
+                    </h4>
+                    <div className="space-y-5">
+                      <div className="flex gap-4 items-start">
+                        <div className="font-bold text-2xl text-primary/30 mt-[-4px]">1.</div>
+                        <div>
+                          <p className="font-semibold text-foreground">Pay</p>
+                          <p className="text-sm text-muted-foreground">your bill at any restaurant on DineDeal</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 items-start">
+                        <div className="font-bold text-2xl text-primary/30 mt-[-4px]">2.</div>
+                        <div>
+                          <p className="font-semibold text-foreground">Earn</p>
+                          <p className="text-sm text-muted-foreground">20% cashback after you pay your dining bill</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 items-start">
+                        <div className="font-bold text-2xl text-primary/30 mt-[-4px]">3.</div>
+                        <div>
+                          <p className="font-semibold text-foreground">Redeem</p>
+                          <p className="text-sm text-muted-foreground">your cashback on next dining transactions</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 text-muted-foreground border-b pb-1">Terms & conditions</h4>
+                    <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4 mt-3 opacity-90">
+                      <li>The cashback will be valid for 15 days from the date of issuance.</li>
+                      <li>A minimum bill value of ₹1,000 is required to redeem the cashback.</li>
+                      <li>10 Reward Points = ₹1.</li>
+                    </ul>
+                  </div>
+                  <Button className="w-full text-md h-12" onClick={() => setShowClarification(false)}>Okay, got it</Button>
+                </div>
+              </motion.div>
+            </div>
+          )}
         </AnimatePresence>
       </main>
     </div>
