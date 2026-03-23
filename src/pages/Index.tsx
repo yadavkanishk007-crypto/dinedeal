@@ -388,6 +388,14 @@ const LandingPage = () => {
           </motion.div>
         </div>
       </main>
+      <footer className="container py-8 border-t border-border/50 mt-auto text-center text-sm text-muted-foreground flex flex-col md:flex-row justify-between items-center gap-4">
+        <span>© {new Date().getFullYear()} DineDeal. All rights reserved.</span>
+        <div className="flex items-center gap-6">
+          <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+          <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
+          <Link to="/help" className="hover:text-primary transition-colors">FAQs</Link>
+        </div>
+      </footer>
     </div>
   );
 };

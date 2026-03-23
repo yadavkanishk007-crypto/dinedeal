@@ -100,16 +100,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (!roleRow && signupRole) {
+    // Support OAuth signups by checking localStorage for a saved role
+    const savedSignupRole = localStorage.getItem("signup_role") as UserRole | null;
+    const finalSignupRole = signupRole || savedSignupRole;
+
+    if (!roleRow && finalSignupRole) {
       const { error } = await supabase.from("user_roles").insert({
         user_id: userId,
-        role: toDbRole(signupRole),
+        role: toDbRole(finalSignupRole),
       });
       if (error) throw error;
+      
+      // Clear it after successful insertion
+      if (savedSignupRole) {
+        localStorage.removeItem("signup_role");
+      }
     }
 
     const effectiveRole =
-      roleRow?.role ?? (signupRole ? toDbRole(signupRole) : "customer");
+      roleRow?.role ?? (finalSignupRole ? toDbRole(finalSignupRole) : "customer");
 
     /* RESTAURANT BOOTSTRAP */
     // Note: event_organiser row is NOT created here. 
@@ -231,7 +240,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // Redirect the user to the reset password page if they clicked a recovery link
+        window.location.href = "/reset-password";
+      }
+
       if (session) {
         loadUserData();
       } else {
