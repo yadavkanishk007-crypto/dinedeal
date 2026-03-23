@@ -14,9 +14,14 @@ const AuthCallback = () => {
       // Check if this is an OAuth redirect (uses hash fragments instead of query params)
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       if (hashParams.get("access_token")) {
-        // Supabase client handles the session automatically for hash tokens.
-        // The auth context listener will load the user.
-        navigate("/");
+        // Await getSession so Supabase processes the hash before we change the URL
+        const { error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error("OAuth Verification error:", sessionError.message);
+          navigate("/auth");
+        } else {
+          navigate("/");
+        }
         return;
       }
 

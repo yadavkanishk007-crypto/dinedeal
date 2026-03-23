@@ -104,10 +104,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const savedSignupRole = localStorage.getItem("signup_role") as UserRole | null;
     const finalSignupRole = signupRole || savedSignupRole;
 
-    if (!roleRow && finalSignupRole) {
+    if (!roleRow) {
       const { error } = await supabase.from("user_roles").insert({
         user_id: userId,
-        role: toDbRole(finalSignupRole),
+        role: toDbRole(finalSignupRole || "customer"),
       });
       if (error) throw error;
       
@@ -118,7 +118,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const effectiveRole =
-      roleRow?.role ?? (finalSignupRole ? toDbRole(finalSignupRole) : "customer");
+      roleRow?.role ?? toDbRole(finalSignupRole || "customer");
 
     /* RESTAURANT BOOTSTRAP */
     // Note: event_organiser row is NOT created here. 
