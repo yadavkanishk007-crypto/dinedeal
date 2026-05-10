@@ -337,6 +337,15 @@ const DineIn = () => {
   
     try {
       setPaying(true);
+
+      // 🔐 CRIT-1 FIX: Get auth token for backend
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const accessToken = authSession?.access_token;
+      if (!accessToken) {
+        toast.error("Session expired. Please sign in again.");
+        setPaying(false);
+        return;
+      }
   
       // 1️⃣ Ask backend to create Razorpay order
       const res = await fetch(
@@ -345,6 +354,7 @@ const DineIn = () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             amount: newFinalAmount,

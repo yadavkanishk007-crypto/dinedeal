@@ -101,7 +101,7 @@ const App = () => (
                   <EventOrganiserOnboarding />
                 </RoleRoute>
               }
-               />
+              />
 
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
@@ -112,6 +112,9 @@ const App = () => (
                 </RoleRoute>
               }
             />
+
+            {/* MED-3 FIX: 404 catch-all route */}
+            <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
         </TooltipProvider>

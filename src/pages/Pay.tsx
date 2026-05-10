@@ -267,6 +267,16 @@ export default function Pay() {
       return;
     }
 
+    // HIGH-6 FIX: Block payment for unauthenticated users
+    if (!user?.id) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to make a payment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!isRazorpayLoaded) return;
 
     // 🧪 Debug Log
@@ -276,12 +286,24 @@ export default function Pay() {
     toast({ title: "Securing connection..." });
 
     try {
+      // 🔐 CRIT-1 FIX: Get Supabase session token for backend auth
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const accessToken = authSession?.access_token;
+      if (!accessToken) {
+        toast({ title: "Session expired", description: "Please sign in again.", variant: "destructive" });
+        setIsProcessing(false);
+        return;
+      }
+
       // 1. Create Order on Backend
       const res = await fetch(
         "https://dinedeal-backend-076n.onrender.com/api/payments/create-order",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({
             amount: finalAmount,
             // ✅ Fix: Send explicit bill & discount amounts for tracking
@@ -291,7 +313,7 @@ export default function Pay() {
             restaurantBill: amount - (restaurantDiscount + couponDiscount),
             type: paymentType === "event" ? "event" : "restaurant",
             restaurantId: restaurant.id,
-            userId: user?.id ?? "guest",
+            userId: user.id,
             pointsUsed,
             metadata: {
               // We pass this data so the Backend Webhook knows what to apply

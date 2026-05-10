@@ -118,7 +118,6 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
         .in('user_id', customerIds);
 
       if (profilesData) setProfiles(profilesData as UserProfile[]);
-      if (profilesData) setProfiles(profilesData as UserProfile[]);
 
       // Check for reservations today for these customers
       const today = new Date().toISOString().split('T')[0];

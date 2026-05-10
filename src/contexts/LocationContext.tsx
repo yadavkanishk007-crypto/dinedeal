@@ -20,8 +20,12 @@ const LocationContext = createContext<LocationState | undefined>(undefined);
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [city, setCity] = useState<string | null>(() => localStorage.getItem("user_city"));
   const [coordinates, setCoordinates] = useState<Coordinates | null>(() => {
-    const saved = localStorage.getItem("user_coordinates");
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem("user_coordinates");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
   const [exactAddress, setExactAddress] = useState<string | null>(() => localStorage.getItem("user_address"));
   const [isLoading, setIsLoading] = useState(false);

@@ -104,10 +104,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const savedSignupRole = localStorage.getItem("signup_role") as UserRole | null;
     const finalSignupRole = signupRole || savedSignupRole;
 
+    // MED-1 FIX: Only allow safe roles during self-service signup.
+    // Admin/super_admin can ONLY be assigned via the database directly.
+    const SAFE_SIGNUP_ROLES: string[] = ["customer", "restaurant", "event_organiser"];
+    const safeRole = (finalSignupRole && SAFE_SIGNUP_ROLES.includes(finalSignupRole))
+      ? finalSignupRole
+      : "customer";
+
     if (!roleRow) {
       const { error } = await supabase.from("user_roles").insert({
         user_id: userId,
-        role: toDbRole(finalSignupRole || "customer"),
+        role: toDbRole(safeRole),
       });
       if (error) throw error;
       
