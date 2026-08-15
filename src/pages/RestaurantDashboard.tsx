@@ -24,7 +24,8 @@ import {
   Headphones,
   Sparkles,
   QrCode,
-  Ticket
+  Ticket,
+  Gamepad
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,7 +50,8 @@ import RestaurantSettings from "@/components/RestaurantSettings";
 import EventManager from "@/components/events/EventManager";
 import EventBookingsList from "@/components/events/EventBookingsList";
 import EventCheckIn from "@/components/events/EventCheckIn";
-type OrganiserType = "restaurant" | "event_group";
+import ActivityDashboard from "./ActivityDashboard";
+type OrganiserType = "restaurant" | "event_group" | "activity_provider";
 
 interface Restaurant {
   id: string;
@@ -70,6 +72,9 @@ interface Restaurant {
   bank_account_number?: string;
   bank_ifsc?: string;
   bank_account_holder?: string;
+  fssai?: string | null;
+  gst?: string | null;
+  provides_dine_in?: boolean | null;
 }
 
 interface Offer {
@@ -106,7 +111,8 @@ const RestaurantDashboard = () => {
   >("overview");
   
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const isEventOnlyOrganiser = restaurant?.organiser_type === "event_group";
+  const isEventOnlyOrganiser = role === "event_organiser" || restaurant?.organiser_type === "event_group";
+  const isActivityProvider = role === "activity_provider" || restaurant?.organiser_type === "activity_provider";
 
   // Onboarding form state
   const [formData, setFormData] = useState({
@@ -122,15 +128,18 @@ const RestaurantDashboard = () => {
     bankAccountNumber: "",
     bankIfsc: "",
     bankAccountHolder: "",
+    fssai: "",
+    gst: "",
+    providesDineIn: false,
   });
 
   useEffect(() => {
-    if (!loading && (!user || role !== "restaurant" && role !== "event_organiser")) {
+    if (!loading && (!user || (role !== "restaurant" && role !== "event_organiser" && role !== "activity_provider"))) {
       navigate("/auth");
       return;
     }
     
-    if (user && (role === "restaurant" || role === "event_organiser")) {
+    if (user && (role === "restaurant" || role === "event_organiser" || role === "activity_provider")) {
       fetchRestaurantData();
     }
   }, [user, role, loading, navigate]);
@@ -149,11 +158,23 @@ const RestaurantDashboard = () => {
       if (restaurantError) throw restaurantError;
 
       if (restaurantData) {
+        // Auto-heal of organiser_type
+        if (role === "activity_provider" && restaurantData.organiser_type !== "activity_provider") {
+          await supabase
+            .from("restaurants")
+            .update({ organiser_type: "activity_provider" })
+            .eq("id", restaurantData.id);
+          restaurantData.organiser_type = "activity_provider";
+        } else if (role === "event_organiser" && restaurantData.organiser_type !== "event_group") {
+          await supabase
+            .from("restaurants")
+            .update({ organiser_type: "event_group" })
+            .eq("id", restaurantData.id);
+          restaurantData.organiser_type = "event_group";
+        }
+
         setRestaurant({...restaurantData,
-            organiser_type:
-            restaurantData.organiser_type === "event_group"
-            ? "event_group"
-            : "restaurant",});
+            organiser_type: restaurantData.organiser_type as OrganiserType,});
 
         // Pre-fill form data if we have an existing row (essential for the update flow)
         setFormData(prev => ({
@@ -170,6 +191,9 @@ const RestaurantDashboard = () => {
           bankAccountNumber: restaurantData.bank_account_number || prev.bankAccountNumber,
           bankIfsc: restaurantData.bank_ifsc || prev.bankIfsc,
           bankAccountHolder: restaurantData.bank_account_holder || prev.bankAccountHolder,
+          fssai: restaurantData.fssai || "",
+          gst: restaurantData.gst || "",
+          providesDineIn: restaurantData.provides_dine_in || false,
         }));
 
         // Fetch offers
@@ -225,6 +249,21 @@ const RestaurantDashboard = () => {
     e.preventDefault();
     if (!user) return;
 
+    const isActivity = role === "activity_provider";
+
+    // FSSAI validations
+    if (!isActivity) {
+      if (!formData.fssai) {
+        toast({ title: "FSSAI Required", description: "FSSAI license number is compulsory for restaurants.", variant: "destructive" });
+        return;
+      }
+    } else {
+      if (formData.providesDineIn && !formData.fssai) {
+        toast({ title: "FSSAI Required", description: "FSSAI license number is compulsory since you provide food/dine-in services.", variant: "destructive" });
+        return;
+      }
+    }
+
     try {
       // UPDATE existing row instead of inserting
       const { data, error } = await supabase
@@ -242,7 +281,10 @@ const RestaurantDashboard = () => {
           bank_account_number: formData.bankAccountNumber,
           bank_ifsc: formData.bankIfsc,
           bank_account_holder: formData.bankAccountHolder,
-          // We do not force is_approved/is_active here, preserving existing state or admin logic
+          fssai: formData.fssai || null,
+          gst: formData.gst || null,
+          provides_dine_in: formData.providesDineIn,
+          organiser_type: role === "activity_provider" ? "activity_provider" : (role === "event_organiser" ? "event_group" : "restaurant"),
         })
         .eq("owner_id", user.id)
         .select()
@@ -251,10 +293,7 @@ const RestaurantDashboard = () => {
       if (error) throw error;
 
       setRestaurant({...data,
-                     organiser_type:
-                       data.organiser_type==="event_group"
-                       ?"event_group"
-                       : "restaurant" });
+                     organiser_type: data.organiser_type as OrganiserType });
       
       // Refresh auth context to update needsRestaurantOnboarding state
       await refresh();
@@ -320,6 +359,10 @@ const RestaurantDashboard = () => {
     return <RestaurantOnboarding formData={formData} setFormData={setFormData} onSubmit={handleUpdateRestaurant} />;
   }
 
+  if (isActivityProvider) {
+    return <ActivityDashboard />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -329,7 +372,7 @@ const RestaurantDashboard = () => {
             <Logo size="default" />
             <div className="h-6 w-px bg-border" />
             <span className="text-sm font-medium text-muted-foreground">
-              {isEventOnlyOrganiser ? "Event Organiser Dashboard" : "Restaurant Dashboard"}
+              {isEventOnlyOrganiser ? "Event Organiser Dashboard" : (isActivityProvider ? "Activity Center Dashboard" : "Restaurant Dashboard")}
             </span>  
           </div>
           <div className="flex items-center gap-4">
@@ -364,7 +407,7 @@ const RestaurantDashboard = () => {
             <div>
               <p className="font-medium text-foreground">Pending Approval</p>
               <p className="text-sm text-muted-foreground">
-                Your restaurant is under review. You'll be notified once approved.
+                Your {isActivityProvider ? "activity center" : "restaurant"} is under review. You'll be notified once approved.
               </p>
             </div>
           </motion.div>
@@ -388,9 +431,11 @@ const RestaurantDashboard = () => {
              // Restaurant-only tabs
             ...(!isEventOnlyOrganiser ? [
               { id: "overview", label: "Overview", icon: BarChart3 },
-              { id: "menu", label: "Menu", icon: UtensilsCrossed },
-              { id: "reservations", label: "Reservations", icon: Calendar },
-              { id: "dinein", label: "Dine-In", icon: Users },
+              { id: "menu", label: isActivityProvider ? "Activities" : "Menu", icon: isActivityProvider ? Gamepad : UtensilsCrossed },
+              { id: "reservations", label: isActivityProvider ? "Slot Bookings" : "Reservations", icon: Calendar },
+              ...(!isActivityProvider ? [
+                { id: "dinein", label: "Dine-In", icon: Users },
+              ] : []),
               { id: "offers", label: "Offers", icon: Percent },
               { id: "transactions", label: "Transactions", icon: Receipt },
             ] : [
@@ -489,7 +534,7 @@ const RestaurantDashboard = () => {
         )}
 
         {activeTab === "menu" && restaurant && (
-          <MenuManager restaurantId={restaurant.id} />
+          <MenuManager restaurantId={restaurant.id} isActivityProvider={restaurant.organiser_type === "activity_provider"} />
         )}
 
         {activeTab === "reservations" && restaurant && (
@@ -566,41 +611,55 @@ const StatCard = ({ icon, label, value, gradient }: { icon: React.ReactNode; lab
 );
 
 // Onboarding Component
-const RestaurantOnboarding = ({ formData, setFormData, onSubmit }: any) => (
-  <div className="min-h-screen bg-background py-12">
-    <div className="container max-w-lg">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
-      >
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4">
-            <Store className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="font-display text-2xl font-bold text-foreground">Set Up Your Restaurant</h1>
-          <p className="text-muted-foreground">Tell us about your restaurant to get started</p>
-        </div>
+const RestaurantOnboarding = ({ formData, setFormData, onSubmit }: any) => {
+  const { role } = useAuth();
+  const isActivity = role === "activity_provider";
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <Input
-            placeholder="Restaurant Name *"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-          />
-          <Input
-            placeholder="Cuisine Type (e.g., Italian, Indian) *"
-            value={formData.cuisine}
-            onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
-            required
-          />
-          <Textarea
-            placeholder="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            rows={3}
-          />
+  return (
+    <div className="min-h-screen bg-background py-12">
+      <div className="container max-w-lg">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          <div className="text-center">
+            <div className="w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4">
+              {isActivity ? (
+                <Gamepad className="w-8 h-8 text-primary-foreground" />
+              ) : (
+                <Store className="w-8 h-8 text-primary-foreground" />
+              )}
+            </div>
+            <h1 className="font-display text-2xl font-bold text-foreground">
+              Set Up Your {isActivity ? "Activity Center" : "Restaurant"}
+            </h1>
+            <p className="text-muted-foreground">
+              {isActivity 
+                ? "Tell us about your play area, turf, or parlour to get started" 
+                : "Tell us about your restaurant to get started"}
+            </p>
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-4">
+            <Input
+              placeholder={isActivity ? "Activity Center Name *" : "Restaurant Name *"}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+            <Input
+              placeholder={isActivity ? "Activity Type (e.g., Turf, Arcade, Parlour) *" : "Cuisine Type (e.g., Italian, Indian) *"}
+              value={formData.cuisine}
+              onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
+              required
+            />
+            <Textarea
+              placeholder="Description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+            />
           <Input
             placeholder="Full Address *"
             value={formData.address}
@@ -625,11 +684,40 @@ const RestaurantOnboarding = ({ formData, setFormData, onSubmit }: any) => (
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           />
-          <Input
-            placeholder="Open Hours (e.g., 11:00 AM - 11:00 PM)"
-            value={formData.openHours}
-            onChange={(e) => setFormData({ ...formData, openHours: e.target.value })}
-          />
+            <Input
+              placeholder="Open Hours (e.g., 11:00 AM - 11:00 PM)"
+              value={formData.openHours}
+              onChange={(e) => setFormData({ ...formData, openHours: e.target.value })}
+            />
+
+            {/* FSSAI and GST fields */}
+            {isActivity && (
+              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/30 border border-border/50">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground">Do you provide food / dine-in services?</label>
+                  <p className="text-xs text-muted-foreground">Toggle on if your turf, arcade, or parlour serves food/drinks.</p>
+                </div>
+                <Switch
+                  checked={formData.providesDineIn}
+                  onCheckedChange={(checked) => setFormData({ ...formData, providesDineIn: checked, fssai: checked ? formData.fssai : "" })}
+                />
+              </div>
+            )}
+
+            {(!isActivity || formData.providesDineIn) && (
+              <Input
+                placeholder="FSSAI License Number *"
+                value={formData.fssai}
+                onChange={(e) => setFormData({ ...formData, fssai: e.target.value })}
+                required
+              />
+            )}
+
+            <Input
+              placeholder="GST Number (Optional)"
+              value={formData.gst}
+              onChange={(e) => setFormData({ ...formData, gst: e.target.value })}
+            />
 
           {/* Payment Details Section */}
           <div className="pt-4 border-t border-border/50">
@@ -680,6 +768,7 @@ const RestaurantOnboarding = ({ formData, setFormData, onSubmit }: any) => (
     </div>
   </div>
 );
+};
 
 // Offers Tab
 const OffersTab = ({ restaurantId, offers, setOffers }: { restaurantId?: string; offers: Offer[]; setOffers: (o: Offer[]) => void }) => {

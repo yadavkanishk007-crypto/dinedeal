@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { motion } from "framer-motion";
 import { 
   Camera, 
@@ -21,13 +22,20 @@ import {
   Save,
   Mail,
   Sparkles,
-  MapPin
+  MapPin,
+  Instagram,
+  Twitter,
+  Globe,
+  Link2,
+  SunMoon
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
@@ -50,10 +58,49 @@ interface Restaurant {
   bank_account_holder?: string | null;
   // [STEP 1: Added Interface Fields]
   is_event_organiser?: boolean;
-  organiser_type?: "restaurant" | "event_group";
+  organiser_type?: "restaurant" | "event_group" | "activity_provider";
   latitude?: number;
   longitude?: number;
+  fssai?: string | null;
+  gst?: string | null;
+  provides_dine_in?: boolean | null;
+  // Added fields
+  city?: string;
+  description?: string | null;
+  instagram?: string | null;
+  twitter?: string | null;
+  website?: string | null;
 }
+
+const ThemeSettings = registerPlugin<any>('ThemeSettings');
+
+const ACTIVITY_CATEGORIES = [
+  "Turfs / Slots",
+  "Arcade Games",
+  "Console Gaming",
+  "VR Experience",
+  "Bowling Alley",
+  "Board Games",
+  "Adventure Sports",
+  "Water Park / Amusement Park",
+  "Trampoline Park",
+  "Play Zone",
+  "Other Services"
+];
+
+const EVENT_CATEGORIES = [
+  "Live Music / Concerts",
+  "Comedy Shows",
+  "DJ Nights / Clubbing",
+  "Workshops / Classes",
+  "Networking / Meetups",
+  "Festivals",
+  "Sports Tournaments",
+  "Art / Theatre",
+  "Corporate Events",
+  "Community / Cultural",
+  "Other"
+];
 
 interface RestaurantSettingsProps {
   restaurant: Restaurant;
@@ -61,6 +108,8 @@ interface RestaurantSettingsProps {
 }
 
 const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsProps) => {
+  const isActivity = restaurant?.organiser_type === "activity_provider";
+  const isEventGroup = restaurant?.organiser_type === "event_group";
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -73,9 +122,17 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
     name: restaurant?.name || "",
     cuisine: restaurant?.cuisine || "",
     address: restaurant?.address || "",
+    city: restaurant?.city || "",
+    description: restaurant?.description || "",
     phone: restaurant?.phone || "",
     email: restaurant?.email || "",
     open_hours: restaurant?.open_hours || "",
+    fssai: restaurant?.fssai || "",
+    gst: restaurant?.gst || "",
+    provides_dine_in: restaurant?.provides_dine_in || false,
+    instagram: restaurant?.instagram || "",
+    twitter: restaurant?.twitter || "",
+    website: restaurant?.website || "",
   });
   
   // Banking info state
@@ -103,8 +160,36 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
     restaurant?.is_event_organiser ?? false
   );
   useEffect(() => {
-  setEventEnabled(restaurant?.is_event_organiser ?? false);
-}, [restaurant?.is_event_organiser]);
+    setEventEnabled(restaurant?.is_event_organiser ?? false);
+  }, [restaurant?.is_event_organiser]);
+
+  // Theme toggle state
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem("theme") === "dark");
+  const toggleTheme = (checked: boolean) => {
+    setIsDarkMode(checked);
+    const newTheme = checked ? "dark" : "light";
+    localStorage.setItem("theme", newTheme);
+    if (checked) {
+      document.documentElement.classList.add("dark");
+      document.documentElement.classList.remove("light");
+    } else {
+      document.documentElement.classList.add("light");
+      document.documentElement.classList.remove("dark");
+    }
+    // Sync theme to native platform
+    if (Capacitor.isNativePlatform()) {
+      try {
+        ThemeSettings.setTheme({ theme: newTheme });
+      } catch (e) {
+        console.error("Error setting native theme:", e);
+      }
+    }
+    toast({
+      title: checked ? "Dark Theme Restored" : "Warm Light Theme Enabled",
+      description: checked ? "Restored the original dark theme." : "Using the warm earth-toned light theme.",
+    });
+  };
+
   // Load notification permission status
   useEffect(() => {
     if ("Notification" in window) {
@@ -181,17 +266,64 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
 
   const handleUpdateBasicInfo = async () => {
     if (!restaurant) return;
+    const isActivity = restaurant?.organiser_type === "activity_provider";
+    const isEventGroup = restaurant?.organiser_type === "event_group";
+
+    // Validations
+    if (!formData.name.trim()) {
+      toast({ title: "Name Required", description: "Name is compulsory.", variant: "destructive" });
+      return;
+    }
+    if (!formData.cuisine.trim()) {
+      toast({ title: "Category Required", description: "Primary category / type is compulsory.", variant: "destructive" });
+      return;
+    }
+    if (!formData.city.trim()) {
+      toast({ title: "City Required", description: "City is compulsory.", variant: "destructive" });
+      return;
+    }
+    if (!isEventGroup && !formData.address.trim()) {
+      toast({ title: "Address Required", description: "Address is compulsory for venues.", variant: "destructive" });
+      return;
+    }
+    if (!formData.phone.trim()) {
+      toast({ title: "Phone Required", description: "Contact phone number is compulsory.", variant: "destructive" });
+      return;
+    }
+    if (!formData.email.trim()) {
+      toast({ title: "Email Required", description: "Contact email is compulsory.", variant: "destructive" });
+      return;
+    }
+    if (!isEventGroup && !formData.open_hours.trim()) {
+      toast({ title: "Opening Hours Required", description: "Opening hours are compulsory for venues.", variant: "destructive" });
+      return;
+    }
+
+    // FSSAI validations
+    if (!isActivity && !isEventGroup) {
+      if (!formData.fssai) {
+        toast({ title: "FSSAI Required", description: "FSSAI license number is compulsory for restaurants.", variant: "destructive" });
+        return;
+      }
+    } else if (isActivity) {
+      if (formData.provides_dine_in && !formData.fssai) {
+        toast({ title: "FSSAI Required", description: "FSSAI license number is compulsory since you provide food/dine-in services.", variant: "destructive" });
+        return;
+      }
+    }
+
     setSavingBasic(true);
-
     try {
-      let lat = restaurant.latitude;
-      let lng = restaurant.longitude;
-
-      // Try background geocoding if address is provided
-      if (formData.address) {
+      let lat = restaurant?.latitude;
+      let lng = restaurant?.longitude;
+      
+      const targetAddress = formData.address.trim() || formData.city.trim();
+      
+      // Perform manual geocode if address or city changed and coordinates are missing
+      if (formData.address !== restaurant?.address || formData.city !== restaurant?.city) {
         try {
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(formData.address)}&format=json&limit=1`,
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(targetAddress)}&format=json&limit=1`,
             {
               headers: {
                 'Accept': 'application/json',
@@ -199,20 +331,21 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
               }
             }
           );
-          const data = await response.json();
-          if (data && data.length > 0) {
-            lat = parseFloat(data[0].lat);
-            lng = parseFloat(data[0].lon);
+          const geocodeData = await response.json();
+          if (geocodeData && geocodeData.length > 0) {
+            lat = parseFloat(geocodeData[0].lat);
+            lng = parseFloat(geocodeData[0].lon);
           }
-        } catch (geocodeError) {
-          console.error("Geocoding silently failed:", geocodeError);
-          // Non-blocking, continue saving basic info even if geocoding fails
+        } catch (geoError) {
+          console.warn("Geocoding failed during save:", geoError);
         }
       }
 
       const updatePayload = {
         ...formData,
-        ...(lat && lng ? { latitude: lat, longitude: lng } : {})
+        address: isEventGroup && !formData.address.trim() ? formData.city.trim() : formData.address,
+        ...(lat && lng ? { latitude: lat, longitude: lng } : {}),
+        organiser_type: restaurant.organiser_type,
       };
 
       const { error } = await supabase
@@ -232,14 +365,15 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
   };
 
   const handleManualGeocode = async () => {
-    if (!formData.address) {
-      toast({ title: "Address Required", description: "Please enter your address first.", variant: "destructive" });
+    const targetAddress = formData.address.trim() || formData.city.trim();
+    if (!targetAddress) {
+      toast({ title: "Address or City Required", description: "Please enter your address or city first.", variant: "destructive" });
       return;
     }
     setSavingBasic(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(formData.address)}&format=json&limit=1`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(targetAddress)}&format=json&limit=1`,
         {
           headers: {
             'Accept': 'application/json',
@@ -251,7 +385,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
       if (data && data.length > 0) {
         toast({ title: "Success", description: "Map pin updated successfully!" });
       } else {
-        toast({ title: "Not Found", description: "Could not find coordinates for this address on the map.", variant: "destructive" });
+        toast({ title: "Not Found", description: "Could not find coordinates for this location on the map.", variant: "destructive" });
       }
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch map coordinates.", variant: "destructive" });
@@ -262,6 +396,27 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
 
   const handleUpdateBankingInfo = async () => {
     if (!restaurant) return;
+    
+    // Payout validation checks for Event Groups and Activity Providers
+    if (isEventGroup || isActivity) {
+      if (!bankingData.bank_account_holder?.trim()) {
+        toast({ title: "Account Holder Required", description: "Account holder name is compulsory for payouts.", variant: "destructive" });
+        return;
+      }
+      
+      const hasUpi = !!bankingData.upi_id?.trim();
+      const hasBank = !!bankingData.bank_account_number?.trim() && !!bankingData.bank_ifsc?.trim();
+      
+      if (!hasUpi && !hasBank) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide either a UPI ID or complete Bank Details (Account Number & IFSC).",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     setSavingBanking(true);
 
     try {
@@ -295,7 +450,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
       toast({ title: "Notifications Enabled", description: "You'll receive alerts for new bookings" });
       // Test notification
       new Notification("DineDeal", {
-        body: "粕 Notifications enabled! You'll hear a bell for new bookings.",
+        body: "Notifications enabled! You'll hear a bell for new bookings.",
         icon: "/favicon.png"
       });
     }
@@ -303,13 +458,13 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
 
   const playTestSound = () => {
     testSound();
-    toast({ title: "粕 Sound Test", description: "This is how notification sounds will play" });
+    toast({ title: "Sound Test", description: "This is how notification sounds will play" });
   };
 
   return (
     <div className="space-y-6">
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
           <TabsTrigger value="general" className="gap-2">
             <Building2 className="w-4 h-4" />
             <span className="hidden sm:inline">General</span>
@@ -326,6 +481,10 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
             <Shield className="w-4 h-4" />
             <span className="hidden sm:inline">Security</span>
           </TabsTrigger>
+          <TabsTrigger value="appearance" className="gap-2">
+            <SunMoon className="w-4 h-4" />
+            <span className="hidden sm:inline">Theme</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* General Settings Tab */}
@@ -338,7 +497,9 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
             {/* Image Upload Section */}
             <Card className="border-border/50">
               <CardHeader>
-                <CardTitle className="text-base">Restaurant Image</CardTitle>
+                <CardTitle className="text-base">
+                  {isActivity ? "Activity Center Image" : isEventGroup ? "Event Group Logo" : "Restaurant Image"}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="relative">
@@ -346,7 +507,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
                     <div className="relative">
                       <img
                         src={imagePreview}
-                        alt="Restaurant"
+                        alt={isActivity ? "Activity Center" : isEventGroup ? "Event Group" : "Restaurant"}
                         className="w-full h-48 object-cover rounded-xl"
                       />
                       <button
@@ -400,75 +561,308 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
               </CardContent>
             </Card>
 
-            {/* Restaurant Details */}
+            {/* Details Section */}
             <Card className="border-border/50">
               <CardHeader>
-                <CardTitle className="text-base">Restaurant Details</CardTitle>
+                <CardTitle className="text-base">
+                  {isActivity ? "Activity Center Details" : isEventGroup ? "Event Group Details" : "Restaurant Details"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* 1. Name and Category Inputs */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm text-muted-foreground">Restaurant Name</label>
+                    <label className="text-sm text-muted-foreground">
+                      {isActivity ? "Venue Name *" : isEventGroup ? "Group / Brand Name *" : "Restaurant Name *"}
+                    </label>
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder={isActivity ? "e.g. Dream Arena Turf" : isEventGroup ? "e.g. Jhansi Rockers" : "e.g. Gourmet Palace"}
+                      required
                     />
                   </div>
-                  <div>
-                    <label className="text-sm text-muted-foreground">Cuisine Type</label>
-                    <Input
-                      value={formData.cuisine}
-                      onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
-                    />
-                  </div>
+
+                  {isActivity ? (
+                    <div>
+                      <label className="text-sm text-muted-foreground">Activity Category *</label>
+                      <Select
+                        value={ACTIVITY_CATEGORIES.includes(formData.cuisine) ? formData.cuisine : "Other Services"}
+                        onValueChange={(val) => {
+                          if (val === "Other Services") {
+                            setFormData({ ...formData, cuisine: "" });
+                          } else {
+                            setFormData({ ...formData, cuisine: val });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACTIVITY_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(!ACTIVITY_CATEGORIES.includes(formData.cuisine) || formData.cuisine === "Other Services") && (
+                        <Input
+                          className="mt-2"
+                          placeholder="Enter custom activity type *"
+                          value={formData.cuisine}
+                          onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : isEventGroup ? (
+                    <div>
+                      <label className="text-sm text-muted-foreground">Event Organiser Category *</label>
+                      <Select
+                        value={EVENT_CATEGORIES.includes(formData.cuisine) ? formData.cuisine : "Other"}
+                        onValueChange={(val) => {
+                          if (val === "Other") {
+                            setFormData({ ...formData, cuisine: "" });
+                          } else {
+                            setFormData({ ...formData, cuisine: val });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EVENT_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(!EVENT_CATEGORIES.includes(formData.cuisine) || formData.cuisine === "Other") && (
+                        <Input
+                          className="mt-2"
+                          placeholder="Enter custom event category *"
+                          value={formData.cuisine}
+                          onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
+                          required
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-sm text-muted-foreground">Cuisine Type *</label>
+                      <Input
+                        value={formData.cuisine}
+                        onChange={(e) => setFormData({ ...formData, cuisine: e.target.value })}
+                        placeholder="e.g. Italian, North Indian"
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <label className="text-sm text-muted-foreground">Address</label>
-                    <Input
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+
+                {/* 2. Description (For Activity and Event Groups) */}
+                {(isActivity || isEventGroup) && (
+                  <div>
+                    <label className="text-sm text-muted-foreground">
+                      {isActivity ? "About your venue / facilities" : "About your group / brand"}
+                    </label>
+                    <Textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder={
+                        isActivity
+                          ? "Describe your venue, play slots, amenities, ground rules, etc."
+                          : "Tell your audience about the kinds of events you organise..."
+                      }
+                      rows={3}
+                      className="bg-background"
                     />
                   </div>
-                  <div className="flex flex-col justify-end">
+                )}
+
+                {/* 3. Address and Location */}
+                {isEventGroup ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="text-sm text-muted-foreground">Base City *</label>
+                      <Input
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        placeholder="e.g. Jhansi"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-muted-foreground">Office/Group Address (Optional)</label>
+                      <Input
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="Street address or landmark"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="text-sm text-muted-foreground">Street Address *</label>
+                      <Input
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="e.g. Civil Lines"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-muted-foreground">City *</label>
+                      <Input
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                        placeholder="e.g. Jhansi"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Map Pin Finder */}
+                {!isEventGroup && (
+                  <div className="flex justify-end">
                     <Button 
                       variant="outline" 
                       onClick={handleManualGeocode} 
-                      disabled={savingBasic || !formData.address}
-                      className="border-primary/20 hover:bg-primary/5 text-primary"
+                      disabled={savingBasic || (!formData.address && !formData.city)}
+                      className="border-primary/20 hover:bg-primary/5 text-primary w-full sm:w-auto"
                     >
                       <MapPin className="w-4 h-4 mr-2" />
                       Find on Map
                     </Button>
                   </div>
-                </div>
+                )}
+
+                {/* 4. Contact Details */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm text-muted-foreground">Phone Number</label>
+                    <label className="text-sm text-muted-foreground">Contact Phone *</label>
                     <Input
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       placeholder="+91 XXXXXXXXXX"
+                      required
                     />
                   </div>
                   <div>
-                    <label className="text-sm text-muted-foreground">Email</label>
+                    <label className="text-sm text-muted-foreground">Contact Email *</label>
                     <Input
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="restaurant@email.com"
+                      placeholder="contact@email.com"
+                      required
                     />
                   </div>
                 </div>
+
+                {/* 5. Opening Hours (Venue only) */}
+                {!isEventGroup && (
+                  <div>
+                    <label className="text-sm text-muted-foreground">Opening Hours *</label>
+                    <Input
+                      value={formData.open_hours}
+                      onChange={(e) => setFormData({ ...formData, open_hours: e.target.value })}
+                      placeholder="e.g. 06:00 AM - 11:00 PM"
+                      required
+                    />
+                  </div>
+                )}
+
+                {/* 6. Food Services & FSSAI & GST */}
+                {isActivity && (
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50">
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground text-sm">Do you provide food / dine-in services?</p>
+                      <p className="text-xs text-muted-foreground">Toggle on if your turf, arcade, or parlour serves food/drinks.</p>
+                    </div>
+                    <Switch
+                      checked={formData.provides_dine_in}
+                      onCheckedChange={(checked) => setFormData({ ...formData, provides_dine_in: checked, fssai: checked ? formData.fssai : "" })}
+                    />
+                  </div>
+                )}
+
+                {/* Conditionally Render FSSAI */}
+                {((!isActivity && !isEventGroup) || (isActivity && formData.provides_dine_in)) && (
+                  <div>
+                    <label className="text-sm text-muted-foreground">FSSAI License Number *</label>
+                    <Input
+                      value={formData.fssai}
+                      onChange={(e) => setFormData({ ...formData, fssai: e.target.value })}
+                      placeholder="14-digit FSSAI number"
+                      required
+                    />
+                  </div>
+                )}
+
                 <div>
-                  <label className="text-sm text-muted-foreground">Opening Hours</label>
+                  <label className="text-sm text-muted-foreground">GST Number (Optional)</label>
                   <Input
-                    value={formData.open_hours}
-                    onChange={(e) => setFormData({ ...formData, open_hours: e.target.value })}
-                    placeholder="11:00 AM - 11:00 PM"
+                    value={formData.gst}
+                    onChange={(e) => setFormData({ ...formData, gst: e.target.value })}
+                    placeholder="GSTIN (e.g. 22AAAAA1111A1Z1)"
                   />
                 </div>
+
+                {/* 7. Social Links (For Activity Providers and Event Groups) */}
+                {(isActivity || isEventGroup) && (
+                  <div className="pt-4 border-t border-border space-y-4">
+                    <h4 className="font-semibold text-foreground text-sm flex items-center gap-2">
+                      <Link2 className="w-4 h-4 text-primary" />
+                      Social Media Links (Optional)
+                    </h4>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
+                          <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                          Instagram Handle
+                        </label>
+                        <Input
+                          value={formData.instagram}
+                          onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                          placeholder="e.g. handle_name"
+                          className="bg-background"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
+                          <Twitter className="w-3.5 h-3.5 text-sky-500" />
+                          Twitter/X Handle
+                        </label>
+                        <Input
+                          value={formData.twitter}
+                          onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
+                          placeholder="e.g. handle_name"
+                          className="bg-background"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
+                          <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                          Website URL
+                        </label>
+                        <Input
+                          value={formData.website}
+                          onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                          placeholder="e.g. https://domain.com"
+                          className="bg-background"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <Button variant="gradient" onClick={handleUpdateBasicInfo} disabled={savingBasic}>
                   <Save className="w-4 h-4 mr-2" />
                   {savingBasic ? "Saving..." : "Save Changes"}
@@ -477,71 +871,73 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
             </Card>
 
             {/* [STEP 3: Added Events Settings UI] */}
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  Events & Experiences
-                </CardTitle>
-              </CardHeader>
+            {!isActivity && !isEventGroup && (
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Events & Experiences
+                  </CardTitle>
+                </CardHeader>
 
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary">
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">
-                      Host Events at this Venue
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Enable this if you host live music, DJ nights, comedy shows, workshops,
-                      or any ticketed events.
-                    </p>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-secondary">
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">
+                        Host Events at this Venue
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Enable this if you host live music, DJ nights, comedy shows, workshops,
+                        or any ticketed events.
+                      </p>
+                    </div>
+
+                    <Switch
+                      checked={eventEnabled}
+                      onCheckedChange={setEventEnabled}
+                    />
                   </div>
 
-                  <Switch
-                    checked={eventEnabled}
-                    onCheckedChange={setEventEnabled}
-                  />
-                </div>
+                  <Button
+                    variant="gradient"
+                    disabled={eventEnabled === restaurant.is_event_organiser || !restaurant.is_approved}
+                    onClick={async () => {
+                      const { error } = await supabase
+                        .from("restaurants")
+                        .update({
+                          is_event_organiser: eventEnabled,
+                          organiser_type: restaurant.organiser_type || (eventEnabled ? "event_group" : "restaurant"),
+                        })
+                        .eq("id", restaurant.id);
 
-                <Button
-                  variant="gradient"
-                  disabled={eventEnabled === restaurant.is_event_organiser || !restaurant.is_approved}
-                  onClick={async () => {
-                    const { error } = await supabase
-                      .from("restaurants")
-                      .update({
+                      if (error) {
+                        toast({
+                          title: "Error",
+                          description: error.message,
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      setRestaurant({
+                        ...restaurant,
                         is_event_organiser: eventEnabled,
-                        organiser_type: restaurant.organiser_type??"restaurant",
-                      })
-                      .eq("id", restaurant.id);
-
-                    if (error) {
-                      toast({
-                        title: "Error",
-                        description: error.message,
-                        variant: "destructive",
+                        organiser_type: restaurant.organiser_type || (eventEnabled ? "event_group" : "restaurant"),
                       });
-                      return;
-                    }
 
-                    setRestaurant({
-                      ...restaurant,
-                      is_event_organiser: eventEnabled,
-                      organiser_type: "restaurant",
-                    });
-
-                    toast({
-                      title: eventEnabled ? "Events Enabled 🎉" : "Events Disabled",
-                      description: eventEnabled
-                        ? "You can now create and manage events from your dashboard."
-                        : "Event features have been turned off.",
-                    });
-                  }}
-                >
-                  Save Event Settings
-                </Button>
-              </CardContent>
-            </Card>
+                      toast({
+                        title: eventEnabled ? "Events Enabled 🎉" : "Events Disabled",
+                        description: eventEnabled
+                          ? "You can now create and manage events from your dashboard."
+                          : "Event features have been turned off.",
+                      });
+                    }}
+                  >
+                    Save Event Settings
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
           </motion.div>
         </TabsContent>
@@ -563,7 +959,7 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
               <CardContent className="space-y-4">
                 <div className="p-4 rounded-xl bg-gold/10 border border-gold/30">
                   <p className="text-sm text-muted-foreground">
-                    諜 Your payment details are securely encrypted. Settlements are processed weekly to your linked bank account.
+                    Your payment details are securely encrypted. Settlements are processed weekly to your linked bank account.
                   </p>
                 </div>
 
@@ -845,9 +1241,41 @@ const RestaurantSettings = ({ restaurant, setRestaurant }: RestaurantSettingsPro
             <Card className="border-border/50 bg-secondary/30">
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground">
-                  白 Your data is encrypted and stored securely. We never share your business information 
+                  Your data is encrypted and stored securely. We never share your business information 
                   with third parties without your consent.
                 </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* Theme Settings Tab */}
+        <TabsContent value="appearance" className="mt-6">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6 max-w-2xl"
+          >
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <SunMoon className="w-5 h-5 text-primary" />
+                  Theme Preference
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground text-sm">Dark Theme Mode</p>
+                    <p className="text-xs text-muted-foreground">
+                      Enable to restore the original dark theme layout. Disable to use the warm earth light theme.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isDarkMode}
+                    onCheckedChange={toggleTheme}
+                  />
+                </div>
               </CardContent>
             </Card>
           </motion.div>

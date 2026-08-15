@@ -36,10 +36,10 @@ const ResetPassword = () => {
       });
 
       navigate("/auth");
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: "Reset failed",
-        description: err.message,
+        description: err instanceof Error ? err.message : String(err),
         variant: "destructive",
       });
     } finally {

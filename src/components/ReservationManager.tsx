@@ -22,9 +22,10 @@ interface Reservation {
 interface ReservationManagerProps {
   restaurantId: string;
   restaurantName?: string;
+  isActivityProvider?: boolean;
 }
 
-const ReservationManager = ({ restaurantId, restaurantName = "Restaurant" }: ReservationManagerProps) => {
+const ReservationManager = ({ restaurantId, restaurantName = "Restaurant", isActivityProvider = false }: ReservationManagerProps) => {
   const { toast } = useToast();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,7 +152,7 @@ const ReservationManager = ({ restaurantId, restaurantName = "Restaurant" }: Res
         <Card className="border-border/50">
           <CardContent className="p-8 text-center">
             <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">No {filter !== "all" ? filter : ""} reservations</p>
+            <p className="text-muted-foreground">No {filter !== "all" ? filter : ""} {isActivityProvider ? "bookings" : "reservations"}</p>
           </CardContent>
         </Card>
       ) : (
@@ -194,7 +195,7 @@ const ReservationManager = ({ restaurantId, restaurantName = "Restaurant" }: Res
                         </span>
                         <span className="flex items-center gap-1">
                           <Users className="w-4 h-4" />
-                          {reservation.party_size} guests
+                          {reservation.party_size} {isActivityProvider ? "players / guests" : "guests"}
                         </span>
                         {reservation.phone && (
                           <a href={`tel:${reservation.phone}`} className="flex items-center gap-1 text-primary hover:underline">

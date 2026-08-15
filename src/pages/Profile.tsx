@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -14,14 +15,18 @@ import {
   TrendingUp,
   Shield,
   Receipt,
-  Calendar
+  Calendar,
+  SunMoon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import NotificationSettings from "@/components/NotificationSettings";
+
+const ThemeSettings = registerPlugin<any>('ThemeSettings');
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -31,6 +36,28 @@ const Profile = () => {
     lifetimeSavings: 0,
     favoriteRestaurants: 0,
   });
+
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem("theme") === "dark");
+  const handleToggleTheme = (checked: boolean) => {
+    setIsDarkMode(checked);
+    const newTheme = checked ? "dark" : "light";
+    localStorage.setItem("theme", newTheme);
+    if (checked) {
+      document.documentElement.classList.add("dark");
+      document.documentElement.classList.remove("light");
+    } else {
+      document.documentElement.classList.add("light");
+      document.documentElement.classList.remove("dark");
+    }
+    // Sync theme to native platform
+    if (Capacitor.isNativePlatform()) {
+      try {
+        ThemeSettings.setTheme({ theme: newTheme });
+      } catch (e) {
+        console.error("Error setting native theme:", e);
+      }
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -127,6 +154,33 @@ const Profile = () => {
         {/* Push Notifications */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <NotificationSettings />
+        </motion.div>
+
+        {/* Theme Preference */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+          <Card className="border-border/50">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  isDarkMode ? "bg-primary/10" : "bg-muted"
+                }`}
+              >
+                <SunMoon className={`w-5 h-5 ${isDarkMode ? "text-primary" : "text-muted-foreground"}`} />
+              </div>
+
+              <div className="flex-1">
+                <p className="font-medium text-foreground text-sm">Dark Theme Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  {isDarkMode ? "Original dark theme enabled" : "Warm earth light theme enabled"}
+                </p>
+              </div>
+
+              <Switch
+                checked={isDarkMode}
+                onCheckedChange={handleToggleTheme}
+              />
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* Menu Items */}

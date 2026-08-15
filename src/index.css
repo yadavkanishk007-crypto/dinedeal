@@ -6,72 +6,72 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 10%;
+    --background: 35 39% 96%;
+    --foreground: 36 38% 25%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card: 35 39% 98%;
+    --card-foreground: 36 38% 25%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover: 35 39% 98%;
+    --popover-foreground: 36 38% 25%;
 
-    --primary: 16 100% 60%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 10 93% 36%;
+    --primary-foreground: 35 39% 98%;
 
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 10%;
+    --secondary: 35 39% 92%;
+    --secondary-foreground: 36 38% 25%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
+    --muted: 35 39% 90%;
+    --muted-foreground: 36 38% 35%;
 
-    --accent: 326 78% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 29 73% 50%;
+    --accent-foreground: 36 38% 25%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 10 93% 36%;
+    --destructive-foreground: 35 39% 98%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 16 100% 60%;
+    --border: 35 39% 82%;
+    --input: 35 39% 82%;
+    --ring: 10 93% 36%;
 
     --radius: 1rem;
 
-    /* Custom Zave Colors */
-    --coral: 16 100% 60%;
-    --coral-light: 16 100% 70%;
-    --coral-dark: 16 100% 50%;
-    --orange: 28 100% 55%;
-    --pink: 326 78% 60%;
-    --gold: 45 100% 55%;
-    --success: 152 69% 45%;
-    --success-foreground: 0 0% 100%;
+    /* Custom Colors from Palette */
+    --coral: 10 93% 36%;
+    --coral-light: 21 79% 47%;
+    --coral-dark: 36 38% 25%;
+    --orange: 21 79% 47%;
+    --pink: 10 93% 36%;
+    --gold: 29 73% 50%;
+    --success: 48 37% 29%;
+    --success-foreground: 35 39% 98%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(16, 100%, 60%) 0%, hsl(326, 78%, 60%) 100%);
-    --gradient-warm: linear-gradient(135deg, hsl(28, 100%, 55%) 0%, hsl(16, 100%, 60%) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(45, 100%, 55%) 0%, hsl(28, 100%, 55%) 100%);
-    --gradient-success: linear-gradient(135deg, hsl(152, 69%, 45%) 0%, hsl(165, 70%, 50%) 100%);
-    --gradient-dark: linear-gradient(135deg, hsl(240, 10%, 10%) 0%, hsl(240, 10%, 20%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(10, 93%, 36%) 0%, hsl(21, 79%, 47%) 100%);
+    --gradient-warm: linear-gradient(135deg, hsl(21, 79%, 47%) 0%, hsl(29, 73%, 50%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(29, 73%, 50%) 0%, hsl(35, 39%, 67%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(48, 37%, 29%) 0%, hsl(35, 39%, 67%) 100%);
+    --gradient-dark: linear-gradient(135deg, hsl(36, 38%, 25%) 0%, hsl(36, 38%, 15%) 100%);
 
     /* Glass Effects */
-    --glass-bg: hsla(0, 0%, 100%, 0.7);
-    --glass-border: hsla(0, 0%, 100%, 0.2);
+    --glass-bg: hsla(35, 39%, 98%, 0.7);
+    --glass-border: hsla(35, 39%, 67%, 0.2);
 
     /* Shadows */
-    --shadow-sm: 0 2px 8px -2px hsla(0, 0%, 0%, 0.08);
-    --shadow-md: 0 8px 24px -4px hsla(0, 0%, 0%, 0.12);
-    --shadow-lg: 0 16px 48px -8px hsla(0, 0%, 0%, 0.16);
-    --shadow-glow: 0 0 40px hsla(16, 100%, 60%, 0.3);
-    --shadow-coral: 0 8px 32px -4px hsla(16, 100%, 60%, 0.4);
+    --shadow-sm: 0 2px 8px -2px hsla(36, 38%, 25%, 0.08);
+    --shadow-md: 0 8px 24px -4px hsla(36, 38%, 25%, 0.12);
+    --shadow-lg: 0 16px 48px -8px hsla(36, 38%, 25%, 0.16);
+    --shadow-glow: 0 0 40px hsla(10, 93%, 36%, 0.3);
+    --shadow-coral: 0 8px 32px -4px hsla(10, 93%, 36%, 0.4);
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 16 100% 60%;
+    --sidebar-background: 35 39% 98%;
+    --sidebar-foreground: 36 38% 25%;
+    --sidebar-primary: 10 93% 36%;
+    --sidebar-primary-foreground: 35 39% 98%;
+    --sidebar-accent: 35 39% 90%;
+    --sidebar-accent-foreground: 36 38% 25%;
+    --sidebar-border: 35 39% 82%;
+    --sidebar-ring: 10 93% 36%;
   }
 
   .dark {
@@ -102,6 +102,16 @@
     --border: 240 10% 18%;
     --input: 240 10% 18%;
     --ring: 16 100% 60%;
+
+    /* Custom Zave Colors */
+    --coral: 16 100% 60%;
+    --coral-light: 16 100% 70%;
+    --coral-dark: 16 100% 50%;
+    --orange: 28 100% 55%;
+    --pink: 326 78% 60%;
+    --gold: 45 100% 55%;
+    --success: 152 69% 45%;
+    --success-foreground: 0 0% 100%;
 
     /* Glass Effects - Dark Mode */
     --glass-bg: hsla(240, 10%, 10%, 0.7);

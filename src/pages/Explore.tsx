@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, SlidersHorizontal, Utensils, Calendar } from "lucide-react";
+import { Search, MapPin, SlidersHorizontal, Utensils, Calendar, Gamepad } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -9,6 +9,9 @@ import BottomNav from "@/components/BottomNav";
 import Logo from "@/components/Logo";
 import { supabase } from "@/integrations/supabase/client";
 import ExploreEvents from "@/components/ExploreEvents";
+import ExploreActivities from "@/components/ExploreActivities";
+import { useLocation } from "@/contexts/LocationContext";
+import { LocationSelector } from "@/components/LocationSelector";
 
 /* =========================================================
    UI MODEL
@@ -22,6 +25,7 @@ interface RestaurantUI {
   discount: number;
   imageUrl: string;
   isPopular: boolean;
+  city: string;
 }
 
 /* =========================================================
@@ -39,13 +43,19 @@ const filters = [
 ];
 
 const Explore = () => {
+  const { city } = useLocation();
   const [restaurants, setRestaurants] = useState<RestaurantUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [location, setLocation] = useState("Jhansi");
-  const [isLocating, setIsLocating] = useState(false);
-  const [viewMode, setViewMode] = useState<"restaurants" | "events">("restaurants");
+  const [viewMode, setViewMode] = useState<"restaurants" | "events" | "activities">(() => {
+    const initial = localStorage.getItem("explore_initial_tab");
+    if (initial === "activities" || initial === "events" || initial === "restaurants") {
+      localStorage.removeItem("explore_initial_tab");
+      return initial;
+    }
+    return "restaurants";
+  });
 
   /* =========================================================
      FETCH + NORMALIZE (FILTERED FOR APPROVED & NOT DELETED)
@@ -67,7 +77,8 @@ const Explore = () => {
         `)
         .eq("is_approved", true)
         .eq("is_active", true)
-        .neq("organiser_type", "event_group");
+        .neq("organiser_type", "event_group")
+        .neq("organiser_type", "activity_provider");
 
       if (error) throw error;
 
@@ -92,6 +103,7 @@ const Explore = () => {
               ? row.image_url
               : "/images/restaurant-placeholder.jpg",
           isPopular: Boolean(row.is_popular),
+          city: String(row.city ?? ""),
         };
       });
 
@@ -104,42 +116,7 @@ const Explore = () => {
     }
   }, []);
 
-  /* =========================================================
-     LOCATION (UI ONLY)
-  ========================================================= */
-  const detectLocation = async () => {
-    setIsLocating(true);
-    if (!("geolocation" in navigator)) {
-      setLocation("Jhansi");
-      setIsLocating(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json`
-          );
-          const json = await res.json();
-          setLocation(
-            json.address?.city || json.address?.town || json.address?.district || "Jhansi"
-          );
-        } catch {
-          setLocation("Jhansi");
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      () => {
-        setLocation("Jhansi");
-        setIsLocating(false);
-      }
-    );
-  };
-
   useEffect(() => {
-    detectLocation();
     fetchRestaurants();
   }, [fetchRestaurants]);
 
@@ -147,6 +124,11 @@ const Explore = () => {
      FILTER LOGIC
   ========================================================= */
   const filteredRestaurants = restaurants.filter((r) => {
+    // Filter by selected city
+    if (city && r.city && !r.city.toLowerCase().includes(city.toLowerCase())) {
+      return false;
+    }
+
     const q = searchQuery.toLowerCase();
     const name = r.name.toLowerCase();
     const cuisine = r.cuisine.toLowerCase();
@@ -176,10 +158,7 @@ const Explore = () => {
         <div className="container py-4 space-y-4">
           <div className="flex items-center justify-between">
             <Logo size="default" />
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span>{isLocating ? "Detecting..." : location}</span>
-            </div>
+            <LocationSelector />
           </div>
 
           {/* View Mode Toggle */}
@@ -188,19 +167,28 @@ const Explore = () => {
               variant={viewMode === "restaurants" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("restaurants")}
-              className="flex-1"
+              className="flex-1 text-xs px-2"
             >
-              <Utensils className="w-4 h-4 mr-2" />
+              <Utensils className="w-3.5 h-3.5 mr-1" />
               Restaurants
             </Button>
             <Button
               variant={viewMode === "events" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("events")}
-              className="flex-1"
+              className="flex-1 text-xs px-2"
             >
-              <Calendar className="w-4 h-4 mr-2" />
+              <Calendar className="w-3.5 h-3.5 mr-1" />
               Events
+            </Button>
+            <Button
+              variant={viewMode === "activities" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("activities")}
+              className="flex-1 text-xs px-2"
+            >
+              <Gamepad className="w-3.5 h-3.5 mr-1" />
+              Activities
             </Button>
           </div>
 
@@ -208,8 +196,14 @@ const Explore = () => {
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder={viewMode === "restaurants" ? "Search restaurants, cuisines..." : "Search events, venues..."}
-                className="pl-10 bg-secondary border-transparent"
+                placeholder={
+                  viewMode === "restaurants"
+                    ? "Search restaurants, cuisines..."
+                    : viewMode === "events"
+                    ? "Search events, venues..."
+                    : "Search activities, turfs..."
+                }
+                className="pl-10 bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-primary"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -222,7 +216,7 @@ const Explore = () => {
       </motion.header>
 
       <main className="container py-4 space-y-4">
-        {viewMode === "restaurants" ? (
+        {viewMode === "restaurants" && (
           <>
             <FilterChips
               filters={filters}
@@ -258,12 +252,20 @@ const Explore = () => {
               <div className="text-center py-16">
                 <Search className="w-8 h-8 text-muted-foreground mx-auto mb-4" />
                 <h3 className="font-bold text-lg">No restaurants found</h3>
-                <p className="text-muted-foreground text-sm">Try adjusting your filters.</p>
+                <p className="text-muted-foreground text-sm">
+                  {city?.toLowerCase() !== "jhansi"
+                    ? "DineDeal is currently serviceable only in Jhansi."
+                    : "Try adjusting your filters."}
+                </p>
               </div>
             )}
           </>
-        ) : (
-          <ExploreEvents searchQuery={searchQuery} location={location} />
+        )}
+        {viewMode === "events" && (
+          <ExploreEvents searchQuery={searchQuery} location={city || "Jhansi"} />
+        )}
+        {viewMode === "activities" && (
+          <ExploreActivities searchQuery={searchQuery} location={city || "Jhansi"} />
         )}
       </main>
 

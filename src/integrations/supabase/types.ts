@@ -701,6 +701,47 @@ export type Database = {
           },
         ]
       }
+      user_consent_logs: {
+        Row: {
+          id: string
+          user_id: string
+          consent_type: string
+          is_granted: boolean
+          notice_version: string
+          language: string
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          consent_type?: string
+          is_granted: boolean
+          notice_version?: string
+          language?: string
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          consent_type?: string
+          is_granted?: boolean
+          notice_version?: string
+          language?: string
+          user_agent?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_consent_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_reward_balance_view"
+            referencedColumns: ["user_id"]
+          }
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -966,6 +1007,9 @@ export type Database = {
           updated_at: string
           upi_id: string | null
           website: string | null
+          fssai: string | null
+          gst: string | null
+          provides_dine_in: boolean | null
         }
         Insert: {
           address: string
@@ -1002,6 +1046,9 @@ export type Database = {
           updated_at?: string
           upi_id?: string | null
           website?: string | null
+          fssai?: string | null
+          gst?: string | null
+          provides_dine_in?: boolean | null
         }
         Update: {
           address?: string
@@ -1038,6 +1085,9 @@ export type Database = {
           updated_at?: string
           upi_id?: string | null
           website?: string | null
+          fssai?: string | null
+          gst?: string | null
+          provides_dine_in?: boolean | null
         }
         Relationships: [
           {
@@ -1536,7 +1586,7 @@ export type Database = {
       is_admin: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "customer" | "restaurant" | "admin" | "event_organiser"
+      app_role: "customer" | "restaurant" | "admin" | "event_organiser" | "activity_provider"
       booking_status: "confirmed" | "cancelled" | "attended" | "expired"
       event_status: "draft" | "published" | "cancelled" | "completed"
       ticket_priority: "low" | "medium" | "high" | "urgent"
@@ -1668,7 +1718,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["customer", "restaurant", "admin", "event_organiser"],
+      app_role: ["customer", "restaurant", "admin", "event_organiser", "activity_provider"],
       booking_status: ["confirmed", "cancelled", "attended", "expired"],
       event_status: ["draft", "published", "cancelled", "completed"],
       ticket_priority: ["low", "medium", "high", "urgent"],

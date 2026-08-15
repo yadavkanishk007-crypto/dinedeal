@@ -361,12 +361,12 @@ export default function Pay() {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setIsProcessing(false);
       toast({
         title: "Payment Error",
-        description: "Could not initiate secure checkout.",
+        description: err.message || "Could not initiate secure checkout.",
         variant: "destructive"
       });
     }

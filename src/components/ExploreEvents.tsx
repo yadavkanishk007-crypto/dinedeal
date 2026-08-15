@@ -58,6 +58,11 @@ export default function ExploreEvents({ searchQuery, location }: ExploreEventsPr
   };
 
   const filteredEvents = events.filter((event) => {
+    // Filter by location city
+    if (location && event.city && !event.city.toLowerCase().includes(location.toLowerCase())) {
+      return false;
+    }
+
     const matchesSearch =
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.venue_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,7 +93,9 @@ export default function ExploreEvents({ searchQuery, location }: ExploreEventsPr
           No events found
         </h3>
         <p className="text-muted-foreground text-sm">
-          Check back later for upcoming events
+          {location?.toLowerCase() !== "jhansi"
+            ? "DineDeal is currently serviceable only in Jhansi."
+            : "Check back later for upcoming events"}
         </p>
       </motion.div>
     );

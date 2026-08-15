@@ -42,13 +42,14 @@ interface ActiveOffer {
 
 interface PostBillToCustomerProps {
   restaurantId: string;
+  isActivityProvider?: boolean;
 }
 
 /* =========================
    COMPONENT
 ========================= */
 
-const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
+const PostBillToCustomer = ({ restaurantId, isActivityProvider = false }: PostBillToCustomerProps) => {
   const [sessions, setSessions] = useState<DineInSession[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [activeReservations, setActiveReservations] = useState<ActiveReservation[]>([]);
@@ -154,8 +155,6 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
   };
 
   const calculateDiscount = (amount: number, customerId?: string) => {
-    let baseAmount = amount;
-    
     // 1. Calculate Offer Discount
     const offer = getEffectiveOffer();
     let discountAmount = 0;
@@ -257,7 +256,7 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Active Sessions (Last 3h)</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> {isActivityProvider ? "Active Play Sessions (Last 3h)" : "Active Sessions (Last 3h)"}</CardTitle>
           <CardDescription>Sessions expire automatically after 3 hours of inactivity.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -272,12 +271,12 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
                       <div className="font-medium flex items-center gap-2">
                         {getCustomerName(s.customer_id)}
                         {activeReservations.some(r => r.user_id === s.customer_id) && (
-                           <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-600 border-blue-200">Table Booked</Badge>
+                           <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-600 border-blue-200">{isActivityProvider ? "Slot Booked" : "Table Booked"}</Badge>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">Started {format(new Date(s.created_at), 'h:mm a')}</p>
                     </div>
-                    <Badge variant={s.status === 'bill_posted' ? 'secondary' : 'outline'}>{s.status === 'bill_posted' ? 'Bill Sent' : 'Dining'}</Badge>
+                    <Badge variant={s.status === 'bill_posted' ? 'secondary' : 'outline'}>{s.status === 'bill_posted' ? 'Bill Sent' : (isActivityProvider ? 'Playing' : 'Dining')}</Badge>
                   </div>
                 </div>
               ))}
@@ -321,14 +320,14 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
               
               {preview.discountAmount > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
-                  <span>DineDeal Offer ({preview.offer?.title})</span>
+                  <span>{isActivityProvider ? "DineDeal Slot Offer" : "DineDeal Offer"} ({preview.offer?.title})</span>
                   <span>-₹{preview.discountAmount.toFixed(2)}</span>
                 </div>
               )}
               
               {preview.reservationAdvanceDeduction > 0 && (
                 <div className="flex justify-between text-sm text-blue-600 font-medium">
-                  <span>Reservation Advance Paid</span>
+                  <span>{isActivityProvider ? "Slot Booking Advance" : "Reservation Advance Paid"}</span>
                   <span>-₹{preview.reservationAdvanceDeduction.toFixed(2)}</span>
                 </div>
               )}
@@ -349,7 +348,7 @@ const PostBillToCustomer = ({ restaurantId }: PostBillToCustomerProps) => {
 
           <Button className="w-full h-12 text-lg mt-2" onClick={handlePostBill} disabled={posting || !selectedSession || !billAmount}>
             {posting ? <Loader2 className="animate-spin mr-2" /> : <Receipt className="mr-2 h-5 w-5" />}
-            Post Bill to Customer
+            {isActivityProvider ? "Post Bill to Player" : "Post Bill to Customer"}
           </Button>
         </CardContent>
       </Card>

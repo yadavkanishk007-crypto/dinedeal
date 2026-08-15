@@ -13,8 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
    ROLE DEFINITIONS
 ======================= */
 
-export type UserRole = "customer" | "restaurant" | "admin" | "super_admin" | "event_organiser"; 
-type DbRole = "customer" | "restaurant" | "admin" | "event_organiser";
+export type UserRole = "customer" | "restaurant" | "admin" | "super_admin" | "event_organiser" | "activity_provider"; 
+type DbRole = "customer" | "restaurant" | "admin" | "event_organiser" | "activity_provider";
 
 /* =======================
    CONTEXT SHAPE
@@ -34,7 +34,9 @@ interface AuthContextType {
     fullName: string,
     role: UserRole,
     phone?: string,
-    agreedToTerms?: boolean
+    agreedToTerms?: boolean,
+    consentLang?: string,
+    noticeVersion?: string
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -77,6 +79,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const meta = user.user_metadata || {};
     const signupRole = meta.signup_role as UserRole | undefined;
 
+    // Retrieve consent values from user metadata or fallback to localStorage (for Google OAuth signup)
+    const savedAgreed = localStorage.getItem("signup_agreed_to_terms") === "true";
+    const savedLang = localStorage.getItem("signup_consent_lang") || "en";
+    const savedVersion = localStorage.getItem("signup_notice_version") || "v1.0-dpdp";
+    const savedUserAgent = localStorage.getItem("signup_user_agent") || (typeof window !== "undefined" ? window.navigator.userAgent : null);
+
+    const agreedVal = meta.agreed_to_terms ?? savedAgreed ?? false;
+    const langVal = meta.consent_lang ?? savedLang ?? "en";
+    const versionVal = meta.notice_version ?? savedVersion ?? "v1.0-dpdp";
+    const userAgentVal = meta.user_agent ?? savedUserAgent ?? null;
+
     /* PROFILE */
     const { data: profileRow } = await supabase
       .from("profiles")
@@ -89,8 +102,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user_id: userId,
         full_name: meta.full_name ?? "",
         phone: meta.phone ?? null,
+        agreed_to_terms: agreedVal,
       });
       if (error) throw error;
+
+      // Log consent in the separate audit table
+      if (agreedVal) {
+        try {
+          await supabase.from("user_consent_logs").insert({
+            user_id: userId,
+            consent_type: "terms_and_privacy",
+            is_granted: true,
+            notice_version: versionVal,
+            language: langVal,
+            user_agent: userAgentVal,
+          });
+        } catch (consentErr) {
+          console.error("Failed to log DPDP consent:", consentErr);
+        }
+      }
     }
 
     /* ROLE */
@@ -106,7 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // MED-1 FIX: Only allow safe roles during self-service signup.
     // Admin/super_admin can ONLY be assigned via the database directly.
-    const SAFE_SIGNUP_ROLES: string[] = ["customer", "restaurant", "event_organiser"];
+    const SAFE_SIGNUP_ROLES: string[] = ["customer", "restaurant", "event_organiser", "activity_provider"];
     const safeRole = (finalSignupRole && SAFE_SIGNUP_ROLES.includes(finalSignupRole))
       ? finalSignupRole
       : "customer";
@@ -122,15 +152,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (savedSignupRole) {
         localStorage.removeItem("signup_role");
       }
+      if (localStorage.getItem("signup_agreed_to_terms")) {
+        localStorage.removeItem("signup_agreed_to_terms");
+        localStorage.removeItem("signup_consent_lang");
+        localStorage.removeItem("signup_notice_version");
+        localStorage.removeItem("signup_user_agent");
+      }
     }
 
     const effectiveRole =
       roleRow?.role ?? toDbRole(finalSignupRole || "customer");
 
-    /* RESTAURANT BOOTSTRAP */
+    /* RESTAURANT / ACTIVITY PROVIDER BOOTSTRAP */
     // Note: event_organiser row is NOT created here. 
     // It is created manually in EventOrganiserOnboarding.tsx.
-    if (effectiveRole === "restaurant") {
+    if (effectiveRole === "restaurant" || effectiveRole === "activity_provider") {
       const { data: restaurantRow } = await supabase
         .from("restaurants")
         .select("id")
@@ -138,17 +174,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle();
 
       if (!restaurantRow) {
+        const isActivity = effectiveRole === "activity_provider";
+
         const { error } = await supabase.from("restaurants").insert({
           owner_id: userId,
-          name: `${meta.full_name || "Restaurant"}`,
+          name: `${meta.full_name || (isActivity ? "Activity Center" : "Restaurant")}`,
           city: "Jhansi",
           address: "TBD",
-          cuisine: "Multi-Cuisine",
+          cuisine: isActivity ? "Activity" : "Multi-Cuisine",
           is_approved: false,
           is_active: true,
           bank_account_number: null,
           bank_account_holder: null,
           upi_id: null,
+          organiser_type: isActivity ? "activity_provider" : null,
         });
         if (error) throw error;
       }
@@ -197,8 +236,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       let restaurantRow = null;
       let onboarding = false;
 
-      // Both Restaurant and Event Organiser roles look for a row in the 'restaurants' table.
-      if (userRole === "restaurant" || userRole === "event_organiser") {
+      // Both Restaurant, Event Organiser, and Activity Provider roles look for a row in the 'restaurants' table.
+      if (userRole === "restaurant" || userRole === "event_organiser" || userRole === "activity_provider") {
         const { data } = await supabase
           .from("restaurants")
           .select("*")
@@ -210,8 +249,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!restaurantRow) {
           // If no row exists, we MUST onboard.
           onboarding = true;
-        } else if (userRole === "restaurant") {
-          // Additional verification for Dining restaurants (checking payment details).
+        } else if (userRole === "restaurant" || userRole === "activity_provider") {
+          // Additional verification for Dining and Activity partners (checking payment details).
           const bank = clean(restaurantRow.bank_account_number);
           const upi = clean(restaurantRow.upi_id);
           const holder = clean(restaurantRow.bank_account_holder);
@@ -279,7 +318,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     fullName: string,
     role: UserRole,
     phone?: string,
-    agreedToTerms?: boolean
+    agreedToTerms?: boolean,
+    consentLang?: string,
+    noticeVersion?: string
   ) => {
     const { error } = await supabase.auth.signUp({
       email,
@@ -290,6 +331,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           phone,
           signup_role: role,
           agreed_to_terms: agreedToTerms,
+          consent_lang: consentLang,
+          notice_version: noticeVersion,
+          user_agent: typeof window !== "undefined" ? window.navigator.userAgent : null,
         },
       },
     });

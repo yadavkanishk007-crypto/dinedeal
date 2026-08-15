@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.env.mobile
+android/
+capacitor.config.ts
+icons/
+ios/
+resources/

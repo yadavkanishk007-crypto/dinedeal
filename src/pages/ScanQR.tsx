@@ -112,7 +112,7 @@ const ScanQR = () => {
       }
       // Pattern 2: /restaurant/xxx
       else if (url.pathname.includes('/restaurant/')) {
-        const match = url.pathname.match(/\/restaurant\/([^\/]+)/);
+        const match = url.pathname.match(/\/restaurant\/([^/]+)/);
         if (match) restaurantId = match[1];
       }
       // Pattern 3: /pay?restaurant=xxx
