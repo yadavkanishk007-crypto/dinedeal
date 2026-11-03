@@ -650,7 +650,7 @@ const RestaurantDetail = () => {
                       setSelectedDate(e.target.value);
                       setSelectedSlots([]);
                     }}
-                    className="px-3 py-1 border border-border/50 rounded-lg bg-background text-foreground text-sm"
+                    className="neo-inset px-3 py-1 border border-border/50 rounded-lg bg-background text-foreground text-sm"
                   />
                 </div>
 

@@ -9,16 +9,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:opacity-90 shadow-coral",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border-2 border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        default: "neo-button bg-primary text-primary-foreground hover:opacity-90 shadow-coral",
+        destructive: "neo-button bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline: "neo-button border-2 border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
+        secondary: "neo-button bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-secondary hover:text-secondary-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        gradient: "gradient-primary text-primary-foreground shadow-coral hover:opacity-90",
-        glass: "glass border-primary/20 text-foreground hover:bg-primary/10",
-        success: "gradient-success text-success-foreground shadow-md hover:opacity-90",
-        gold: "gradient-gold text-primary-foreground shadow-md hover:opacity-90",
+        gradient: "neo-button gradient-primary text-primary-foreground shadow-coral hover:opacity-90",
+        glass: "neo-button glass border-primary/20 text-foreground hover:bg-primary/10",
+        success: "neo-button gradient-success text-success-foreground shadow-md hover:opacity-90",
+        gold: "neo-button gradient-gold text-primary-foreground shadow-md hover:opacity-90",
       },
       size: {
         default: "h-11 px-6 py-2",

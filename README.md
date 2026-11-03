@@ -200,3 +200,23 @@ This project is co-founded and technically led by **Kanishk Yadav**. The system 
 <div align="center">
   <p>Made with ❤️ to redefine local dining.</p>
 </div>
+# Landing themes
+
+The public landing page fetches `/landing-theme.json` when it opens. Set its
+`activeTheme` to `diwali` or `default` to choose a bundled theme. If the file
+cannot be loaded, the page falls back to `VITE_LANDING_THEME` (Diwali by default).
+To switch without deploying the frontend, host the JSON at a URL you control
+and set `VITE_LANDING_CONFIG_URL` to that URL when deploying. The host must allow
+requests from your site. Then changing `activeTheme` in the hosted file changes
+the landing page on the next visit.
+
+For a preview, add `?theme=diwali` or `?theme=default` to the landing URL.
+To add another campaign, add its copy and image to `src/data/landingThemes.ts`,
+then select its key in the JSON file.
+
+For admin controls, apply `supabase/migrations/20261103_landing_theme.sql` to the
+project database. The Admin Panel → Landing Theme tab then selects a theme,
+previews it, and optionally schedules it. The database setting takes priority
+over the JSON configuration. Public visitors can read this setting; only users
+with the database `admin` role can update it. Without the migration, the JSON
+configuration remains the fallback.

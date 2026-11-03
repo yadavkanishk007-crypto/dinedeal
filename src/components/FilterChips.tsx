@@ -14,8 +14,8 @@ const FilterChip = ({ label, isActive, onClick, icon }: FilterChipProps) => {
       className={cn(
         "flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200",
         isActive
-          ? "gradient-primary text-primary-foreground shadow-coral"
-          : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+          ? "neo-pressed gradient-primary text-primary-foreground"
+          : "neo-raised bg-secondary text-secondary-foreground hover:bg-secondary/80"
       )}
       onClick={onClick}
       whileTap={{ scale: 0.95 }}

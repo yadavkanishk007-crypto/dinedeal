@@ -54,7 +54,7 @@ const RestaurantCard = ({
         whileTap={{ scale: 0.98 }}
         transition={{ type: "spring", stiffness: 400, damping: 25 }}
       >
-        <Card className="overflow-hidden border-border/50 hover:border-primary/30 hover:shadow-lg group">
+        <Card className="neo-raised overflow-hidden border-border/50 hover:border-primary/30 group">
           <div className="relative">
             <div className="aspect-[16/10] overflow-hidden">
               <img

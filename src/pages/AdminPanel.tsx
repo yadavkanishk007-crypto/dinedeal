@@ -42,6 +42,7 @@ import AdminRestaurantEarnings from "@/components/AdminRestaurantEarnings";
 import AdminSettlements from "@/components/AdminSettlements";
 import AdminPayouts from "@/components/AdminPayouts";
 import AdminSupport from "@/components/AdminSupport"; 
+import AdminLandingTheme from "@/components/AdminLandingTheme";
 import { cn } from "@/lib/utils";
 
 interface RestaurantStats {
@@ -90,6 +91,7 @@ const AdminPanel = () => {
     | "settlements"
     | "support"
     | "payouts"
+    | "landing"
   >("overview");
   
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
@@ -237,6 +239,7 @@ const AdminPanel = () => {
             { id: "support", label: "Support", icon: Headphones },
             { id: "notifications", label: "Notifications", icon: Bell },
             { id: "coupons", label: "Coupons" },
+            { id: "landing", label: "Landing Theme" },
             { id: "audit", label: "Audit Log" },
           ]
             .filter(Boolean)
@@ -469,6 +472,8 @@ const AdminPanel = () => {
         {activeTab === "notifications" && <AdminNotificationSender />}
 
         {activeTab === "coupons" && <CouponManager />}
+
+        {activeTab === "landing" && <AdminLandingTheme />}
 
         {activeTab === "audit" && <AdminAuditLog />}
 

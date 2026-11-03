@@ -269,3 +269,73 @@
   background-size: 200% 200%;
   animation: gradient-shift 3s ease infinite;
 }
+
+/* Soft surface depth. The existing palette and text colors stay intact. */
+:root {
+  --surface-light: rgba(255, 255, 255, .85);
+  --surface-dark: rgba(77, 57, 35, .19);
+  --surface-raised: -6px -6px 14px var(--surface-light), 6px 6px 14px var(--surface-dark);
+  --surface-pressed: inset -3px -3px 7px var(--surface-light), inset 3px 3px 7px var(--surface-dark);
+}
+.dark {
+  --surface-light: rgba(255, 255, 255, .07);
+  --surface-dark: rgba(0, 0, 0, .55);
+}
+.landing-surface {
+  --surface-light: rgba(255, 255, 255, .85);
+  --surface-dark: rgba(77, 57, 35, .19);
+  --surface-raised: -6px -6px 14px var(--surface-light), 6px 6px 14px var(--surface-dark);
+  --surface-pressed: inset -3px -3px 7px var(--surface-light), inset 3px 3px 7px var(--surface-dark);
+}
+.neo-raised, .neo-button, .glass-card, .landing-eyebrow,
+.glass.rounded-2xl, .glass.rounded-3xl,
+.neo-tab[data-state="active"] {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--surface-raised);
+}
+.neo-button:not(:disabled):active, .neo-pressed, .neo-inset {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--surface-pressed);
+}
+.neo-button:not(:disabled):hover { transform: translateY(-1px); }
+.neo-button:not(:disabled):active { transform: translateY(0); }
+.neo-nav { box-shadow: 0 -5px 18px var(--surface-dark); }
+.neo-button:focus-visible, .neo-inset:focus-visible, .neo-tab:focus-visible,
+.landing-surface :focus-visible, .home-surface :focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .neo-button { transition: none; }
+  .neo-button:not(:disabled):hover { transform: none; }
+}
+.landing-eyebrow {
+  display: inline-block;
+  padding: .65rem 1rem;
+  border-radius: 999px;
+  background: #FCFAF5;
+}
+.landing-diwali::before {
+  content: "";
+  position: absolute;
+  inset: 3rem -8rem auto auto;
+  width: 30rem;
+  height: 30rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(226, 135, 26, .16), transparent 70%);
+  pointer-events: none;
+}
+.diwali-halo {
+  position: absolute;
+  inset: -2rem;
+  border: 1px solid rgba(226, 135, 26, .25);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.diwali-halo span { position: absolute; color: #E2871A; font-size: 1.6rem; }
+.diwali-halo span:nth-child(1) { top: 8%; left: 12%; }
+.diwali-halo span:nth-child(2) { top: 20%; right: 8%; }
+.diwali-halo span:nth-child(3) { bottom: 12%; left: 6%; }
+.diwali-diyas { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.diwali-diyas span { position: absolute; font-size: clamp(2rem, 4vw, 3rem); filter: drop-shadow(0 0 14px rgba(226, 135, 26, .55)); }
+.diwali-diyas span:nth-child(1) { bottom: 5%; left: -3%; }
+.diwali-diyas span:nth-child(2) { bottom: 11%; right: -3%; }
+@media (max-width: 640px) { .diwali-halo { inset: 0; } }

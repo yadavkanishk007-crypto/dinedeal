@@ -13,6 +13,7 @@ import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import Index from "./pages/Index";
+import LandingPage from "./pages/LandingPage";
 import Explore from "./pages/Explore";
 import RestaurantDetail from "./pages/RestaurantDetail";
 import EventDetail from "./pages/EventDetail";
@@ -132,6 +133,7 @@ const App = () => {
               <NetworkBanner />
               <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/landing-preview" element={<LandingPage />} />
               <Route path="/explore" element={<Explore />} />
               <Route path="/restaurant/:id" element={<RestaurantDetail />} />
               <Route path="/pay" element={<ProtectedRoute><Pay /></ProtectedRoute>} />

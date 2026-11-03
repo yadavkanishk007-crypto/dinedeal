@@ -15,7 +15,7 @@ const BottomNav = () => {
 
   return (
     <motion.nav
-      className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-border/50 pb-safe"
+      className="neo-nav fixed bottom-0 left-0 right-0 z-50 glass border-t border-border/50 pb-safe"
       initial={{ y: 100 }}
       animate={{ y: 0 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -48,7 +48,7 @@ const BottomNav = () => {
           return (
             <Link key={item.path} to={item.path}>
               <motion.div
-                className="flex flex-col items-center gap-1 px-3 py-2"
+                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl ${isActive ? "neo-pressed" : ""}`}
                 whileTap={{ scale: 0.95 }}
               >
                 <motion.div

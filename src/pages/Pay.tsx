@@ -486,7 +486,7 @@ export default function Pay() {
                     placeholder="0"
                     value={billAmount}
                     onChange={(e) => setBillAmount(e.target.value)}
-                    className="text-5xl font-display font-bold bg-transparent border-none outline-none w-48 text-center placeholder:text-muted-foreground/20"
+                    className="neo-inset rounded-xl px-3 py-2 text-5xl font-display font-bold bg-transparent border-none w-48 text-center placeholder:text-muted-foreground/20"
                     autoFocus
                   />
                 </div>

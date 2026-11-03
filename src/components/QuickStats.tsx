@@ -19,7 +19,7 @@ interface QuickStatsProps {
 const StatsCard = ({ icon, label, value, subValue, gradient = "gradient-primary" }: StatsCardProps) => {
   return (
     <motion.div
-      className="relative overflow-hidden rounded-2xl p-4 glass border-border/30"
+      className="neo-raised relative overflow-hidden rounded-2xl p-4 glass border-border/30"
       whileHover={{ scale: 1.02 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
     >
